@@ -242,14 +242,30 @@ owm init (run in Docker context)
 
 Repos declared in `workspace.toml` with `has_addons = true` on repos that contribute Odoo modules. Explicit opt-in — better semantics over ergonomics (accidental inclusion harder to spot than accidental exclusion).
 
+Each repo with `has_addons = true` may also declare `addons_paths` — a list of paths within the repo root that each contribute an addons directory. The folder names carry no special meaning to owm; any name is valid. Default: `["."]` (repo root), which matches the common layout where addons live directly at repo root with no wrapper folder.
+
+```toml
+[repos.meta]
+odoo.has_addons         = true
+odoo.addons_paths       = ["addons", "odoo/addons"]   # two named subfolders
+
+product-core.has_addons = true
+# addons_paths defaults to ["."] — addons directly at repo root
+
+multi-repo.has_addons   = true
+multi-repo.addons_paths = ["primary_addons", "extras"] # arbitrary folder names; "addons" not required
+
+scripts.has_addons      = false
+```
+
 Repos declared in stability order in workspace.toml: `odoo → product-core → customer-config → scripts`. `addons_path` in generated `instance.conf` reverses this order for override specificity: `customer-config → product-core → odoo`.
 
 Only repos explicitly listed in `instance.toml` contribute to addons_path — no implicit fallback to shared for absent repos. If product-core is not in the instance, it is not in addons_path. Silent exclusion, no warnings.
 
-For repos present in instance but via shared worktree: addons path resolves to `_shared/<repo>/<branch>/addons` automatically.
+For repos present in instance but via shared worktree: each configured addons_path entry resolves under `_shared/<repo>/<branch>/`.
 
 ```
-instance with [odoo(shared), product-core(feat), customer-config(feat)]
+instance with [odoo(shared, addons_paths=["addons","odoo/addons"]), product-core(feat), customer-config(feat)]
 → addons_path = customer-config/addons, product-core/addons, _shared/odoo/19.0/addons, _shared/odoo/19.0/odoo/addons
 ```
 
@@ -262,6 +278,12 @@ instance with [odoo(shared), product-core(feat)] — customer-config excluded
 ```
 scripts repo in instance (has_addons not set)
 → not included in addons_path
+```
+
+```
+instance with [multi-repo(feat, addons_paths=["primary_addons","secondary_addons"])]
+→ addons_path = multi-repo/secondary_addons, multi-repo/primary_addons
+# both folders contribute; reversed within the repo following the same override-specificity rule
 ```
 
 ## Requirements patching
@@ -1051,7 +1073,9 @@ The following areas were implied by the spec but not fully elaborated. Revisit w
 
 ## Technology recommendation
 
-**Python throughout.**
+**Python throughout. Minimum version: 3.12.**
+
+owm itself requires Python 3.12+. This is independent of which Python version runs Odoo inside a managed instance — Odoo 12/14 may use older Pythons, managed via per-instance venvs. owm's own code targets modern Python; per-instance venvs handle version isolation.
 
 Static argument: core Odoo is Python. Rewriting osh, pr-ism, and existing owm is possible but carries cost; Odoo itself being Python is the load-bearing constraint.
 

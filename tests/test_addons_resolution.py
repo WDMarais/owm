@@ -18,13 +18,13 @@ def test_addons_path_full_instance_reversed_override_order():
     """
     Repos declared in workspace.toml stability order: odoo → product-core → customer-config.
     addons_path reverses this for override specificity: customer-config → product-core → odoo.
-    Odoo shared worktree contributes two entries: addons/ and odoo/addons/.
+    odoo uses addons_paths=["addons","odoo/addons"] — contributes two entries.
     """
     workspace_repos = {
-        "odoo":            {"has_addons": True,  "url": "..."},
-        "product-core":    {"has_addons": True,  "url": "..."},
-        "customer-config": {"has_addons": True,  "url": "..."},
-        "scripts":         {"has_addons": False, "url": "..."},
+        "odoo":            {"has_addons": True,  "addons_paths": ["addons", "odoo/addons"], "url": "..."},
+        "product-core":    {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
+        "customer-config": {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
+        "scripts":         {"has_addons": False,                                             "url": "..."},
     }
     instance_repos = {
         "odoo":            {"branch": "19.0", "shared": True},
@@ -50,9 +50,9 @@ def test_addons_path_full_instance_reversed_override_order():
 def test_addons_path_excludes_repo_not_in_instance():
     """customer-config absent from instance.toml → silently excluded, no warning."""
     workspace_repos = {
-        "odoo":            {"has_addons": True,  "url": "..."},
-        "product-core":    {"has_addons": True,  "url": "..."},
-        "customer-config": {"has_addons": True,  "url": "..."},
+        "odoo":            {"has_addons": True,  "addons_paths": ["addons", "odoo/addons"], "url": "..."},
+        "product-core":    {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
+        "customer-config": {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
     }
     instance_repos = {
         "odoo":         {"branch": "19.0", "shared": True},
@@ -78,8 +78,8 @@ def test_addons_path_excludes_repo_not_in_instance():
 def test_addons_path_excludes_repo_without_has_addons():
     """scripts repo: has_addons = false in workspace.toml → never appears in addons_path."""
     workspace_repos = {
-        "odoo":     {"has_addons": True,  "url": "..."},
-        "scripts":  {"has_addons": False, "url": "..."},
+        "odoo":     {"has_addons": True,  "addons_paths": ["addons"], "url": "..."},
+        "scripts":  {"has_addons": False,                              "url": "..."},
     }
     instance_repos = {
         "odoo":    {"branch": "19.0", "shared": True},
@@ -96,10 +96,10 @@ def test_addons_path_excludes_repo_without_has_addons():
 
 
 @pytest.mark.addons_resolution
-def test_addons_path_shared_worktree_uses_shared_path():
-    """Repo present in instance via shared worktree → _shared/<repo>/<branch>/addons."""
+def test_addons_path_shared_worktree_resolves_each_configured_path():
+    """Shared worktree with addons_paths → each path resolved under _shared/<repo>/<branch>/."""
     workspace_repos = {
-        "odoo": {"has_addons": True, "url": "..."},
+        "odoo": {"has_addons": True, "addons_paths": ["addons", "odoo/addons"], "url": "..."},
     }
     instance_repos = {
         "odoo": {"branch": "19.0", "shared": True},
@@ -116,11 +116,119 @@ def test_addons_path_shared_worktree_uses_shared_path():
 
 
 @pytest.mark.addons_resolution
+def test_addons_path_default_addons_paths_is_repo_root():
+    """Repo with has_addons=true but no addons_paths → defaults to ["."] (repo root).
+
+    The common real-world layout has addons directly at repo root with no
+    addons/ subdirectory wrapper. Default ["."] supports this without
+    requiring every workspace.toml to spell it out. Repos using the addons/
+    convention declare addons_paths = ["addons"] explicitly.
+    """
+    workspace_repos = {
+        "product-core": {"has_addons": True, "url": "..."},
+        # no addons_paths key → default ["."]
+    }
+    instance_repos = {
+        "product-core": {"branch": "feat-789-dev", "shared": False},
+    }
+    result = resolve_addons_path(
+        workspace_repos=workspace_repos,
+        instance_repos=instance_repos,
+        workspace_root="/ws",
+        instance_name="feat-789",
+        instances_dir="instances",
+    )  # TODO: wire up
+    assert result == ["/ws/instances/feat-789/product-core"]
+
+
+@pytest.mark.addons_resolution
+def test_addons_path_explicit_root_dot():
+    """addons_paths=["."] explicitly → repo root as addons dir."""
+    workspace_repos = {
+        "product-core": {"has_addons": True, "addons_paths": ["."], "url": "..."},
+    }
+    instance_repos = {
+        "product-core": {"branch": "feat-789-dev", "shared": False},
+    }
+    result = resolve_addons_path(
+        workspace_repos=workspace_repos,
+        instance_repos=instance_repos,
+        workspace_root="/ws",
+        instance_name="feat-789",
+        instances_dir="instances",
+    )  # TODO: wire up
+    assert result == ["/ws/instances/feat-789/product-core"]
+
+
+@pytest.mark.addons_resolution
+def test_addons_path_explicit_named_subfolders():
+    """addons_paths accepts any folder names — "addons" is not required in the string."""
+    workspace_repos = {
+        "product-core": {"has_addons": True, "addons_paths": ["primary_addons", "extras"], "url": "..."},
+    }
+    instance_repos = {
+        "product-core": {"branch": "feat-789-dev", "shared": False},
+    }
+    result = resolve_addons_path(
+        workspace_repos=workspace_repos,
+        instance_repos=instance_repos,
+        workspace_root="/ws",
+        instance_name="feat-789",
+        instances_dir="instances",
+    )  # TODO: wire up
+    assert "/ws/instances/feat-789/product-core/primary_addons" in result
+    assert "/ws/instances/feat-789/product-core/extras" in result
+
+
+@pytest.mark.addons_resolution
+def test_addons_path_multi_path_repo_both_folders_included():
+    """Repo with addons_paths=["primary_addons","secondary_addons"] → both in addons_path."""
+    workspace_repos = {
+        "multi-repo": {"has_addons": True, "addons_paths": ["primary_addons", "secondary_addons"], "url": "..."},
+    }
+    instance_repos = {
+        "multi-repo": {"branch": "feat-789-dev", "shared": False},
+    }
+    result = resolve_addons_path(
+        workspace_repos=workspace_repos,
+        instance_repos=instance_repos,
+        workspace_root="/ws",
+        instance_name="feat-789",
+        instances_dir="instances",
+    )  # TODO: wire up
+    assert "/ws/instances/feat-789/multi-repo/secondary_addons" in result
+    assert "/ws/instances/feat-789/multi-repo/primary_addons" in result
+
+
+@pytest.mark.addons_resolution
+def test_addons_path_multi_path_repo_reversed_within_repo():
+    """Within a repo's multiple addons paths, later-declared = higher override priority (reversed)."""
+    workspace_repos = {
+        "multi-repo": {"has_addons": True, "addons_paths": ["primary_addons", "secondary_addons"], "url": "..."},
+    }
+    instance_repos = {
+        "multi-repo": {"branch": "feat-789-dev", "shared": False},
+    }
+    paths = resolve_addons_path(
+        workspace_repos=workspace_repos,
+        instance_repos=instance_repos,
+        workspace_root="/ws",
+        instance_name="feat-789",
+        instances_dir="instances",
+    )  # TODO: wire up
+    if not isinstance(paths, list):
+        paths = list(paths)
+    secondary_idx = next(i for i, p in enumerate(paths) if "secondary_addons" in p)
+    primary_idx   = next(i for i, p in enumerate(paths) if "primary_addons" in p)
+    assert secondary_idx < primary_idx
+
+
+@pytest.mark.addons_resolution
 def test_addons_path_exclusion_produces_no_warning():
     """Silent exclusion: absent repo with has_addons=true in workspace must not warn."""
     workspace_repos = {
-        "odoo":            {"has_addons": True, "url": "..."},
-        "customer-config": {"has_addons": True, "url": "..."},
+        "odoo":            {"has_addons": True, "addons_paths": ["addons"], "url": "..."},
+        "customer-config": {"has_addons": True, "addons_paths": ["addons"], "url": "..."},
     }
     instance_repos = {
         "odoo": {"branch": "19.0", "shared": True},
@@ -133,7 +241,6 @@ def test_addons_path_exclusion_produces_no_warning():
         instance_name="feat-789",
         instances_dir="instances",
     )  # TODO: wire up
-    # result may be a namedtuple or plain list; assert no warnings either way
     warnings = getattr(result, "warnings", []) if not isinstance(result, list) else []
     assert warnings == []
 
@@ -145,9 +252,9 @@ def test_addons_path_ordering_matches_workspace_declaration_reversed():
     addons_path must reverse it: last-declared = highest override priority.
     """
     workspace_repos = {
-        "odoo":            {"has_addons": True, "url": "..."},  # declared first
-        "product-core":    {"has_addons": True, "url": "..."},  # declared second
-        "customer-config": {"has_addons": True, "url": "..."},  # declared third
+        "odoo":            {"has_addons": True, "addons_paths": ["addons", "odoo/addons"], "url": "..."},
+        "product-core":    {"has_addons": True, "addons_paths": ["addons"],                "url": "..."},
+        "customer-config": {"has_addons": True, "addons_paths": ["addons"],                "url": "..."},
     }
     instance_repos = {
         "odoo":            {"branch": "19.0", "shared": True},
@@ -170,9 +277,7 @@ def test_addons_path_ordering_matches_workspace_declaration_reversed():
 
 
 # === SPEC GAPS ===
-# test_addons_path_per_instance_non_shared_path_structure: spec gives the shared path
-#   as _shared/<repo>/<branch>/addons but does not state the exact subpath for per-instance
-#   worktrees (assumed instances/<name>/<repo>/addons — verify in implementation).
 # test_addons_path_workspace_declaration_order_preserved: spec says "declared in stability
-#   order" but TOML dict ordering was not guaranteed before Python 3.7; confirm whether
-#   workspace.toml parsing preserves insertion order or uses an explicit ordering field.
+#   order" — owm requires Python 3.12+ (dict insertion order guaranteed since 3.7), but
+#   confirm that workspace.toml parsing preserves TOML table key order rather than
+#   re-sorting or using an unordered dict internally.
