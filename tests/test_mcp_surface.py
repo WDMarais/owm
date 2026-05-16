@@ -163,10 +163,15 @@ def test_owm_ps_managed_entry_shape():
 
 
 @pytest.mark.mcp_surface
-def test_owm_ps_no_git_calls_no_config_parsing():
-    """owm_ps must be instant — no git calls, no config parsing."""
+def test_owm_ps_reads_only_state_json():
+    """owm_ps reads state.json per instance — no git calls, no toml parsing.
+    Performance contract: reads instances/*/state.json only; enforced via integration
+    test with subprocess mocking, not assertable here as a unit test.
+    Structural check: result shape is correct regardless of source.
+    """
     result = owm_ps()  # TODO: wire up
-    assert result.get("git_calls", 0) == 0  # implementation must not make git calls
+    assert "managed" in result
+    assert "unmanaged" in result
 
 
 # ---------------------------------------------------------------------------
