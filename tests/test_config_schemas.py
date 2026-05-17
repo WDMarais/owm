@@ -4,15 +4,9 @@ Covers: Config schemas, Requirements patching sections.
 """
 import pytest
 
-# TODO: from owm.config import parse_workspace_config, parse_instance_config
-# TODO: from owm.config import WorkspaceConfig, InstanceConfig, RepoSpec, ClusterConfig
-# TODO: from owm.config import WorkspaceDefaults, RepoMeta
-
-def parse_workspace_config(*args, **kwargs):
-    raise NotImplementedError
-
-def parse_instance_config(*args, **kwargs):
-    raise NotImplementedError
+from owm.config import parse_workspace_config, parse_instance_config
+from owm.config import WorkspaceConfig, InstanceConfig, RepoSpec, ClusterConfig
+from owm.config import WorkspaceDefaults, RepoMeta
 
 # ---------------------------------------------------------------------------
 # Workspace.toml — integration: parse full valid config
@@ -155,9 +149,7 @@ odoo = "git@github.com:odoo/odoo.git"
 # Repo spec string parsing: "branch:base+flags"
 # ---------------------------------------------------------------------------
 
-# TODO: from owm.config import parse_repo_spec
-def parse_repo_spec(*args, **kwargs):
-    raise NotImplementedError
+from owm.config import parse_repo_spec
 
 
 @pytest.mark.config_schemas
