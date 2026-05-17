@@ -10,7 +10,7 @@ from owm.instance import (
     kill_instance, restart_instance, health_check,
 )
 from owm.archive import archive_instance
-from owm.cli import delete_instance, rename_instance, show_logs, db_dump, db_restore
+from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
 from owm.sync import fetch_workspace, sync_instance, push_instance, reset_instance
 from owm.modules import upgrade_modules
 from owm.session_context import build_agent_context

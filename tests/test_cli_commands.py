@@ -4,9 +4,9 @@ Also covers: CWD inference, Log rotation sections.
 """
 import pytest
 
-from owm.cli import delete_instance, rename_instance, show_logs
-from owm.cli import db_dump, db_restore, validate_instance
-from owm.cli import adopt_instance, infer_instance_from_cwd
+from owm.operations import delete_instance, rename_instance, show_logs
+from owm.operations import db_dump, db_restore, validate_instance
+from owm.operations import adopt_instance, infer_instance_from_cwd
 from owm.log_rotation import check_rotation_needed, rotate_log
 
 
