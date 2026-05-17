@@ -4,16 +4,7 @@ Covers: owm.log — audit trail section.
 """
 import pytest
 
-# TODO: from owm.audit_log import append_log_entry, read_log_tail, parse_log_entry
-
-def append_log_entry(*args, **kwargs):
-    raise NotImplementedError
-
-def read_log_tail(*args, **kwargs):
-    raise NotImplementedError
-
-def parse_log_entry(*args, **kwargs):
-    raise NotImplementedError
+from owm.audit_log import append_log_entry, read_log_tail, parse_log_entry
 
 
 # ---------------------------------------------------------------------------
