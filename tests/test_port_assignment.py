@@ -254,6 +254,22 @@ def test_odoo_conf_includes_dbfilter_for_subdomain():
     assert conf.get("dbfilter") == "^feat-789$" or "dbfilter = ^feat-789$" in conf
 
 
+@pytest.mark.port_assignment
+@pytest.mark.ports_gevent
+def test_odoo_conf_no_dbfilter_when_proxy_inactive():
+    """dbfilter must be absent when proxy is not active.
+    Without subdomain routing each instance shares localhost — dbfilter causes
+    silent session cookie collisions across instances (the bug owm was built to avoid)."""
+    conf = generate_instance_conf(
+        instance_name="feat-789",
+        http_port=8142,
+        gevent_port=8143,
+        workers=2,
+        proxy_active=False,
+    )
+    assert "dbfilter" not in conf
+
+
 # === SPEC GAPS ===
 # test_assign_port_pair_boundary: spec says range is [8100, 8299]; unclear whether 8299
 #   can be a gevent port (making 8298 the last valid HTTP port) or if 8299 can be HTTP.

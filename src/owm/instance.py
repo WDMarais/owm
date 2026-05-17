@@ -232,11 +232,16 @@ def generate_instance_conf(
     workers: int,
     db_name: str | None = None,
     db_port: int | None = None,
+    proxy_active: bool = True,
 ) -> dict:
     # TODO: real implementation must return ini-format string written to instance.conf
-    return {
+    # dbfilter is only safe when subdomain routing is active (feat-789.localhost);
+    # without it, all instances share localhost and dbfilter causes session cookie collisions.
+    conf = {
         "http_port": http_port,
         "longpolling_port": gevent_port,
         "workers": workers,
-        "dbfilter": f"^{instance_name}$",
     }
+    if proxy_active:
+        conf["dbfilter"] = f"^{instance_name}$"
+    return conf
