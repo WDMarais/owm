@@ -149,6 +149,11 @@ def parse_workspace_config(toml: str) -> WorkspaceConfig:
         raise ValueError("workspace.toml must have [clusters]")
 
     repos_raw = dict(raw["repos"])
+    if "meta" in repos_raw and isinstance(repos_raw["meta"], str):
+        raise ValueError(
+            "'meta' is a reserved key in [repos] and cannot be used as a repo name; "
+            "rename the repo and use [repos.meta] for per-repo metadata"
+        )
     meta_raw = repos_raw.pop("meta", {})
 
     repos_meta: dict[str, RepoMeta] = {}

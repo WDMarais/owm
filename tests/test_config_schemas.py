@@ -112,6 +112,22 @@ odoo = "git@github.com:odoo/odoo.git"
 
 
 @pytest.mark.config_schemas
+def test_parse_workspace_config_meta_reserved_name_raises():
+    """'meta' is a reserved key in [repos] — using it as a repo name must raise."""
+    import textwrap
+    toml = textwrap.dedent("""
+        [repos]
+        meta = "git@example.com/meta.git"
+        odoo = "git@example.com/odoo.git"
+
+        [clusters]
+        "19" = {pg_version = "16", port = 5432}
+    """)
+    with pytest.raises(ValueError, match="reserved"):
+        parse_workspace_config(toml)
+
+
+@pytest.mark.config_schemas
 def test_parse_workspace_config_invalid_port_range_type_raises():
     toml = """
 [repos]
