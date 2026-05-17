@@ -4,24 +4,9 @@ Covers: Port assignment, Ports — gevent and workers sections.
 """
 import pytest
 
-# TODO: from owm.ports import assign_port, find_conflicting_process, evict_port
-# TODO: from owm.ports import PortPool, PortConflict, PortExhaustedError
-# TODO: from owm.ports import get_eviction_log, eviction_count_in_window
-
-def assign_port(*args, **kwargs):
-    raise NotImplementedError
-
-def find_conflicting_process(*args, **kwargs):
-    raise NotImplementedError
-
-def evict_port(*args, **kwargs):
-    raise NotImplementedError
-
-def get_eviction_log(*args, **kwargs):
-    raise NotImplementedError
-
-def eviction_count_in_window(*args, **kwargs):
-    raise NotImplementedError
+from owm.ports import assign_port, find_conflicting_process, evict_port
+from owm.ports import PortConflict, PortExhaustedError
+from owm.ports import get_eviction_log, eviction_count_in_window
 
 
 # ---------------------------------------------------------------------------
@@ -99,9 +84,7 @@ def test_assign_port_respects_owm_internal_range_exclusion():
 # Pinned port in instance.toml
 # ---------------------------------------------------------------------------
 
-# TODO: from owm.ports import honour_pinned_port
-def honour_pinned_port(*args, **kwargs):
-    raise NotImplementedError
+from owm.ports import honour_pinned_port
 
 
 @pytest.mark.port_assignment
@@ -148,9 +131,7 @@ def test_pinned_port_conflicts_with_running_instance_hard_error():
 # Start-time port conflict with unrelated process
 # ---------------------------------------------------------------------------
 
-# TODO: from owm.ports import check_port_at_start
-def check_port_at_start(*args, **kwargs):
-    raise NotImplementedError
+from owm.ports import check_port_at_start
 
 
 @pytest.mark.port_assignment
