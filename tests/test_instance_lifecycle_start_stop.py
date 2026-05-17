@@ -294,43 +294,67 @@ def test_restart_stop_timeout_returns_error_without_killing(tmp_path):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_health_running_and_http_alive():
-    result = health_check(instance="feat-789", pid=1234, http_alive=True)  # TODO: wire up
+def test_health_running_and_http_alive(tmp_path):
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=1234), \
+         patch("owm.instance._process_alive", return_value=True), \
+         patch("owm.instance._probe_http", return_value=True):
+        result = health_check("feat-789", str(tmp_path))
     assert result == {"status": "healthy", "pid": 1234, "http_alive": True, "url": "https://feat-789.localhost"}
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_health_starting():
-    result = health_check(instance="feat-789", pid=1234, http_alive=False, process_running=True)  # TODO: wire up
+def test_health_starting(tmp_path):
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=1234), \
+         patch("owm.instance._process_alive", return_value=True), \
+         patch("owm.instance._probe_http", return_value=False):
+        result = health_check("feat-789", str(tmp_path))  # wait=False by default
     assert result["status"] == "starting"
     assert result["http_alive"] is False
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_health_unhealthy_process_running_no_http():
-    result = health_check(instance="feat-789", pid=1234, http_alive=False, process_running=True, timed_out=True)  # TODO: wire up
+def test_health_unhealthy_process_running_no_http(tmp_path):
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=1234), \
+         patch("owm.instance._process_alive", return_value=True), \
+         patch("owm.instance._probe_http", return_value=False), \
+         patch("owm.instance._wait_for_http", side_effect=OwmError("timeout", code=START_TIMEOUT)):
+        result = health_check("feat-789", str(tmp_path), wait=True)
     assert result["status"] == "unhealthy"
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_health_stopped():
-    result = health_check(instance="feat-789", pid=None, process_running=False)  # TODO: wire up
+def test_health_stopped(tmp_path):
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=None), \
+         patch("owm.instance.find_conflicting_process", return_value=None):
+        result = health_check("feat-789", str(tmp_path))
     assert result == {"status": "stopped"}
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_health_unmanaged_process():
+def test_health_unmanaged_process(tmp_path):
     """Process on instance port but not started by owm → status: unmanaged."""
-    result = health_check(instance="feat-789", pid=9999, unmanaged=True, port=8142)  # TODO: wire up
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=None), \
+         patch("owm.instance.find_conflicting_process",
+               return_value={"pid": 9999, "name": "nginx", "cmdline": "nginx -g daemon off;"}):
+        result = health_check("feat-789", str(tmp_path))
     assert result["status"] == "unmanaged"
     assert result["pid"] == 9999
     assert result["port"] == 8142
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_health_is_process_and_http_only_not_db_or_venv():
+def test_health_is_process_and_http_only_not_db_or_venv(tmp_path):
     """Health check scope: process + HTTP only; DB/venv/module state is owm_validate."""
-    result = health_check(instance="feat-789", pid=1234, http_alive=True)  # TODO: wire up
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=1234), \
+         patch("owm.instance._process_alive", return_value=True), \
+         patch("owm.instance._probe_http", return_value=True):
+        result = health_check("feat-789", str(tmp_path))
     assert "db" not in result
     assert "venv" not in result
     assert "modules" not in result

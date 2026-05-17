@@ -148,8 +148,8 @@ def owm_restart(instance, wait=False, *,
     }
 
 
-def owm_health(instance, **kwargs):
-    return health_check(instance=instance, **kwargs)
+def owm_health(instance, workspace_root=".", **kwargs):
+    return health_check(instance, workspace_root, **kwargs)
 
 
 def owm_archive(instance, running=False, discard_db=False, **kwargs):

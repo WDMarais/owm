@@ -8,6 +8,7 @@ Safety invariants tested explicitly:
 - Delete/archive/reset tools operate on local state only
 """
 import pytest
+from unittest.mock import patch
 
 from owm.mcp import (
     owm_status, owm_ps, owm_validate, owm_env,
@@ -300,19 +301,24 @@ def test_owm_restart_stop_timeout_returns_error():
 
 @pytest.mark.mcp_surface
 def test_owm_health_healthy():
-    result = owm_health(instance="feat-789", pid=1234, http_alive=True)  # TODO: wire up
+    mock_result = {"status": "healthy", "pid": 1234, "http_alive": True, "url": "https://feat-789.localhost"}
+    with patch("owm.mcp.health_check", return_value=mock_result):
+        result = owm_health(instance="feat-789")
     assert result == {"status": "healthy", "pid": 1234, "http_alive": True, "url": "https://feat-789.localhost"}
 
 
 @pytest.mark.mcp_surface
 def test_owm_health_stopped():
-    result = owm_health(instance="feat-789", process_running=False)  # TODO: wire up
+    with patch("owm.mcp.health_check", return_value={"status": "stopped"}):
+        result = owm_health(instance="feat-789")
     assert result == {"status": "stopped"}
 
 
 @pytest.mark.mcp_surface
 def test_owm_health_unmanaged():
-    result = owm_health(instance="feat-789", unmanaged=True, pid=9999, port=8142)  # TODO: wire up
+    mock_result = {"status": "unmanaged", "pid": 9999, "port": 8142}
+    with patch("owm.mcp.health_check", return_value=mock_result):
+        result = owm_health(instance="feat-789")
     assert result["status"] == "unmanaged"
     assert result["pid"] == 9999
     assert result["port"] == 8142

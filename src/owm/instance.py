@@ -11,6 +11,7 @@ import psutil
 
 from owm.config import parse_instance_config, InstanceConfig
 from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT
+from owm.ports import find_conflicting_process
 
 
 @dataclass
@@ -121,6 +122,17 @@ def _wait_for_stop(pid: int, timeout_seconds: int) -> bool:
             return True
         time.sleep(1)
     return False
+
+
+def _probe_http(port: int, timeout: float = 2.0) -> bool:
+    url = f"http://localhost:{port}/web"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout):
+            return True
+    except urllib.error.HTTPError:
+        return True  # any HTTP response means server is up
+    except Exception:
+        return False
 
 
 def _build_start_command(instance: str, workspace_root: str, conf: InstanceConfig) -> list[str]:
@@ -305,31 +317,34 @@ def restart_instance(
 
 def health_check(
     instance: str,
+    workspace_root: str,
     *,
-    pid: int | None = None,
-    http_alive: bool = False,
-    process_running: bool = True,
-    timed_out: bool = False,
-    unmanaged: bool = False,
-    port: int | None = None,
+    wait: bool = False,
+    timeout_seconds: int = 30,
 ) -> dict:
-    if unmanaged:
-        result = {"status": "unmanaged", "pid": pid}
-        if port is not None:
-            result["port"] = port
-        return result
-    if pid is None and not process_running:
+    instance_dir = os.path.join(workspace_root, "instances", instance)
+    with open(os.path.join(instance_dir, "instance.toml")) as f:
+        conf = parse_instance_config(f.read())
+    port = conf.server.http_port
+
+    pid = _read_pid(instance, workspace_root)
+    if pid is None or not _process_alive(pid):
+        other = find_conflicting_process(port)
+        if other:
+            return {"status": "unmanaged", "pid": other["pid"], "port": port}
         return {"status": "stopped"}
-    if http_alive:
-        return {
-            "status": "healthy",
-            "pid": pid,
-            "http_alive": True,
-            "url": f"https://{instance}.localhost",
-        }
-    if timed_out:
+
+    if _probe_http(port):
+        return {"status": "healthy", "pid": pid, "http_alive": True, "url": f"https://{instance}.localhost"}
+
+    if not wait:
+        return {"status": "starting", "pid": pid, "http_alive": False}
+
+    try:
+        _wait_for_http(port, timeout_seconds)
+        return {"status": "healthy", "pid": pid, "http_alive": True, "url": f"https://{instance}.localhost"}
+    except OwmError:
         return {"status": "unhealthy", "pid": pid, "http_alive": False}
-    return {"status": "starting", "pid": pid, "http_alive": False}
 
 
 def generate_instance_conf(
