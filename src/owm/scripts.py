@@ -8,6 +8,9 @@ class FailureMode(StrEnum):
     CONTRACT  = "contract"
 
 
+VALID_ROW_STATUSES = frozenset({"OK", "FAIL", "WARN", "NONE"})
+
+
 @dataclass
 class ScriptSummary:
     ok: int
@@ -15,6 +18,7 @@ class ScriptSummary:
     warn: int
     none: int
     total: int
+    non_conforming: int = 0
     unexpected_changes: int = 0
 
 
@@ -73,6 +77,11 @@ def run_script(
                 abort_reason=row.get("reason"),
             )
 
+        if "status" in row and row["status"] not in VALID_ROW_STATUSES:
+            processed.append({**row, "_non_conforming": True})
+            rows_run += 1
+            continue
+
         if failure_mode == FailureMode.CONTRACT and contract and row.get("status") == "FAIL":
             blocking = contract.get("blocking_failures", [])
             if row.get("case") in blocking:
@@ -102,7 +111,11 @@ def run_script(
 
 def _tally(rows: list) -> ScriptSummary:
     counts = {"OK": 0, "FAIL": 0, "WARN": 0, "NONE": 0}
+    non_conforming = 0
     for r in rows:
+        if r.get("_non_conforming"):
+            non_conforming += 1
+            continue
         s = r.get("status")
         if s in counts:
             counts[s] += 1
@@ -110,6 +123,7 @@ def _tally(rows: list) -> ScriptSummary:
         ok=counts["OK"],
         fail=counts["FAIL"],
         warn=counts["WARN"],
+        non_conforming=non_conforming,
         none=counts["NONE"],
         total=len(rows),
     )
