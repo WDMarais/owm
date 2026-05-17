@@ -1,4 +1,5 @@
 import getpass
+import subprocess
 from dataclasses import dataclass, field
 
 
@@ -110,7 +111,7 @@ def sync_db_from_template(
     instance: str | None = None,
     auto_sync: bool = False,
     opt_in: bool | None = None,
-    simulate_failure: bool = False,
+    pg_port: int = 5432,
 ) -> SyncResult:
     if instances is not None:
         return SyncResult(
@@ -119,14 +120,25 @@ def sync_db_from_template(
         )
     if opt_in is False:
         return SyncResult(synced=False, backup_created=False)
+
     backup_path = f"/tmp/owm_backup_{instance}_{template}.dump"
-    if simulate_failure:
+    pg_args = ["-p", str(pg_port), "-h", "/var/run/postgresql"]
+
+    subprocess.run(["pg_dump", "-Fc", *pg_args, "-f", backup_path, instance], check=True)
+
+    try:
+        subprocess.run(["dropdb", *pg_args, instance], check=True)
+        subprocess.run(["createdb", *pg_args, f"--template={template}", instance], check=True)
+    except subprocess.CalledProcessError as exc:
+        subprocess.run(["createdb", *pg_args, instance], check=True)
+        subprocess.run(["pg_restore", *pg_args, "-d", instance, backup_path], check=True)
         return SyncResult(
             backup_created=True,
             backup_path=backup_path,
             backup_restored=True,
-            error="simulated sync failure",
+            error=str(exc),
         )
+
     return SyncResult(backup_created=True, backup_path=backup_path, synced=True)
 
 

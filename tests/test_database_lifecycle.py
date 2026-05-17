@@ -2,7 +2,9 @@
 Tests for database creation, cloning, reset, and template management.
 Covers: Database lifecycle, Database auth sections.
 """
+import subprocess
 import pytest
+from unittest.mock import patch
 
 from owm.database import create_db, reset_db, sync_db_from_template
 from owm.database import check_template_staleness, check_pg_reachability
@@ -149,23 +151,30 @@ def test_template_staleness_no_warning_within_threshold():
 
 @pytest.mark.database_lifecycle
 def test_template_sync_opt_in_creates_backup_first():
-    result = sync_db_from_template(
-        template="odoo19_base",
-        instance="feat-789",
-        opt_in=True,
-    )  # TODO: wire up
+    with patch("owm.database.subprocess.run"):
+        result = sync_db_from_template(
+            template="odoo19_base",
+            instance="feat-789",
+            opt_in=True,
+        )
     assert result.backup_created is True
     assert result.backup_path is not None
 
 
 @pytest.mark.database_lifecycle
 def test_template_sync_failure_restores_backup():
-    result = sync_db_from_template(
-        template="odoo19_base",
-        instance="feat-789",
-        opt_in=True,
-        simulate_failure=True,
-    )  # TODO: wire up
+    with patch("owm.database.subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            None,  # pg_dump backup
+            subprocess.CalledProcessError(1, "dropdb"),  # sync step fails
+            None,  # createdb for restore
+            None,  # pg_restore
+        ]
+        result = sync_db_from_template(
+            template="odoo19_base",
+            instance="feat-789",
+            opt_in=True,
+        )
     assert result.backup_restored is True
     assert result.error is not None
 
