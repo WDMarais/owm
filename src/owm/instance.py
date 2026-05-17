@@ -1,8 +1,13 @@
 import os
+import subprocess
+import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 
 import psutil
 
+from owm.config import parse_instance_config, InstanceConfig
 from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT
 
 
@@ -82,6 +87,36 @@ def _process_alive(pid: int) -> bool:
     return psutil.pid_exists(pid)
 
 
+def _build_start_command(instance: str, workspace_root: str, conf: InstanceConfig) -> list[str]:
+    python = os.path.join(workspace_root, "instances", instance, ".venv", "bin", "python")
+    # TODO: derive odoo-bin path from workspace config (which repo is the odoo source)
+    odoo_bin = os.path.join(workspace_root, "instances", instance, "odoo_like", "odoo-bin")
+    conf_file = os.path.join(workspace_root, "instances", instance, "instance.conf")
+    return [python, odoo_bin, "--config", conf_file]
+
+
+def _wait_for_http(port: int, timeout_seconds: int) -> None:
+    # Use /web rather than /web/health: health endpoint only exists in Odoo 16+.
+    # Any HTTP response (200, 3xx, 4xx) means the server is accepting connections.
+    # Only connection errors (refused, timeout) mean it is not ready yet.
+    # TODO: use /web/health on Odoo 16+ for structured health status (DB, modules).
+    import urllib.error
+    deadline = time.monotonic() + timeout_seconds
+    url = f"http://localhost:{port}/web"
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2):
+                return
+        except urllib.error.HTTPError:
+            return  # server responded — it's up
+        except Exception:
+            time.sleep(1)
+    raise OwmError(
+        f"timed out waiting for instance to start (port {port})",
+        code=START_TIMEOUT,
+    )
+
+
 def new_instance(name: str, repos: dict, workspace_root: str, *, already_exists: bool = False) -> NewResult:
     if already_exists:
         raise OwmError(f"instance {name!r} already exists", code=ALREADY_EXISTS)
@@ -149,31 +184,35 @@ def create_instance(
 
 def start_instance(
     instance: str,
+    workspace_root: str,
     *,
     wait: bool = False,
-    simulate_healthy: bool | None = None,
-    timeout_seconds: int | None = None,
-    already_running: bool = False,
+    timeout_seconds: int = 30,
 ) -> StartResult:
-    if already_running:
+    pid = _read_pid(instance, workspace_root)
+    if pid is not None and _process_alive(pid):
         return StartResult(
             status="already_running",
-            pid=9999,
-            message=f"{instance} is already running (pid 9999)",
+            pid=pid,
+            message=f"{instance} is already running (pid {pid})",
         )
-    if wait and simulate_healthy is False:
-        raise OwmError(f"timed out waiting for {instance} to start", code=START_TIMEOUT)
-    if wait and simulate_healthy:
-        return StartResult(
-            status="healthy",
-            pid=1234,
-            events_emitted=["instance_starting", "instance_healthy"],
-        )
-    return StartResult(
-        status="spawned",
-        pid=1234,
-        events_emitted=["instance_starting"],
-    )
+
+    instance_dir = os.path.join(workspace_root, "instances", instance)
+    with open(os.path.join(instance_dir, "instance.toml")) as f:
+        conf = parse_instance_config(f.read())
+
+    cmd = _build_start_command(instance, workspace_root, conf)
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _write_pid(instance, workspace_root, proc.pid)
+
+    events = ["instance_starting"]
+
+    if wait:
+        _wait_for_http(conf.server.http_port, timeout_seconds)
+        events.append("instance_healthy")
+        return StartResult(status="healthy", pid=proc.pid, events_emitted=events)
+
+    return StartResult(status="spawned", pid=proc.pid, events_emitted=events)
 
 
 def stop_instance(

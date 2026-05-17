@@ -3,11 +3,38 @@ Tests for instance start, stop, kill, restart, and health checks.
 Covers: Instance lifecycle — start/stop section.
 """
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
+from owm.errors import OwmError, START_TIMEOUT
 from owm.instance import start_instance, stop_instance, kill_instance
 from owm.instance import restart_instance, health_check
 from owm.instance import _pid_file_path, _write_pid, _read_pid, _process_alive
+
+
+# ---------------------------------------------------------------------------
+# Shared fixture helpers
+# ---------------------------------------------------------------------------
+
+_INSTANCE_TOML = """\
+[repos]
+odoo_like = "main:shared"
+
+[database]
+name = "owm_test_feat789"
+pg_port = 5432
+
+[server]
+http_port = 8142
+gevent_port = 8143
+workers = 2
+"""
+
+
+def _make_instance_dir(tmp_path, instance="feat-789"):
+    inst_dir = tmp_path / "instances" / instance
+    inst_dir.mkdir(parents=True)
+    (inst_dir / "instance.toml").write_text(_INSTANCE_TOML)
+    return inst_dir
 
 
 # ---------------------------------------------------------------------------
@@ -42,49 +69,84 @@ def test_process_alive_delegates_to_psutil():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_start_spawns_and_returns_pid_immediately():
-    result = start_instance(instance="feat-789", wait=False)  # TODO: wire up
+def test_start_spawns_and_returns_pid_immediately(tmp_path):
+    _make_instance_dir(tmp_path)
+    mock_proc = MagicMock()
+    mock_proc.pid = 1234
+    with patch("owm.instance.subprocess.Popen", return_value=mock_proc), \
+         patch("owm.instance._read_pid", return_value=None):
+        result = start_instance("feat-789", str(tmp_path), wait=False)
     assert result.status == "spawned"
     assert result.pid is not None
     assert isinstance(result.pid, int)
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_start_emits_starting_event():
-    result = start_instance(instance="feat-789", wait=False)  # TODO: wire up
+def test_start_emits_starting_event(tmp_path):
+    _make_instance_dir(tmp_path)
+    mock_proc = MagicMock()
+    mock_proc.pid = 1234
+    with patch("owm.instance.subprocess.Popen", return_value=mock_proc), \
+         patch("owm.instance._read_pid", return_value=None):
+        result = start_instance("feat-789", str(tmp_path), wait=False)
     assert "instance_starting" in result.events_emitted
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_start_wait_blocks_until_healthy():
-    result = start_instance(instance="feat-789", wait=True, simulate_healthy=True)  # TODO: wire up
+def test_start_wait_blocks_until_healthy(tmp_path):
+    _make_instance_dir(tmp_path)
+    mock_proc = MagicMock()
+    mock_proc.pid = 1234
+    with patch("owm.instance.subprocess.Popen", return_value=mock_proc), \
+         patch("owm.instance._read_pid", return_value=None), \
+         patch("owm.instance._wait_for_http"):
+        result = start_instance("feat-789", str(tmp_path), wait=True)
     assert result.status == "healthy"
     assert result.pid is not None
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_start_wait_emits_healthy_event_on_success():
-    result = start_instance(instance="feat-789", wait=True, simulate_healthy=True)  # TODO: wire up
+def test_start_wait_emits_healthy_event_on_success(tmp_path):
+    _make_instance_dir(tmp_path)
+    mock_proc = MagicMock()
+    mock_proc.pid = 1234
+    with patch("owm.instance.subprocess.Popen", return_value=mock_proc), \
+         patch("owm.instance._read_pid", return_value=None), \
+         patch("owm.instance._wait_for_http"):
+        result = start_instance("feat-789", str(tmp_path), wait=True)
     assert "instance_healthy" in result.events_emitted
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_start_wait_timeout_exits_nonzero():
-    with pytest.raises(Exception) as exc_info:
-        start_instance(instance="feat-789", wait=True, simulate_healthy=False, timeout_seconds=1)  # TODO: wire up
+def test_start_wait_timeout_exits_nonzero(tmp_path):
+    _make_instance_dir(tmp_path)
+    mock_proc = MagicMock()
+    mock_proc.pid = 1234
+    with patch("owm.instance.subprocess.Popen", return_value=mock_proc), \
+         patch("owm.instance._read_pid", return_value=None), \
+         patch("owm.instance._wait_for_http",
+               side_effect=OwmError("timed out waiting for instance to start (port 8142)", code=START_TIMEOUT)):
+        with pytest.raises(Exception) as exc_info:
+            start_instance("feat-789", str(tmp_path), wait=True, timeout_seconds=1)
     assert "START_TIMEOUT" in str(exc_info.value) or "timed out" in str(exc_info.value).lower()
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_start_already_running_is_noop():
-    result = start_instance(instance="feat-789", already_running=True)  # TODO: wire up
+def test_start_already_running_is_noop(tmp_path):
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=9999), \
+         patch("owm.instance._process_alive", return_value=True):
+        result = start_instance("feat-789", str(tmp_path))
     assert result.status == "already_running"
     assert result.pid is not None
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_start_already_running_message_is_clear():
-    result = start_instance(instance="feat-789", already_running=True)  # TODO: wire up
+def test_start_already_running_message_is_clear(tmp_path):
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=9999), \
+         patch("owm.instance._process_alive", return_value=True):
+        result = start_instance("feat-789", str(tmp_path))
     assert "already running" in result.message.lower() or "feat-789" in result.message
 
 
