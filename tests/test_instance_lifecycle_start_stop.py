@@ -10,6 +10,7 @@ from unittest.mock import patch, MagicMock
 from owm.errors import OwmError, START_TIMEOUT
 from owm.instance import start_instance, stop_instance, kill_instance
 from owm.instance import restart_instance, health_check
+from owm.instance import StartResult, StopResult
 from owm.instance import _state_file_path, _write_pid, _read_pid, _clear_pid, _process_alive
 from owm.instance import _PID_UNSET
 
@@ -225,15 +226,22 @@ def test_stop_not_running_message_is_clear(tmp_path):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_kill_running_instance():
-    result = kill_instance(instance="feat-789", running=True, pid=1234)  # TODO: wire up
+def test_kill_running_instance(tmp_path):
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=1234), \
+         patch("owm.instance._process_alive", return_value=True), \
+         patch("owm.instance.os.kill"), \
+         patch("owm.instance._clear_pid"):
+        result = kill_instance("feat-789", str(tmp_path))
     assert result.status == "killed"
     assert result.pid == 1234
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_kill_not_running_is_noop():
-    result = kill_instance(instance="feat-789", running=False)  # TODO: wire up
+def test_kill_not_running_is_noop(tmp_path):
+    _make_instance_dir(tmp_path)
+    with patch("owm.instance._read_pid", return_value=None):
+        result = kill_instance("feat-789", str(tmp_path))
     assert result.status == "not_running"
 
 
@@ -256,30 +264,29 @@ def test_stop_never_auto_kills(tmp_path):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_restart_stops_and_starts_returning_new_pid():
-    result = restart_instance(
-        instance="feat-789",
-        wait=False,
-        simulate_stop_clean=True,
-        new_pid=1235,
-    )  # TODO: wire up
+def test_restart_stops_and_starts_returning_new_pid(tmp_path):
+    _make_instance_dir(tmp_path)
+    mock_stop = StopResult(status="stopped", pid=1234)
+    mock_start = StartResult(status="spawned", pid=1235)
+    with patch("owm.instance.stop_instance", return_value=mock_stop), \
+         patch("owm.instance.start_instance", return_value=mock_start):
+        result = restart_instance("feat-789", str(tmp_path), wait=False)
     assert result.status == "restarted"
     assert result.pid == 1235
     assert result.url == "https://feat-789.localhost"
 
 
 @pytest.mark.instance_lifecycle_start_stop
-def test_restart_stop_timeout_returns_error_without_killing():
+def test_restart_stop_timeout_returns_error_without_killing(tmp_path):
     """Restart stop timeout → error, no implicit kill."""
-    with pytest.raises(Exception) as exc_info:
-        restart_instance(
-            instance="feat-789",
-            simulate_stop_clean=False,
-            timeout_seconds=1,
-        )  # TODO: wire up
+    _make_instance_dir(tmp_path)
+    mock_stop = StopResult(status="stop_timeout", force_killed=False, hint="run owm kill to force-stop the instance")
+    with patch("owm.instance.stop_instance", return_value=mock_stop):
+        with pytest.raises(Exception) as exc_info:
+            restart_instance("feat-789", str(tmp_path), timeout_seconds=1)
     err = str(exc_info.value)
     assert "STOP_TIMEOUT" in err or "stop timed out" in err.lower()
-    assert "kill" in err.lower()  # hint to call owm_kill
+    assert "kill" in err.lower()
 
 
 # ---------------------------------------------------------------------------

@@ -277,27 +277,30 @@ def stop_instance(
     )
 
 
-def kill_instance(instance: str, *, running: bool, pid: int | None = None) -> KillResult:
-    if not running:
+def kill_instance(instance: str, workspace_root: str) -> KillResult:
+    pid = _read_pid(instance, workspace_root)
+    if pid is None or not _process_alive(pid):
         return KillResult(status="not_running")
+    os.kill(pid, signal.SIGKILL)
+    _clear_pid(instance, workspace_root)
     return KillResult(status="killed", pid=pid)
 
 
 def restart_instance(
     instance: str,
+    workspace_root: str,
     *,
     wait: bool = False,
-    simulate_stop_clean: bool | None = None,
-    timeout_seconds: int | None = None,
-    new_pid: int | None = None,
+    timeout_seconds: int = 30,
 ) -> RestartResult:
-    if simulate_stop_clean is False:
+    stop_result = stop_instance(instance, workspace_root, wait=True, timeout_seconds=timeout_seconds)
+    if stop_result.status == "stop_timeout":
         raise OwmError(
             f"stop timed out for {instance}; run owm kill to force-stop first",
             code=STOP_TIMEOUT,
         )
-    pid = new_pid or 1235
-    return RestartResult(status="restarted", pid=pid, url=f"https://{instance}.localhost")
+    start_result = start_instance(instance, workspace_root, wait=wait, timeout_seconds=timeout_seconds)
+    return RestartResult(status="restarted", pid=start_result.pid, url=f"https://{instance}.localhost")
 
 
 def health_check(
