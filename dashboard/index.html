@@ -15,12 +15,23 @@
       <button class="collapse-btn" title="Collapse pane">‹</button>
     </div>
 
-    <div class="nav-section">
-      <a href="#instances" class="nav-item active" data-page="instances">Instances</a>
-      <a href="#processes" class="nav-item" data-page="processes">Processes</a>
+    <div class="nav-section nav-section-instances">
+      <div class="section-label">Instances</div>
+      <div class="instance-item active" data-instance="dev">
+        <span class="dot dot-running"></span>
+        <span class="instance-name">dev</span>
+      </div>
+      <div class="instance-item" data-instance="feat-789">
+        <span class="dot dot-stopped"></span>
+        <span class="instance-name">feat-789</span>
+      </div>
+      <div class="instance-item" data-instance="staging">
+        <span class="dot dot-stopped"></span>
+        <span class="instance-name">staging</span>
+      </div>
     </div>
 
-    <div class="nav-section">
+    <div class="nav-section nav-section-repos">
       <div class="section-label">Repos</div>
       <div class="repo-item">
         <span class="repo-name">odoo</span>
@@ -36,20 +47,8 @@
       </div>
     </div>
 
-    <div class="nav-section">
-      <div class="section-label">Instances</div>
-      <div class="instance-item active" data-instance="dev">
-        <span class="dot dot-running"></span>
-        <span class="instance-name">dev</span>
-      </div>
-      <div class="instance-item" data-instance="feat-789">
-        <span class="dot dot-stopped"></span>
-        <span class="instance-name">feat-789</span>
-      </div>
-      <div class="instance-item" data-instance="staging">
-        <span class="dot dot-stopped"></span>
-        <span class="instance-name">staging</span>
-      </div>
+    <div class="nav-section nav-section-footer">
+      <a href="#processes" class="nav-item" data-page="processes">Processes</a>
     </div>
   </nav>
 
@@ -90,7 +89,7 @@
           <span class="health-value ok">ok</span>
         </div>
         <div class="health-item">
-          <span class="health-label">Nginx</span>
+          <span class="health-label">Proxy</span>
           <span class="health-value ok">dev.localhost</span>
         </div>
       </div>

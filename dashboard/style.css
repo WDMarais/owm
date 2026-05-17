@@ -10,8 +10,8 @@
   --radius:    8px;
   --shadow:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
 
-  --pane-left-w:   220px;
-  --pane-right-w:  320px;
+  --pane-left-w:   200px;
+  --pane-right-w:  400px;
   --pane-right-bg: #0f172a;
   --pane-right-fg: #cbd5e1;
   --pane-right-border: #1e293b;
