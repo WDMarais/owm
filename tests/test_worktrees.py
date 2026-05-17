@@ -4,20 +4,8 @@ Covers: Worktrees and branch ownership section.
 """
 import pytest
 
-# TODO: from owm.worktrees import resolve_worktree_path, push_branch, check_shared_commit_warning
-# TODO: from owm.worktrees import create_worktree, WorktreeConfig
-
-def resolve_worktree_path(*args, **kwargs):
-    raise NotImplementedError
-
-def push_branch(*args, **kwargs):
-    raise NotImplementedError
-
-def check_shared_commit_warning(*args, **kwargs):
-    raise NotImplementedError
-
-def create_worktree(*args, **kwargs):
-    raise NotImplementedError
+from owm.worktrees import resolve_worktree_path, push_branch, check_shared_commit_warning
+from owm.worktrees import create_worktree, WorktreeConfig
 
 
 # ---------------------------------------------------------------------------
@@ -206,9 +194,7 @@ def test_per_instance_worktree_commit_no_warning():
 # Local edits in readonly worktree
 # ---------------------------------------------------------------------------
 
-# TODO: from owm.worktrees import check_edit_allowed
-def check_edit_allowed(*args, **kwargs):
-    raise NotImplementedError
+from owm.worktrees import check_edit_allowed
 
 
 @pytest.mark.worktrees
