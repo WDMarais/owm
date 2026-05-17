@@ -7,6 +7,8 @@ import pytest
 from owm.database import create_db, reset_db, sync_db_from_template
 from owm.database import check_template_staleness, check_pg_reachability
 from owm.database import DatabaseConfig, TemplateStatus
+from owm.config import generate_instance_conf
+from owm.workspace import init_workspace
 
 
 # ---------------------------------------------------------------------------
@@ -197,10 +199,6 @@ def test_pg_reachability_check_uses_pg_isready():
 @pytest.mark.database_auth
 def test_odoo_conf_includes_dbfilter():
     """Generated instance.conf sets dbfilter = ^<name>$ for subdomain isolation."""
-    # TODO: from owm.config import generate_instance_conf
-    def generate_instance_conf(*args, **kwargs):
-        raise NotImplementedError
-
     conf = generate_instance_conf(instance_name="feat-789", http_port=8142, gevent_port=8143, workers=2)  # TODO: wire up
     dbfilter = conf.get("dbfilter") if isinstance(conf, dict) else None
     assert dbfilter == "^feat-789$" or "dbfilter = ^feat-789$" in str(conf)
@@ -210,10 +208,6 @@ def test_odoo_conf_includes_dbfilter():
 @pytest.mark.database_auth
 def test_init_creates_operator_superuser_role_if_absent():
     """owm init: createuser --superuser $(whoami) if role absent; idempotent."""
-    # TODO: from owm.workspace import init_workspace
-    def init_workspace(*args, **kwargs):
-        raise NotImplementedError
-
     result = init_workspace(
         pg_port=5432,
         operator_user="devuser",
@@ -226,9 +220,6 @@ def test_init_creates_operator_superuser_role_if_absent():
 @pytest.mark.database_lifecycle
 @pytest.mark.database_auth
 def test_init_superuser_already_exists_is_idempotent():
-    def init_workspace(*args, **kwargs):
-        raise NotImplementedError
-
     result = init_workspace(
         pg_port=5432,
         operator_user="devuser",
