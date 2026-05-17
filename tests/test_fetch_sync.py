@@ -4,26 +4,8 @@ Covers: Fetch and sync section.
 """
 import pytest
 
-# TODO: from owm.sync import fetch_workspace, sync_instance, push_instance
-# TODO: from owm.sync import reset_instance, record_checkpoint, rollback_to_checkpoint
-
-def fetch_workspace(*args, **kwargs):
-    raise NotImplementedError
-
-def sync_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def push_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def reset_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def record_checkpoint(*args, **kwargs):
-    raise NotImplementedError
-
-def rollback_to_checkpoint(*args, **kwargs):
-    raise NotImplementedError
+from owm.sync import fetch_workspace, sync_instance, push_instance
+from owm.sync import reset_instance, record_checkpoint, rollback_to_checkpoint
 
 
 # ---------------------------------------------------------------------------
