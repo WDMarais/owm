@@ -4,16 +4,7 @@ Covers: Unmanaged processes and adoption section.
 """
 import pytest
 
-# TODO: from owm.adoption import detect_unmanaged_processes, adopt_process, status_with_unmanaged
-
-def detect_unmanaged_processes(*args, **kwargs):
-    raise NotImplementedError
-
-def adopt_process(*args, **kwargs):
-    raise NotImplementedError
-
-def status_with_unmanaged(*args, **kwargs):
-    raise NotImplementedError
+from owm.adoption import detect_unmanaged_processes, adopt_process, status_with_unmanaged
 
 
 # ---------------------------------------------------------------------------
