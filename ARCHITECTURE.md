@@ -69,6 +69,26 @@ Stable terms used throughout owm. Reference here to avoid ambiguity.
 ```
 Written by owm on start/stop/adopt/kill. Read by `owm_ps`, `health_check`, `owm_status`. Absent = stopped.
 
+**Repo sync state shape** (returned by `owm_status`, `owm_sync`, dashboard API — see INCOMING.md for caching/staleness discussion):
+```json
+{
+  "dirty": false,
+  "vs_origin_branch": {"ahead_by": 2, "behind_by": 0},
+  "vs_origin_base":   {"behind_by": 3, "ahead_by": 0},
+  "vs_pinned_hash":   {"ahead_by": 0, "behind_by": 0}
+}
+```
+`dirty`, `vs_origin_branch`, and `vs_origin_base` are always present.
+- `vs_origin_branch`: push state — unpushed local commits (ahead) or remote was updated by someone else (behind)
+- `vs_origin_base`: rebase state — how far the base branch has moved away; behind means rebase needed
+- `dirty`: uncommitted local changes
+
+Opt-in extras (key absent = not applicable/not opted in; key present = active, even if all zeros):
+- `vs_pinned_hash`: present when a specific base commit is pinned (e.g. after hash-restore); removed when unpinned or rebased past the pin
+- `vs_local_base`: present when opted into local base tracking
+
+Display-layer strings ("clean", "behind", "ahead", "diverged", "dirty") are derived from these fields, not stored.
+
 **`review/` semantics:** Dated Markdown snapshots from any participant — agent-written reviews,
 received human feedback, pr-ism syncs, discussion notes. Each snapshot is point-in-time and
 self-contained relative to `context.md` (which holds the stable PR-wide background). Trigger

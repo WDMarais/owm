@@ -1,0 +1,29 @@
+[repos]
+odoo            = "https://github.com/odoo/odoo.git"
+enterprise      = "https://github.com/odoo/enterprise.git"
+customer-config = "git@github.com:acme/customer-config.git"
+
+[repos.meta.odoo]
+has_addons   = true
+addons_paths = ["odoo/addons", "addons"]
+
+[repos.meta.enterprise]
+has_addons   = true
+addons_paths = ["."]
+
+[repos.meta.customer-config]
+has_addons   = true
+addons_paths = ["addons"]
+
+[clusters.default]
+pg_version = "15"
+port       = 5432
+
+[defaults]
+http_port_range = [8100, 8199]
+
+[proxy]
+domain_suffix = "localhost"
+
+[scripts]
+scripts_dir = "scripts/workspace"

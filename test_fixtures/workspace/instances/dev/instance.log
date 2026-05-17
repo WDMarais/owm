@@ -1,0 +1,5 @@
+2026-05-18 10:22:58,123 1 INFO dev odoo.service.server: HTTP service (werkzeug) running on 0.0.0.0:8100
+2026-05-18 10:22:58,456 1 INFO dev odoo.service.server: Evented Service (longpolling) running on 0.0.0.0:8101
+2026-05-18 10:22:59,012 1 INFO dev odoo.modules.loading: loading 1 modules...
+2026-05-18 10:22:59,734 1 INFO dev odoo.modules.loading: 1 modules loaded in 0.72s, 0 queries
+2026-05-18 10:23:01,089 1 INFO dev odoo: server ready

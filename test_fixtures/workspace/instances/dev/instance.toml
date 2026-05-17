@@ -1,0 +1,27 @@
+[repos]
+customer-config = "feat-789-dev:dev"
+enterprise      = "17.0:shared+readonly"
+odoo            = "17.0:shared+readonly"
+
+[database]
+name    = "dev"
+pg_port = 5432
+
+[server]
+http_port   = 8100
+gevent_port = 8101
+
+[scripts]
+default = "setup"
+
+[scripts.runners.setup]
+file = "setup.py"
+type = "odoo_test"
+
+[scripts.runners.data-load]
+file = "data_load.py"
+type = "odoo_test"
+
+[scripts.runners.migrate]
+file = "migrate.py"
+type = "odoo_test"

@@ -1,0 +1,19 @@
+[repos]
+customer-config = "staging:dev"
+enterprise      = "17.0:shared+readonly"
+odoo            = "17.0:shared+readonly"
+
+[database]
+name    = "staging"
+pg_port = 5432
+
+[server]
+http_port   = 8104
+gevent_port = 8105
+
+[scripts]
+default = "setup"
+
+[scripts.runners.setup]
+file = "setup.py"
+type = "odoo_test"

@@ -1,0 +1,6 @@
+{"ts": "2026-05-18T10:21:10Z", "level": "INFO", "msg": "owm started"}
+{"ts": "2026-05-18T10:22:28Z", "level": "INFO", "msg": "workspace fetched", "repos": {"odoo": "2 new commits", "customer-config": "ok"}}
+{"ts": "2026-05-18T10:22:30Z", "level": "INFO", "msg": "venv activated", "instance": "dev"}
+{"ts": "2026-05-18T10:22:45Z", "level": "WARN", "msg": "waiting for port 8100...", "instance": "dev"}
+{"ts": "2026-05-18T10:22:58Z", "level": "INFO", "msg": "starting odoo-bin on :8100", "instance": "dev"}
+{"ts": "2026-05-18T10:23:01Z", "level": "INFO", "msg": "instance dev started", "instance": "dev", "pid": 12345}
