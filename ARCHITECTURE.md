@@ -93,6 +93,7 @@ implemented.
 | Port pair | `[N, N+1]`; N = http, N+1 = gevent; skip whole pair if either occupied |
 | Port range boundary | `[8100, 8299]` = 100 pairs; 8298 = last valid HTTP, 8299 = last valid gevent |
 | `simulate_*` parameters | Kept as real injection parameters in production signatures; provide controlled state without disk/process setup |
+| `addons_paths` ordering | Two-level rule: **across repos**, workspace.toml declaration order is reversed (base→specific ergonomic; last-declared repo wins). **Within a repo's `addons_paths` list**, declaration order is preserved (first-declared = highest priority; users write explicit priority order, same as PATH/PYTHONPATH convention). |
 
 ---
 

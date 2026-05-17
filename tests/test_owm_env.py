@@ -4,13 +4,7 @@ Covers: owm env section.
 """
 import pytest
 
-# TODO: from owm.env import resolve_env, format_env
-
-def resolve_env(*args, **kwargs):
-    raise NotImplementedError
-
-def format_env(*args, **kwargs):
-    raise NotImplementedError
+from owm.env import resolve_env, format_env
 
 
 # ---------------------------------------------------------------------------

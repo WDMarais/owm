@@ -4,9 +4,7 @@ Covers: Addons resolution section.
 """
 import pytest
 
-# TODO: from owm.addons import resolve_addons_path
-def resolve_addons_path(*args, **kwargs):
-    raise NotImplementedError
+from owm.addons import resolve_addons_path
 
 
 # ---------------------------------------------------------------------------
@@ -201,8 +199,10 @@ def test_addons_path_multi_path_repo_both_folders_included():
 
 
 @pytest.mark.addons_resolution
-def test_addons_path_multi_path_repo_reversed_within_repo():
-    """Within a repo's multiple addons paths, later-declared = higher override priority (reversed)."""
+def test_addons_path_multi_path_repo_declaration_order_within_repo():
+    """Within a repo's addons_paths, first-declared = highest priority (no reversal).
+    Reversal only applies across repos (workspace declaration order), not within a single
+    repo's addons_paths list. Users write addons_paths in explicit priority order."""
     workspace_repos = {
         "multi-repo": {"has_addons": True, "addons_paths": ["primary_addons", "secondary_addons"], "url": "..."},
     }
@@ -218,9 +218,9 @@ def test_addons_path_multi_path_repo_reversed_within_repo():
     )  # TODO: wire up
     if not isinstance(paths, list):
         paths = list(paths)
-    secondary_idx = next(i for i, p in enumerate(paths) if "secondary_addons" in p)
     primary_idx   = next(i for i, p in enumerate(paths) if "primary_addons" in p)
-    assert secondary_idx < primary_idx
+    secondary_idx = next(i for i, p in enumerate(paths) if "secondary_addons" in p)
+    assert primary_idx < secondary_idx
 
 
 @pytest.mark.addons_resolution
