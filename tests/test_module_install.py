@@ -4,16 +4,7 @@ Covers: Module install and upgrade section.
 """
 import pytest
 
-# TODO: from owm.modules import install_modules, upgrade_modules, check_modules_present
-
-def install_modules(*args, **kwargs):
-    raise NotImplementedError
-
-def upgrade_modules(*args, **kwargs):
-    raise NotImplementedError
-
-def check_modules_present(*args, **kwargs):
-    raise NotImplementedError
+from owm.modules import install_modules, upgrade_modules, check_modules_present
 
 
 # ---------------------------------------------------------------------------
