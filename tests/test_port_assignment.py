@@ -3,6 +3,7 @@ Tests for port assignment logic.
 Covers: Port assignment, Ports — gevent and workers sections.
 """
 import pytest
+from unittest.mock import patch, MagicMock
 
 from owm.ports import assign_port, find_conflicting_process, evict_port
 from owm.ports import PortConflict, PortExhaustedError
@@ -268,6 +269,84 @@ def test_odoo_conf_no_dbfilter_when_proxy_inactive():
         proxy_active=False,
     )
     assert "dbfilter" not in conf
+
+
+# ---------------------------------------------------------------------------
+# find_conflicting_process (I/O layer)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.port_assignment
+def test_find_conflicting_process_returns_none_when_port_free():
+    with patch("owm.ports.psutil.net_connections", return_value=[]):
+        result = find_conflicting_process(8142)
+    assert result is None
+
+
+@pytest.mark.port_assignment
+def test_find_conflicting_process_returns_pid_name_cmdline():
+    mock_conn = MagicMock()
+    mock_conn.laddr.port = 8142
+    mock_conn.status = "LISTEN"
+    mock_conn.pid = 9999
+    mock_proc = MagicMock()
+    mock_proc.name.return_value = "nginx"
+    mock_proc.cmdline.return_value = ["nginx", "-g", "daemon off;"]
+    with patch("owm.ports.psutil.net_connections", return_value=[mock_conn]):
+        with patch("owm.ports.psutil.Process", return_value=mock_proc):
+            result = find_conflicting_process(8142)
+    assert result == {"pid": 9999, "name": "nginx", "cmdline": "nginx -g daemon off;"}
+
+
+@pytest.mark.port_assignment
+def test_find_conflicting_process_ignores_non_listen_connections():
+    mock_conn = MagicMock()
+    mock_conn.laddr.port = 8142
+    mock_conn.status = "ESTABLISHED"
+    with patch("owm.ports.psutil.net_connections", return_value=[mock_conn]):
+        result = find_conflicting_process(8142)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_eviction_log / evict_port (I/O layer)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.port_assignment
+def test_get_eviction_log_reads_json_lines(tmp_path):
+    log = tmp_path / "evictions.jsonl"
+    log.write_text(
+        '{"instance":"feat-789","old_port":8142,"new_port":8200,"reason":"nginx"}\n'
+    )
+    result = get_eviction_log(str(log))
+    assert len(result) == 1
+    assert result[0]["instance"] == "feat-789"
+    assert result[0]["old_port"] == 8142
+
+
+@pytest.mark.port_assignment
+def test_get_eviction_log_missing_file_returns_empty(tmp_path):
+    result = get_eviction_log(str(tmp_path / "nonexistent.jsonl"))
+    assert result == []
+
+
+@pytest.mark.port_assignment
+def test_evict_port_writes_to_log_when_path_given(tmp_path):
+    log = tmp_path / "evictions.jsonl"
+    result = evict_port("feat-789", 8142, 8200, "nginx conflict", log_path=str(log))
+    assert result.logged is True
+    entries = get_eviction_log(str(log))
+    assert len(entries) == 1
+    assert entries[0]["old_port"] == 8142
+    assert entries[0]["new_port"] == 8200
+
+
+@pytest.mark.port_assignment
+def test_evict_port_appends_multiple_entries(tmp_path):
+    log = tmp_path / "evictions.jsonl"
+    evict_port("feat-789", 8142, 8200, "first", log_path=str(log))
+    evict_port("feat-789", 8200, 8202, "second", log_path=str(log))
+    entries = get_eviction_log(str(log))
+    assert len(entries) == 2
 
 
 # === SPEC GAPS ===

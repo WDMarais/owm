@@ -1,4 +1,8 @@
+import json
+import os
 from dataclasses import dataclass, field
+
+import psutil
 
 from owm.errors import OwmError, PORT_EXHAUSTED, PORT_CONTESTED
 
@@ -132,7 +136,13 @@ def evict_port(
     old_port: int,
     new_port: int,
     reason: str,
+    *,
+    log_path: str | None = None,
 ) -> EvictResult:
+    if log_path is not None:
+        entry = {"instance": instance, "old_port": old_port, "new_port": new_port, "reason": reason}
+        with open(log_path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
     return EvictResult(logged=True, old_port=old_port, new_port=new_port)
 
 
@@ -150,10 +160,23 @@ def eviction_count_in_window(
 
 
 def find_conflicting_process(port: int) -> dict | None:
-    # I/O stub — real implementation queries psutil or `ss -tlnp` for pid/name/cmdline.
+    for conn in psutil.net_connections(kind="tcp"):
+        if conn.laddr.port == port and conn.status == "LISTEN":
+            try:
+                proc = psutil.Process(conn.pid)
+                return {
+                    "pid": conn.pid,
+                    "name": proc.name(),
+                    "cmdline": " ".join(proc.cmdline()),
+                }
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                return {"pid": conn.pid, "name": None, "cmdline": None}
     return None
 
 
 def get_eviction_log(log_path: str) -> list[dict]:
-    # I/O stub — real implementation reads and parses the eviction log file at log_path.
-    return []
+    try:
+        with open(log_path) as f:
+            return [json.loads(line) for line in f if line.strip()]
+    except OSError:
+        return []

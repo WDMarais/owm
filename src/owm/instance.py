@@ -1,4 +1,7 @@
+import os
 from dataclasses import dataclass, field
+
+import psutil
 
 from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT
 
@@ -56,6 +59,27 @@ class RestartResult:
     status: str
     pid: int | None = None
     url: str | None = None
+
+
+def _pid_file_path(instance: str, workspace_root: str) -> str:
+    return os.path.join(workspace_root, "instances", instance, ".owm.pid")
+
+
+def _write_pid(instance: str, workspace_root: str, pid: int) -> None:
+    with open(_pid_file_path(instance, workspace_root), "w") as f:
+        f.write(str(pid))
+
+
+def _read_pid(instance: str, workspace_root: str) -> int | None:
+    try:
+        with open(_pid_file_path(instance, workspace_root)) as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _process_alive(pid: int) -> bool:
+    return psutil.pid_exists(pid)
 
 
 def new_instance(name: str, repos: dict, workspace_root: str, *, already_exists: bool = False) -> NewResult:

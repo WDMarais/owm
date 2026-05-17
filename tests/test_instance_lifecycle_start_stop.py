@@ -3,9 +3,38 @@ Tests for instance start, stop, kill, restart, and health checks.
 Covers: Instance lifecycle — start/stop section.
 """
 import pytest
+from unittest.mock import patch
 
 from owm.instance import start_instance, stop_instance, kill_instance
 from owm.instance import restart_instance, health_check
+from owm.instance import _pid_file_path, _write_pid, _read_pid, _process_alive
+
+
+# ---------------------------------------------------------------------------
+# PID file helpers
+# ---------------------------------------------------------------------------
+
+@pytest.mark.instance_lifecycle_start_stop
+def test_pid_file_round_trip(tmp_path):
+    inst_dir = tmp_path / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True)
+    _write_pid("feat-789", str(tmp_path), 1234)
+    assert _read_pid("feat-789", str(tmp_path)) == 1234
+
+
+@pytest.mark.instance_lifecycle_start_stop
+def test_read_pid_returns_none_when_missing(tmp_path):
+    inst_dir = tmp_path / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True)
+    assert _read_pid("feat-789", str(tmp_path)) is None
+
+
+@pytest.mark.instance_lifecycle_start_stop
+def test_process_alive_delegates_to_psutil():
+    with patch("owm.instance.psutil.pid_exists", return_value=True):
+        assert _process_alive(1234) is True
+    with patch("owm.instance.psutil.pid_exists", return_value=False):
+        assert _process_alive(9999999) is False
 
 
 # ---------------------------------------------------------------------------
