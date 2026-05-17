@@ -255,7 +255,10 @@ def start_instance(
     events = ["instance_starting"]
 
     if wait:
-        _wait_for_http(conf.server.http_port, timeout_seconds)
+        try:
+            _wait_for_http(conf.server.http_port, timeout_seconds)
+        except OwmError as e:
+            raise OwmError(str(e.args[0]), code=e.code, pid=proc.pid) from e
         events.append("instance_healthy")
         return StartResult(status="healthy", pid=proc.pid, events_emitted=events)
 

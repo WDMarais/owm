@@ -8,6 +8,7 @@ consistent, and (c) that specific operations produce the right code.
 These complement the per-section tests; they assert the cross-cutting contract.
 """
 import pytest
+from unittest.mock import patch
 
 from owm.errors import (
     NOT_FOUND, ALREADY_EXISTS, INSTANCE_RUNNING, DIRTY_WORKTREE,
@@ -22,6 +23,7 @@ from owm.mcp import (
     owm_db_restore, owm_create, owm_reset, owm_push, owm_compare,
     owm_start, owm_stop, owm_upgrade,
 )
+from owm.instance import StopResult
 from owm.ports import assign_port, honour_pinned_port
 
 
@@ -190,13 +192,20 @@ def test_no_compare_target_when_no_pair_and_no_base():
 
 @pytest.mark.error_taxonomy
 def test_start_timeout_code():
-    result = owm_start(instance="feat-789", wait=True, simulate_timeout=True)  # TODO: wire up
+    with patch("owm.mcp.start_instance",
+               side_effect=OwmError("timed out", code=START_TIMEOUT, pid=1234)):
+        result = owm_start(instance="feat-789", wait=True)
     assert result["code"] == START_TIMEOUT
 
 
 @pytest.mark.error_taxonomy
 def test_stop_timeout_code_and_hint():
-    result = owm_stop(instance="feat-789", wait=True, simulate_timeout=True)  # TODO: wire up
+    with patch("owm.mcp.stop_instance", return_value=StopResult(
+        status="stop_timeout",
+        force_killed=False,
+        hint="run owm kill to force-stop the instance",
+    )):
+        result = owm_stop(instance="feat-789", wait=True)
     assert result["code"] == STOP_TIMEOUT
     assert "kill" in result["hint"].lower()
 

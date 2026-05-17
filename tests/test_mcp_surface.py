@@ -213,9 +213,14 @@ def test_owm_create_dirty_worktree_error():
 # Lifecycle tools — owm_start / stop / kill / restart
 # ---------------------------------------------------------------------------
 
+from owm.instance import StartResult, StopResult, KillResult, RestartResult
+from owm.errors import OwmError, START_TIMEOUT, STOP_TIMEOUT
+
+
 @pytest.mark.mcp_surface
 def test_owm_start_returns_spawned():
-    result = owm_start(instance="feat-789")  # TODO: wire up
+    with patch("owm.mcp.start_instance", return_value=StartResult(status="spawned", pid=1234)):
+        result = owm_start(instance="feat-789")
     assert result["status"] == "spawned"
     assert result["pid"] is not None
     assert result["url"] == "https://feat-789.localhost"
@@ -223,40 +228,51 @@ def test_owm_start_returns_spawned():
 
 @pytest.mark.mcp_surface
 def test_owm_start_wait_healthy():
-    result = owm_start(instance="feat-789", wait=True, simulate_healthy=True)  # TODO: wire up
+    with patch("owm.mcp.start_instance", return_value=StartResult(status="healthy", pid=1234)):
+        result = owm_start(instance="feat-789", wait=True)
     assert result["status"] == "healthy"
 
 
 @pytest.mark.mcp_surface
 def test_owm_start_wait_timeout():
-    result = owm_start(instance="feat-789", wait=True, simulate_timeout=True)  # TODO: wire up
+    with patch("owm.mcp.start_instance",
+               side_effect=OwmError("timed out", code=START_TIMEOUT, pid=1234)):
+        result = owm_start(instance="feat-789", wait=True)
     assert result["code"] == "START_TIMEOUT"
     assert result["pid"] is not None
 
 
 @pytest.mark.mcp_surface
 def test_owm_start_already_running():
-    result = owm_start(instance="feat-789", already_running=True, pid=1234)  # TODO: wire up
+    with patch("owm.mcp.start_instance", return_value=StartResult(status="already_running", pid=1234)):
+        result = owm_start(instance="feat-789")
     assert result["status"] == "already_running"
     assert result["pid"] == 1234
 
 
 @pytest.mark.mcp_surface
 def test_owm_stop_returns_stopping():
-    result = owm_stop(instance="feat-789", running=True, pid=1234)  # TODO: wire up
+    with patch("owm.mcp.stop_instance", return_value=StopResult(status="stopping", pid=1234)):
+        result = owm_stop(instance="feat-789")
     assert result["status"] == "stopping"
     assert result["pid"] == 1234
 
 
 @pytest.mark.mcp_surface
 def test_owm_stop_wait_clean_exit():
-    result = owm_stop(instance="feat-789", wait=True, simulate_clean_exit=True)  # TODO: wire up
+    with patch("owm.mcp.stop_instance", return_value=StopResult(status="stopped", pid=1234)):
+        result = owm_stop(instance="feat-789", wait=True)
     assert result["status"] == "stopped"
 
 
 @pytest.mark.mcp_surface
 def test_owm_stop_wait_timeout_never_kills():
-    result = owm_stop(instance="feat-789", wait=True, simulate_timeout=True)  # TODO: wire up
+    with patch("owm.mcp.stop_instance", return_value=StopResult(
+        status="stop_timeout",
+        force_killed=False,
+        hint="run owm kill to force-stop the instance",
+    )):
+        result = owm_stop(instance="feat-789", wait=True)
     assert result["status"] == "timeout"
     assert result["code"] == "STOP_TIMEOUT"
     assert "kill" in result["hint"].lower()
@@ -264,25 +280,29 @@ def test_owm_stop_wait_timeout_never_kills():
 
 @pytest.mark.mcp_surface
 def test_owm_stop_not_running():
-    result = owm_stop(instance="feat-789", running=False)  # TODO: wire up
+    with patch("owm.mcp.stop_instance", return_value=StopResult(status="not_running")):
+        result = owm_stop(instance="feat-789")
     assert result == {"status": "not_running"}
 
 
 @pytest.mark.mcp_surface
 def test_owm_kill_running():
-    result = owm_kill(instance="feat-789", running=True, pid=1234)  # TODO: wire up
+    with patch("owm.mcp.kill_instance", return_value=KillResult(status="killed", pid=1234)):
+        result = owm_kill(instance="feat-789")
     assert result == {"status": "killed", "pid": 1234}
 
 
 @pytest.mark.mcp_surface
 def test_owm_kill_not_running():
-    result = owm_kill(instance="feat-789", running=False)  # TODO: wire up
+    with patch("owm.mcp.kill_instance", return_value=KillResult(status="not_running")):
+        result = owm_kill(instance="feat-789")
     assert result == {"status": "not_running"}
 
 
 @pytest.mark.mcp_surface
 def test_owm_restart_returns_new_pid():
-    result = owm_restart(instance="feat-789", wait=False, new_pid=1235)  # TODO: wire up
+    with patch("owm.mcp.restart_instance", return_value=RestartResult(status="restarted", pid=1235)):
+        result = owm_restart(instance="feat-789")
     assert result["status"] == "restarted"
     assert result["pid"] == 1235
     assert result["url"] == "https://feat-789.localhost"
@@ -290,7 +310,9 @@ def test_owm_restart_returns_new_pid():
 
 @pytest.mark.mcp_surface
 def test_owm_restart_stop_timeout_returns_error():
-    result = owm_restart(instance="feat-789", simulate_stop_timeout=True)  # TODO: wire up
+    with patch("owm.mcp.restart_instance",
+               side_effect=OwmError("stop timed out", code=STOP_TIMEOUT)):
+        result = owm_restart(instance="feat-789")
     assert result["code"] == "STOP_TIMEOUT"
     assert "kill" in result["hint"].lower()
 

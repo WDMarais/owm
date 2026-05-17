@@ -4,7 +4,7 @@ Each owm_* function calls the appropriate underlying module, converts
 OwmError to ErrorResponse dicts, and returns JSON-serialisable results.
 No business logic lives here.
 """
-from owm.errors import OwmError, format_error
+from owm.errors import OwmError, format_error, START_TIMEOUT, STOP_TIMEOUT
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
     kill_instance, restart_instance, health_check,
@@ -100,52 +100,43 @@ def owm_create(instance, toml=None, repos=None, *,
     return {"status": "ok", "created": [], "updated": [], "skipped": []}
 
 
-def owm_start(instance, wait=False, *,
-              simulate_healthy=None, simulate_timeout=False,
-              already_running=False, pid=None, **kwargs):
-    if simulate_timeout:
-        return {"code": "START_TIMEOUT", "pid": pid or 1234}
-    if already_running:
-        return {"status": "already_running", "pid": pid or 1234}
-    if wait and simulate_healthy:
-        return {"status": "healthy", "pid": 1234, "url": f"https://{instance}.localhost"}
-    return {"status": "spawned", "pid": 1234, "url": f"https://{instance}.localhost"}
+def owm_start(instance, workspace_root=".", wait=False, **kwargs):
+    try:
+        result = start_instance(instance, workspace_root, wait=wait)
+    except OwmError as e:
+        return _e(e)
+    return {"status": result.status, "pid": result.pid, "url": f"https://{instance}.localhost"}
 
 
-def owm_stop(instance, wait=False, running=True, *,
-             simulate_clean_exit=None, simulate_timeout=False,
-             pid=None, **kwargs):
-    if not running:
+def owm_stop(instance, workspace_root=".", wait=False, **kwargs):
+    result = stop_instance(instance, workspace_root, wait=wait)
+    if result.status == "not_running":
         return {"status": "not_running"}
-    if simulate_timeout:
+    if result.status == "stop_timeout":
         return {
             "status": "timeout",
             "code": "STOP_TIMEOUT",
-            "hint": "run owm kill to force-stop the instance",
+            "hint": result.hint or "run owm kill to force-stop the instance",
         }
-    if wait and simulate_clean_exit:
-        return {"status": "stopped"}
-    return {"status": "stopping", "pid": pid or 1234}
+    return {"status": result.status, "pid": result.pid}
 
 
-def owm_kill(instance, running=True, pid=None, **kwargs):
-    if not running:
+def owm_kill(instance, workspace_root=".", **kwargs):
+    result = kill_instance(instance, workspace_root)
+    if result.status == "not_running":
         return {"status": "not_running"}
-    return {"status": "killed", "pid": pid}
+    return {"status": "killed", "pid": result.pid}
 
 
-def owm_restart(instance, wait=False, *,
-                simulate_stop_timeout=False, new_pid=None, **kwargs):
-    if simulate_stop_timeout:
-        return {
-            "code": "STOP_TIMEOUT",
-            "hint": "run owm kill to force-stop the instance first",
-        }
-    return {
-        "status": "restarted",
-        "pid": new_pid or 1235,
-        "url": f"https://{instance}.localhost",
-    }
+def owm_restart(instance, workspace_root=".", wait=False, **kwargs):
+    try:
+        result = restart_instance(instance, workspace_root, wait=wait)
+    except OwmError as e:
+        err = _e(e)
+        if e.code == STOP_TIMEOUT:
+            err["hint"] = "run owm kill to force-stop the instance first"
+        return err
+    return {"status": "restarted", "pid": result.pid, "url": f"https://{instance}.localhost"}
 
 
 def owm_health(instance, workspace_root=".", **kwargs):
