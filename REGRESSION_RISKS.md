@@ -152,32 +152,14 @@ can import without the naming confusion.
 
 ---
 
-## 9. `find_conflicting_process` and `get_eviction_log` are permanent dead stubs
+## 9. `find_conflicting_process` and `get_eviction_log` are I/O stubs — deferred to I/O sweep
 
-**Issue:** Two functions in `ports.py` have no implementation and no injection
-parameter path that would ever exercise real behavior:
+**Resolution:** These are pure I/O shims, not business-logic paths. Injection
+parameters would be removed when the real implementation lands, so adding them
+now is the wrong pattern. Their callers (`check_port_at_start` via `bound_by=`,
+`eviction_count_in_window` via `evictions=`) are already fully exercised by the
+test harness through their own injection parameters.
 
-```python
-def find_conflicting_process(port: int) -> dict | None:
-    return None
-
-def get_eviction_log(log_path: str) -> list[dict]:
-    return []
-```
-
-Unlike other stubs where an injection parameter controls the path
-(`simulate_failure=True` etc.), these functions have no parameter surface at all.
-There is no test that passes a non-None result from `find_conflicting_process` —
-the conflict detection path in `check_port_at_start` is exercised only by passing
-`bound_by=` directly. The functions are exported from the module but never called
-with real inputs anywhere.
-
-This means the port-conflict-at-start flow (detecting which process holds a port,
-surfacing its PID/name/cmdline) and the eviction log read path are completely
-unexercised. These are load-bearing for the spec's "process name, PID, command
-line" conflict surface.
-
-**What needs addressing:** add injection parameters to both functions so the test
-harness can exercise the callers that depend on them (`check_port_at_start`,
-`eviction_count_in_window`), or document explicitly that these are integration-only
-and note what the real implementation calls (e.g. `psutil`, `/proc`, `ss -tlnp`).
+Both functions now carry comments naming the real I/O call (`psutil` /
+`ss -tlnp` for process lookup; file read for the eviction log). Full
+implementation is deferred to the I/O sweep.

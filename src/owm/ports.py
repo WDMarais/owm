@@ -150,8 +150,10 @@ def eviction_count_in_window(
 
 
 def find_conflicting_process(port: int) -> dict | None:
+    # I/O stub — real implementation queries psutil or `ss -tlnp` for pid/name/cmdline.
     return None
 
 
 def get_eviction_log(log_path: str) -> list[dict]:
+    # I/O stub — real implementation reads and parses the eviction log file at log_path.
     return []
