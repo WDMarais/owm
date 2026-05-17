@@ -1,5 +1,7 @@
 # owm rewrite — behavioral spec
 
+> **Status: superseded.** This document was the source of truth during harness and architecture generation. It has been consumed for that purpose and is no longer actively maintained. Tests are now the canonical behavioral contract. Content here will be reconciled into DESIGN.md / USAGE.md / README.md over time and this file retired. Do not treat anything here as authoritative without cross-checking against the test suite and implementation.
+
 ## Instance model
 
 An instance is a named unit of work comprising:
@@ -282,8 +284,9 @@ scripts repo in instance (has_addons not set)
 
 ```
 instance with [multi-repo(feat, addons_paths=["primary_addons","secondary_addons"])]
-→ addons_path = multi-repo/secondary_addons, multi-repo/primary_addons
-# both folders contribute; reversed within the repo following the same override-specificity rule
+→ addons_path = multi-repo/primary_addons, multi-repo/secondary_addons
+# both folders contribute; declaration order preserved within a repo (first-declared = highest priority, same as PATH convention)
+# inter-repo order is reversed for override specificity; intra-repo order is not
 ```
 
 ## Requirements patching

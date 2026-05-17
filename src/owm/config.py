@@ -32,6 +32,7 @@ class WorkspaceDefaults:
     sync_warn_hours: int = 72
     eviction_threshold: int = 10
     template_warn_days: int = 30
+    repo_priority: list[str] | None = None
 
 
 @dataclass
@@ -176,6 +177,7 @@ def parse_workspace_config(toml: str) -> WorkspaceConfig:
         sync_warn_hours=dr.get("sync_warn_hours", 72),
         eviction_threshold=dr.get("eviction_threshold", 10),
         template_warn_days=dr.get("template_warn_days", 30),
+        repo_priority=dr.get("repo_priority", None),
     )
 
     patches = raw.get("patches", {})

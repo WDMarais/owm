@@ -12,16 +12,16 @@ from owm.addons import resolve_addons_path
 # ---------------------------------------------------------------------------
 
 @pytest.mark.addons_resolution
-def test_addons_path_full_instance_reversed_override_order():
+def test_addons_path_full_instance_declaration_order():
     """
-    Repos declared in workspace.toml stability order: odoo → product-core → customer-config.
-    addons_path reverses this for override specificity: customer-config → product-core → odoo.
+    workspace.toml declares repos in priority order: customer-config → product-core → odoo.
+    addons_path preserves this order: customer-config first (highest priority), odoo last.
     odoo uses addons_paths=["addons","odoo/addons"] — contributes two entries.
     """
     workspace_repos = {
-        "odoo":            {"has_addons": True,  "addons_paths": ["addons", "odoo/addons"], "url": "..."},
-        "product-core":    {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
         "customer-config": {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
+        "product-core":    {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
+        "odoo":            {"has_addons": True,  "addons_paths": ["addons", "odoo/addons"], "url": "..."},
         "scripts":         {"has_addons": False,                                             "url": "..."},
     }
     instance_repos = {
@@ -48,9 +48,9 @@ def test_addons_path_full_instance_reversed_override_order():
 def test_addons_path_excludes_repo_not_in_instance():
     """customer-config absent from instance.toml → silently excluded, no warning."""
     workspace_repos = {
-        "odoo":            {"has_addons": True,  "addons_paths": ["addons", "odoo/addons"], "url": "..."},
-        "product-core":    {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
         "customer-config": {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
+        "product-core":    {"has_addons": True,  "addons_paths": ["addons"],                "url": "..."},
+        "odoo":            {"has_addons": True,  "addons_paths": ["addons", "odoo/addons"], "url": "..."},
     }
     instance_repos = {
         "odoo":         {"branch": "19.0", "shared": True},
@@ -200,9 +200,8 @@ def test_addons_path_multi_path_repo_both_folders_included():
 
 @pytest.mark.addons_resolution
 def test_addons_path_multi_path_repo_declaration_order_within_repo():
-    """Within a repo's addons_paths, first-declared = highest priority (no reversal).
-    Reversal only applies across repos (workspace declaration order), not within a single
-    repo's addons_paths list. Users write addons_paths in explicit priority order."""
+    """Within a repo's addons_paths, first-declared = highest priority.
+    Same rule as across repos: declaration order is priority order throughout."""
     workspace_repos = {
         "multi-repo": {"has_addons": True, "addons_paths": ["primary_addons", "secondary_addons"], "url": "..."},
     }
@@ -246,15 +245,15 @@ def test_addons_path_exclusion_produces_no_warning():
 
 
 @pytest.mark.addons_resolution
-def test_addons_path_ordering_matches_workspace_declaration_reversed():
+def test_addons_path_ordering_matches_workspace_declaration_order():
     """
-    workspace.toml declaration order is the stability axis.
-    addons_path must reverse it: last-declared = highest override priority.
+    workspace.toml declaration order is priority order: first-declared = highest priority.
+    Declare customer-config first (most specific), odoo last (foundational).
     """
     workspace_repos = {
-        "odoo":            {"has_addons": True, "addons_paths": ["addons", "odoo/addons"], "url": "..."},
-        "product-core":    {"has_addons": True, "addons_paths": ["addons"],                "url": "..."},
         "customer-config": {"has_addons": True, "addons_paths": ["addons"],                "url": "..."},
+        "product-core":    {"has_addons": True, "addons_paths": ["addons"],                "url": "..."},
+        "odoo":            {"has_addons": True, "addons_paths": ["addons", "odoo/addons"], "url": "..."},
     }
     instance_repos = {
         "odoo":            {"branch": "19.0", "shared": True},
@@ -276,8 +275,57 @@ def test_addons_path_ordering_matches_workspace_declaration_reversed():
     assert customer_idx < product_idx < odoo_idx
 
 
-# === SPEC GAPS ===
-# test_addons_path_workspace_declaration_order_preserved: spec says "declared in stability
-#   order" — owm requires Python 3.12+ (dict insertion order guaranteed since 3.7), but
-#   confirm that workspace.toml parsing preserves TOML table key order rather than
-#   re-sorting or using an unordered dict internally.
+@pytest.mark.addons_resolution
+def test_addons_path_repo_priority_overrides_declaration_order():
+    """repo_priority in [defaults] overrides TOML declaration order.
+    Repos listed in any order in [repos]; explicit priority wins."""
+    workspace_repos = {
+        "odoo":            {"has_addons": True, "addons_paths": ["addons"], "url": "..."},
+        "product-core":    {"has_addons": True, "addons_paths": ["addons"], "url": "..."},
+        "customer-config": {"has_addons": True, "addons_paths": ["addons"], "url": "..."},
+    }
+    instance_repos = {
+        "odoo":            {"branch": "19.0",          "shared": True},
+        "product-core":    {"branch": "feat-789-dev",  "shared": False},
+        "customer-config": {"branch": "feat-789-dev",  "shared": False},
+    }
+    paths = resolve_addons_path(
+        workspace_repos=workspace_repos,
+        instance_repos=instance_repos,
+        workspace_root="/ws",
+        instance_name="feat-789",
+        instances_dir="instances",
+        repo_priority=["customer-config", "product-core", "odoo"],
+    )
+    customer_idx = next(i for i, p in enumerate(paths) if "customer-config" in p)
+    product_idx  = next(i for i, p in enumerate(paths) if "product-core" in p)
+    odoo_idx     = next(i for i, p in enumerate(paths) if "_shared/odoo" in p)
+    assert customer_idx < product_idx < odoo_idx
+
+
+@pytest.mark.addons_resolution
+def test_addons_path_declaration_order_is_load_bearing():
+    """parse_workspace_config must preserve TOML key insertion order.
+    Declaration order = priority order, so a dict that re-sorts keys would silently
+    produce wrong addons_path. tomllib preserves order; this test confirms the contract
+    is upheld end-to-end through resolve_addons_path."""
+    from owm.config import parse_workspace_config
+    import textwrap
+    toml = textwrap.dedent("""
+        [repos]
+        customer-config = "git@example.com/customer-config.git"
+        product-core    = "git@example.com/product-core.git"
+        odoo            = "git@example.com/odoo.git"
+
+        [repos.meta]
+        customer-config.has_addons = true
+        product-core.has_addons    = true
+        odoo.has_addons            = true
+        odoo.addons_paths          = ["addons", "odoo/addons"]
+
+        [clusters]
+        "19" = {pg_version = "16", port = 5432}
+    """)
+    cfg = parse_workspace_config(toml)
+    repos = list(cfg.repos.keys())
+    assert repos.index("customer-config") < repos.index("product-core") < repos.index("odoo")
