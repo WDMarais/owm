@@ -10,21 +10,29 @@ REPO_FETCH_AGES: dict[str, str] = {
     "customer-config": "2026-05-18T10:17:00Z",
 }
 
+def _sync(*, dirty=False, vob_a=0, vob_b=0, vobase_a=0, vobase_b=0, obvobase_a=0, obvobase_b=0):
+    return {
+        "dirty":                    dirty,
+        "vs_origin_branch":         {"ahead_by": vob_a,      "behind_by": vob_b},
+        "vs_origin_base":           {"ahead_by": vobase_a,   "behind_by": vobase_b},
+        "origin_branch_vs_origin_base": {"ahead_by": obvobase_a, "behind_by": obvobase_b},
+    }
+
 INSTANCE_REPOS_SYNC: dict[str, dict] = {
     "dev": {
-        "customer-config": {"behind_by": 3},
-        "enterprise":      {},
-        "odoo":            {},
+        "customer-config": _sync(vob_b=3),
+        "enterprise":      _sync(),
+        "odoo":            _sync(),
     },
     "feat-789": {
-        "customer-config": {"ahead_by": 2},
-        "enterprise":      {},
-        "odoo":            {"dirty": True},
+        "customer-config": _sync(vob_a=2, vobase_b=1, obvobase_a=2, obvobase_b=1),
+        "enterprise":      _sync(),
+        "odoo":            _sync(dirty=True),
     },
     "staging": {
-        "customer-config": {"behind_by": 1, "ahead_by": 1},
-        "enterprise":      {},
-        "odoo":            {},
+        "customer-config": _sync(vob_a=1, vob_b=1, vobase_b=2, obvobase_b=2),
+        "enterprise":      _sync(),
+        "odoo":            _sync(),
     },
 }
 

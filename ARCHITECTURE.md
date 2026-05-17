@@ -78,9 +78,10 @@ Written by owm on start/stop/adopt/kill. Read by `owm_ps`, `health_check`, `owm_
   "vs_pinned_hash":   {"ahead_by": 0, "behind_by": 0}
 }
 ```
-`dirty`, `vs_origin_branch`, and `vs_origin_base` are always present.
+`dirty`, `vs_origin_branch`, `vs_origin_base`, and `origin_branch_vs_origin_base` are always present.
 - `vs_origin_branch`: push state — unpushed local commits (ahead) or remote was updated by someone else (behind)
-- `vs_origin_base`: rebase state — how far the base branch has moved away; behind means rebase needed
+- `vs_origin_base`: rebase state — how far the base branch has moved away from local; behind means rebase needed
+- `origin_branch_vs_origin_base`: PR-readiness — is origin/feat already behind origin/base regardless of local state? behind means a rebase is needed on the remote even before local changes are considered
 - `dirty`: uncommitted local changes
 
 Opt-in extras (key absent = not applicable/not opted in; key present = active, even if all zeros):

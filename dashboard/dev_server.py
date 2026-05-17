@@ -10,52 +10,18 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from dashboard.fixtures import REPO_FETCH_AGES, INSTANCE_REPOS_SYNC, INSTANCE_SCRIPTS
+
 WORKSPACE = Path(__file__).parent.parent / "test_fixtures" / "workspace"
 DASHBOARD = Path(__file__).parent
 
 app = FastAPI()
 
-# ── Fixture data for live-derived state ────────────────────────────────────
-# In production these come from git calls and ndjson scan; here they're fixed.
-
-_REPO_FETCH_AGES = {
-    "odoo":            "2026-05-18T10:22:28Z",
-    "enterprise":      "2026-05-18T08:23:00Z",
-    "customer-config": "2026-05-18T10:17:00Z",
-}
-
-_INSTANCE_REPOS_SYNC = {
-    "dev": {
-        "customer-config": {"sync_state": "behind", "behind_by": 3},
-        "enterprise":      {"sync_state": "clean"},
-        "odoo":            {"sync_state": "clean"},
-    },
-    "feat-789": {
-        "customer-config": {"sync_state": "clean"},
-        "enterprise":      {"sync_state": "clean"},
-        "odoo":            {"sync_state": "clean"},
-    },
-    "staging": {
-        "customer-config": {"sync_state": "clean"},
-        "enterprise":      {"sync_state": "clean"},
-        "odoo":            {"sync_state": "clean"},
-    },
-}
-
-_INSTANCE_SCRIPTS = {
-    "dev": {
-        "setup":     {"status": "ok",   "last_run_at": "2026-05-18T10:21:00Z"},
-        "data-load": {"status": "fail", "last_run_at": "2026-05-18T10:09:00Z"},
-        "migrate":   {"status": None,   "last_run_at": None},
-    },
-    "feat-789": {
-        "setup":     {"status": "ok", "last_run_at": "2026-05-17T14:10:00Z"},
-        "data-load": {"status": None, "last_run_at": None},
-        "migrate":   {"status": None, "last_run_at": None},
-    },
-    "staging": {
-        "setup": {"status": "ok", "last_run_at": "2026-05-16T09:04:00Z"},
-    },
+_CLEAN_SYNC = {
+    "dirty": False,
+    "vs_origin_branch":         {"ahead_by": 0, "behind_by": 0},
+    "vs_origin_base":           {"ahead_by": 0, "behind_by": 0},
+    "origin_branch_vs_origin_base": {"ahead_by": 0, "behind_by": 0},
 }
 
 
@@ -66,6 +32,7 @@ def _rel(iso: str | None) -> str | None:
         return None
     dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
     secs = (datetime.now(timezone.utc) - dt).total_seconds()
+    if secs < 0:     return "just now"
     if secs < 120:   return f"{int(secs)}s ago"
     if secs < 3600:  return f"{int(secs // 60)}m ago"
     if secs < 86400: return f"{int(secs // 3600)}h ago"
@@ -97,7 +64,7 @@ def api_status():
 
     repos = [
         {"name": name, "last_fetch": _rel(ts)}
-        for name, ts in _REPO_FETCH_AGES.items()
+        for name, ts in REPO_FETCH_AGES.items()
     ]
     return {"instances": instances, "repos": repos}
 
@@ -123,15 +90,15 @@ def api_instance(name: str):
         "proxy":  {"ok": True, "value": proxy_host},
     }
 
-    sync = _INSTANCE_REPOS_SYNC.get(name, {})
+    sync = INSTANCE_REPOS_SYNC.get(name, {})
     repos = [
-        {"name": repo, "branch": spec.split(":")[0], **sync.get(repo, {"sync_state": "clean"})}
+        {"name": repo, "branch": spec.split(":")[0], **sync.get(repo, _CLEAN_SYNC)}
         for repo, spec in cfg.get("repos", {}).items()
     ]
 
     script_cfg     = cfg.get("scripts", {})
     script_runners = script_cfg.get("runners", {})
-    script_state   = _INSTANCE_SCRIPTS.get(name, {})
+    script_state   = INSTANCE_SCRIPTS.get(name, {})
     scripts = [
         {
             "name": sname,
@@ -192,4 +159,4 @@ def api_logs(name: str, log: str, n: int = 50):
 def index():
     return FileResponse(DASHBOARD / "index.html")
 
-app.mount("/", StaticFiles(directory=str(DASHBOARD)), name="static")
+app.mount("/static", StaticFiles(directory=str(DASHBOARD)), name="static")
