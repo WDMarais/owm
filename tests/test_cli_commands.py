@@ -4,32 +4,9 @@ Also covers: CWD inference, Log rotation sections.
 """
 import pytest
 
-# TODO: from owm.cli import delete_instance, rename_instance, show_logs
-# TODO: from owm.cli import db_dump, db_restore, validate_instance
-# TODO: from owm.cli import adopt_instance, infer_instance_from_cwd
-# TODO: from owm.log_rotation import check_rotation_needed, rotate_log
-
-def delete_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def rename_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def show_logs(*args, **kwargs):
-    raise NotImplementedError
-
-def db_dump(*args, **kwargs):
-    raise NotImplementedError
-
-def db_restore(*args, **kwargs):
-    raise NotImplementedError
-
-def validate_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def infer_instance_from_cwd(*args, **kwargs):
-    raise NotImplementedError
-
+from owm.cli import delete_instance, rename_instance, show_logs
+from owm.cli import db_dump, db_restore, validate_instance
+from owm.cli import adopt_instance, infer_instance_from_cwd
 from owm.log_rotation import check_rotation_needed, rotate_log
 
 
