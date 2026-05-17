@@ -93,7 +93,7 @@ implemented.
 | Port pair | `[N, N+1]`; N = http, N+1 = gevent; skip whole pair if either occupied |
 | Port range boundary | `[8100, 8299]` = 100 pairs; 8298 = last valid HTTP, 8299 = last valid gevent |
 | `simulate_*` parameters | Kept as real injection parameters in production signatures; provide controlled state without disk/process setup |
-| `addons_paths` ordering | Two-level rule: **across repos**, workspace.toml declaration order is reversed (base→specific ergonomic; last-declared repo wins). **Within a repo's `addons_paths` list**, declaration order is preserved (first-declared = highest priority; users write explicit priority order, same as PATH/PYTHONPATH convention). |
+| `addons_paths` ordering | **Declaration order is priority order throughout** — first-declared = highest priority, same rule for repos and for `addons_paths` within a repo. Declare `customer-config` before `odoo`. Optional `defaults.repo_priority` list overrides declaration order explicitly. Diverges from owm, which reversed inter-repo order. |
 
 ---
 
@@ -395,7 +395,7 @@ Spec gaps:
 def resolve_addons_path(workspace_repos: dict, instance_repos: dict,
                          workspace_root: str, instance_name: str,
                          instances_dir: str) -> list[str]:
-    # Reverses workspace declaration order for override specificity.
+    # Declaration order = priority order. Optional repo_priority overrides TOML key order.
     # shared=True → _shared/<repo>/<branch>/<addons_path>
     # shared=False → instances/<name>/<repo>/<addons_path>
     # has_addons=False → excluded; repo absent from instance → silently excluded

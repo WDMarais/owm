@@ -260,8 +260,6 @@ multi-repo.addons_paths = ["primary_addons", "extras"] # arbitrary folder names;
 scripts.has_addons      = false
 ```
 
-Repos declared in stability order in workspace.toml: `odoo → product-core → customer-config → scripts`. `addons_path` in generated `instance.conf` reverses this order for override specificity: `customer-config → product-core → odoo`.
-
 Only repos explicitly listed in `instance.toml` contribute to addons_path — no implicit fallback to shared for absent repos. If product-core is not in the instance, it is not in addons_path. Silent exclusion, no warnings.
 
 For repos present in instance but via shared worktree: each configured addons_path entry resolves under `_shared/<repo>/<branch>/`.
@@ -285,8 +283,7 @@ scripts repo in instance (has_addons not set)
 ```
 instance with [multi-repo(feat, addons_paths=["primary_addons","secondary_addons"])]
 → addons_path = multi-repo/primary_addons, multi-repo/secondary_addons
-# both folders contribute; declaration order preserved within a repo (first-declared = highest priority, same as PATH convention)
-# inter-repo order is reversed for override specificity; intra-repo order is not
+# both folders contribute; declaration order = priority order
 ```
 
 ## Requirements patching
