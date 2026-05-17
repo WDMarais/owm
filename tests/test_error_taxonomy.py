@@ -9,36 +9,14 @@ These complement the per-section tests; they assert the cross-cutting contract.
 """
 import pytest
 
-# TODO: from owm.errors import (
-#     NOT_FOUND, ALREADY_EXISTS, INSTANCE_RUNNING, DIRTY_WORKTREE,
-#     BRANCH_NOT_FOUND, NOT_OWNED, SHARED_REPO, DIVERGED,
-#     NO_COMPARE_TARGET, START_TIMEOUT, STOP_TIMEOUT,
-#     DB_UNAVAILABLE, UPGRADE_FAILED, XMLRPC_UNAVAILABLE,
-#     NO_WORKERS, PORT_EXHAUSTED, PORT_CONTESTED,
-# )
-# TODO: from owm.errors import OwmError, format_error
-
-def format_error(*args, **kwargs):
-    raise NotImplementedError
-
-# Stub error codes
-NOT_FOUND           = "NOT_FOUND"
-ALREADY_EXISTS      = "ALREADY_EXISTS"
-INSTANCE_RUNNING    = "INSTANCE_RUNNING"
-DIRTY_WORKTREE      = "DIRTY_WORKTREE"
-BRANCH_NOT_FOUND    = "BRANCH_NOT_FOUND"
-NOT_OWNED           = "NOT_OWNED"
-SHARED_REPO         = "SHARED_REPO"
-DIVERGED            = "DIVERGED"
-NO_COMPARE_TARGET   = "NO_COMPARE_TARGET"
-START_TIMEOUT       = "START_TIMEOUT"
-STOP_TIMEOUT        = "STOP_TIMEOUT"
-DB_UNAVAILABLE      = "DB_UNAVAILABLE"
-UPGRADE_FAILED      = "UPGRADE_FAILED"
-XMLRPC_UNAVAILABLE  = "XMLRPC_UNAVAILABLE"
-NO_WORKERS          = "NO_WORKERS"
-PORT_EXHAUSTED      = "PORT_EXHAUSTED"
-PORT_CONTESTED      = "PORT_CONTESTED"
+from owm.errors import (
+    NOT_FOUND, ALREADY_EXISTS, INSTANCE_RUNNING, DIRTY_WORKTREE,
+    BRANCH_NOT_FOUND, NOT_OWNED, SHARED_REPO, DIVERGED,
+    NO_COMPARE_TARGET, START_TIMEOUT, STOP_TIMEOUT,
+    DB_UNAVAILABLE, UPGRADE_FAILED, XMLRPC_UNAVAILABLE,
+    NO_WORKERS, PORT_EXHAUSTED, PORT_CONTESTED,
+)
+from owm.errors import OwmError, format_error
 
 
 # ---------------------------------------------------------------------------
