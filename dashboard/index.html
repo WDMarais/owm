@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>owm</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Left nav pane ────────────────────────────────────────────────── -->
+  <nav id="left-pane" class="pane pane-left">
+    <div class="pane-header">
+      <span class="wordmark">owm</span>
+      <button class="collapse-btn" title="Collapse pane">‹</button>
+    </div>
+
+    <div class="nav-section">
+      <a href="#instances" class="nav-item active" data-page="instances">Instances</a>
+      <a href="#processes" class="nav-item" data-page="processes">Processes</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="section-label">Repos</div>
+      <div class="repo-item">
+        <span class="repo-name">odoo</span>
+        <span class="repo-age">2m</span>
+      </div>
+      <div class="repo-item">
+        <span class="repo-name">customer-config</span>
+        <span class="repo-age">5m</span>
+      </div>
+      <div class="repo-item stale">
+        <span class="repo-name">enterprise</span>
+        <span class="repo-age">2h</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="section-label">Instances</div>
+      <div class="instance-item active" data-instance="dev">
+        <span class="dot dot-running"></span>
+        <span class="instance-name">dev</span>
+      </div>
+      <div class="instance-item" data-instance="feat-789">
+        <span class="dot dot-stopped"></span>
+        <span class="instance-name">feat-789</span>
+      </div>
+      <div class="instance-item" data-instance="staging">
+        <span class="dot dot-stopped"></span>
+        <span class="instance-name">staging</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Centre pane ──────────────────────────────────────────────────── -->
+  <main id="centre-pane" class="pane pane-centre">
+
+    <!-- Instance header -->
+    <div class="instance-header">
+      <div class="instance-title">
+        <h1>dev</h1>
+        <span class="status-badge running">running · pid 12345</span>
+      </div>
+      <div class="instance-actions">
+        <button class="btn btn-stop">Stop</button>
+        <button class="btn btn-kill">Kill</button>
+        <button class="btn btn-archive">Archive</button>
+      </div>
+    </div>
+
+    <!-- Health card -->
+    <div class="card">
+      <div class="card-title">Health</div>
+      <div class="health-grid">
+        <div class="health-item">
+          <span class="health-label">HTTP</span>
+          <span class="health-value ok">:8100</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Gevent</span>
+          <span class="health-value ok">:8101</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">DB</span>
+          <span class="health-value ok">dev</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Venv</span>
+          <span class="health-value ok">ok</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Nginx</span>
+          <span class="health-value ok">dev.localhost</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts card -->
+    <div class="card">
+      <div class="card-title">Scripts</div>
+      <div class="script-list">
+        <div class="script-row">
+          <span class="badge badge-ok">ok</span>
+          <span class="script-name">setup</span>
+          <span class="script-time">2m ago</span>
+          <button class="btn-run">Run</button>
+        </div>
+        <div class="script-row">
+          <span class="badge badge-fail">fail</span>
+          <span class="script-name">data-load</span>
+          <span class="script-time">14m ago</span>
+          <button class="btn-run">Run</button>
+        </div>
+        <div class="script-row">
+          <span class="badge badge-none">—</span>
+          <span class="script-name">migrate</span>
+          <span class="script-time">never</span>
+          <button class="btn-run">Run</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Repos card -->
+    <div class="card">
+      <div class="card-title">Repos</div>
+      <div class="repo-list">
+        <div class="repo-row">
+          <span class="repo-col repo-name">odoo</span>
+          <span class="repo-col branch">dev</span>
+          <span class="repo-col sync-state clean">up to date</span>
+          <span class="repo-col repo-action"></span>
+        </div>
+        <div class="repo-row">
+          <span class="repo-col repo-name">customer-config</span>
+          <span class="repo-col branch">feat-789-dev</span>
+          <span class="repo-col sync-state behind">3 behind</span>
+          <span class="repo-col repo-action"><button class="btn-sync">Sync</button></span>
+        </div>
+        <div class="repo-row">
+          <span class="repo-col repo-name">enterprise</span>
+          <span class="repo-col branch">dev</span>
+          <span class="repo-col sync-state clean">up to date</span>
+          <span class="repo-col repo-action"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Commands card -->
+    <div class="card">
+      <div class="card-title">Commands</div>
+      <div class="cmd-list">
+        <div class="cmd-row">
+          <span class="cmd-label">psql</span>
+          <code class="cmd-value">psql -U odoo -d dev</code>
+          <button class="btn-copy">Copy</button>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd-label">shell</span>
+          <code class="cmd-value">instances/dev/odoo/odoo-bin shell -d dev</code>
+          <button class="btn-copy">Copy</button>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd-label">logs</span>
+          <code class="cmd-value">tail -f instances/dev/instance.log</code>
+          <button class="btn-copy">Copy</button>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd-label">venv</span>
+          <code class="cmd-value">source instances/dev/.venv/bin/activate</code>
+          <button class="btn-copy">Copy</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── Right log pane ───────────────────────────────────────────────── -->
+  <aside id="right-pane" class="pane pane-right">
+    <div class="tab-strip">
+      <button class="tab active">owm.log</button>
+      <button class="tab">odoo.log</button>
+      <button class="tab tab-runner">setup</button>
+      <!-- transient mutation tab — appears on start/stop/fetch, dismissed when done -->
+      <button class="tab tab-transient">stopping… <span class="tab-close">✕</span></button>
+    </div>
+    <div class="log-viewport">
+      <div class="log-line log-info">[10:23:01] instance dev started (pid 12345)</div>
+      <div class="log-line log-info">[10:22:58] starting odoo-bin on :8100</div>
+      <div class="log-line log-warn">[10:22:45] waiting for port 8100...</div>
+      <div class="log-line log-info">[10:22:30] venv activated</div>
+      <div class="log-line log-info">[10:22:28] workspace fetched (odoo: 2 new, customer-config: ok)</div>
+      <div class="log-line log-info">[10:21:10] owm started</div>
+    </div>
+  </aside>
+
+  <!-- ── Processes page (hidden by default) ───────────────────────────── -->
+  <div id="processes-page" class="page hidden">
+    <div class="page-header">
+      <h2>Processes</h2>
+    </div>
+    <div class="process-section">
+      <div class="section-label">Managed</div>
+      <div class="process-row">
+        <span class="dot dot-running"></span>
+        <span class="proc-name">dev</span>
+        <span class="proc-ports">:8100 :8101</span>
+        <span class="proc-pid">pid 12345</span>
+      </div>
+    </div>
+    <div class="process-section">
+      <div class="section-label">Orphaned owm processes</div>
+      <div class="process-row">
+        <span class="dot dot-warn"></span>
+        <span class="proc-name">feat-123</span>
+        <span class="proc-ports">:8102 :8103</span>
+        <span class="proc-pid">pid 9981</span>
+        <button class="btn-readopt">Re-adopt</button>
+      </div>
+    </div>
+    <div class="process-section">
+      <div class="section-label">Unregistered (owm-shaped)</div>
+      <div class="process-row">
+        <span class="dot dot-warn"></span>
+        <span class="proc-name">unknown</span>
+        <span class="proc-ports">:8104 :8105</span>
+        <span class="proc-pid">pid 7732</span>
+        <button class="btn-adopt-flow">Adopt…</button>
+      </div>
+    </div>
+    <div class="process-section">
+      <div class="section-label">Port squatters</div>
+      <div class="process-row">
+        <span class="dot dot-err"></span>
+        <span class="proc-name">python3 manage.py runserver</span>
+        <span class="proc-ports">:8108</span>
+        <span class="proc-pid">pid 4421</span>
+        <span class="proc-note">not owm-managed, no adoption path</span>
+      </div>
+    </div>
+  </div>
+
+
+</body>
+</html>
