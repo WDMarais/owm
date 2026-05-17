@@ -271,19 +271,3 @@ def parse_instance_config(toml: str) -> InstanceConfig:
         scripts=scripts,
         template=template,
     )
-
-
-def generate_instance_conf(
-    instance_name: str,
-    http_port: int,
-    gevent_port: int,
-    workers: int,
-    db_name: str | None = None,
-    db_port: int | None = None,
-) -> dict:
-    return {
-        "http_port": http_port,
-        "longpolling_port": gevent_port,
-        "workers": workers,
-        "dbfilter": f"^{instance_name}$",
-    }

@@ -213,7 +213,7 @@ def test_eviction_threshold_configurable():
 # Gevent / workers
 # ---------------------------------------------------------------------------
 
-from owm.config import generate_instance_conf
+from owm.instance import generate_instance_conf
 
 
 @pytest.mark.port_assignment

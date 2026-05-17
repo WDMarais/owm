@@ -7,7 +7,7 @@ import pytest
 from owm.database import create_db, reset_db, sync_db_from_template
 from owm.database import check_template_staleness, check_pg_reachability
 from owm.database import DatabaseConfig, TemplateStatus
-from owm.config import generate_instance_conf
+from owm.instance import generate_instance_conf
 from owm.workspace import init_workspace
 
 

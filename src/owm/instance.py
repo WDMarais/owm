@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 
 from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT
-from owm.config import generate_instance_conf
 
 
 @dataclass
@@ -224,3 +223,20 @@ def health_check(
     if timed_out:
         return {"status": "unhealthy", "pid": pid, "http_alive": False}
     return {"status": "starting", "pid": pid, "http_alive": False}
+
+
+def generate_instance_conf(
+    instance_name: str,
+    http_port: int,
+    gevent_port: int,
+    workers: int,
+    db_name: str | None = None,
+    db_port: int | None = None,
+) -> dict:
+    # TODO: real implementation must return ini-format string written to instance.conf
+    return {
+        "http_port": http_port,
+        "longpolling_port": gevent_port,
+        "workers": workers,
+        "dbfilter": f"^{instance_name}$",
+    }
