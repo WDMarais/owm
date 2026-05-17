@@ -30,11 +30,7 @@ def validate_instance(*args, **kwargs):
 def infer_instance_from_cwd(*args, **kwargs):
     raise NotImplementedError
 
-def check_rotation_needed(*args, **kwargs):
-    raise NotImplementedError
-
-def rotate_log(*args, **kwargs):
-    raise NotImplementedError
+from owm.log_rotation import check_rotation_needed, rotate_log
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +339,12 @@ def test_local_rotation_discards_log():
     result = rotate_log(log_path="/ws/owm.log", mode="local")  # TODO: wire up
     assert result.discarded is True
     assert result.summarised is False
+
+
+@pytest.mark.log_rotation
+def test_non_local_rotation_raises_not_implemented():
+    with pytest.raises(NotImplementedError):
+        rotate_log(log_path="/ws/owm.log", mode="summarise")
 
 
 # === SPEC GAPS ===
