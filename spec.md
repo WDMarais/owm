@@ -1463,32 +1463,6 @@ owm stop feat-789  (not running)
 
 ---
 
-## Error taxonomy
-
-All MCP tools return errors in the form `{"error": "<message>", "code": "<CODE>"}`. Consistent codes across all tools:
-
-| Code | Meaning |
-|------|---------|
-| `NOT_FOUND` | Named instance, repo, script, or archive does not exist |
-| `ALREADY_EXISTS` | Instance or resource already exists (use create/owm_create for idempotent path) |
-| `INSTANCE_RUNNING` | Operation requires instance to be stopped first |
-| `DIRTY_WORKTREE` | Uncommitted changes prevent the operation; use `force=True` to override where applicable |
-| `BRANCH_NOT_FOUND` | Branch with `+exists` flag not found on origin |
-| `NOT_OWNED` | Push/write operation refused — branch not configured as owned |
-| `SHARED_REPO` | Operation not applicable to shared worktrees |
-| `DIVERGED` | Branch has diverged from origin; rebase required before push |
-| `NO_COMPARE_TARGET` | No compare_pair declared and no base parameter provided |
-| `START_TIMEOUT` | Instance did not become healthy within timeout |
-| `STOP_TIMEOUT` | Instance did not stop within grace period; use owm_kill |
-| `DB_UNAVAILABLE` | Postgres cluster unreachable |
-| `UPGRADE_FAILED` | odoo-bin -u exited non-zero; log_tail included in response |
-| `XMLRPC_UNAVAILABLE` | In-place upgrade requires running instance with workers > 0 |
-| `NO_WORKERS` | Operation requires workers > 0 (gevent/longpolling) |
-| `PORT_EXHAUSTED` | No free ports in configured range |
-| `PORT_CONTESTED` | Pinned port held by running instance; cannot evict |
-
----
-
 ## Config schemas
 
 ### workspace.toml

@@ -186,7 +186,8 @@ NOT_FOUND, ALREADY_EXISTS, INSTANCE_RUNNING, DIRTY_WORKTREE,
 BRANCH_NOT_FOUND, NOT_OWNED, SHARED_REPO, DIVERGED,
 NO_COMPARE_TARGET, START_TIMEOUT, STOP_TIMEOUT,
 DB_UNAVAILABLE, UPGRADE_FAILED, XMLRPC_UNAVAILABLE,
-NO_WORKERS, PORT_EXHAUSTED, PORT_CONTESTED
+NO_WORKERS, PORT_EXHAUSTED, PORT_CONTESTED,
+ARCHIVE_CONFLICT, CONFIRMATION_REQUIRED
 
 class OwmError(Exception):
     def __init__(self, message: str, code: str, **extra): ...
@@ -194,6 +195,30 @@ class OwmError(Exception):
 def format_error(message: str, code: str, **extra) -> dict:
     # Returns {"error": message, "code": code, **extra}
 ```
+
+Error code semantics (MCP consumer reference):
+
+| Code | Trigger | Consumer action |
+|------|---------|----------------|
+| `NOT_FOUND` | Named instance, repo, script, or archive does not exist. | Surface to user; do not retry. |
+| `ALREADY_EXISTS` | Instance or resource already exists. | Use `owm_create` for the idempotent path, or choose a different name. |
+| `INSTANCE_RUNNING` | Operation requires the instance to be stopped first. | Call `owm_stop` or `owm_kill`, then retry. |
+| `DIRTY_WORKTREE` | Uncommitted changes block the operation. | Surface to user; re-call with `force=True` where supported. |
+| `BRANCH_NOT_FOUND` | Branch declared with `+exists` flag not found on origin. | Verify branch name or remove `+exists` flag. |
+| `NOT_OWNED` | Push/write refused — branch not configured as owned. | Do not retry; surface to user. |
+| `SHARED_REPO` | Operation not applicable to shared worktrees. | Do not retry; surface to user. |
+| `DIVERGED` | Branch has diverged from origin; rebase required before push. | Call `owm_sync` to rebase, then retry push. |
+| `NO_COMPARE_TARGET` | No compare_pair declared and no `base` parameter provided. | Re-call with an explicit `base` argument. |
+| `START_TIMEOUT` | Instance did not become healthy within timeout. | Check logs via `owm_logs`; surface to user. |
+| `STOP_TIMEOUT` | Instance did not stop within grace period. | Call `owm_kill` to force-terminate. |
+| `DB_UNAVAILABLE` | Postgres cluster unreachable. | Verify cluster is running; surface to user. |
+| `UPGRADE_FAILED` | `odoo-bin -u` exited non-zero; `log_tail` included in response. | Surface `log_tail` to user for diagnosis. |
+| `XMLRPC_UNAVAILABLE` | In-place upgrade requires a running instance with `workers > 0`. | Start the instance with workers, then retry. |
+| `NO_WORKERS` | Operation requires `workers > 0` (gevent/longpolling). | Reconfigure instance with workers > 0. |
+| `PORT_EXHAUSTED` | No free ports in configured range. | Evict stale instances or widen port range in `workspace.toml`. |
+| `PORT_CONTESTED` | Pinned port held by a running instance; cannot evict. | Stop the conflicting instance or change the pinned port. |
+| `ARCHIVE_CONFLICT` | `owm_new` called when `_archive/<name>/` exists and no resolution flag provided (agent mode). | Re-call with `flag="restore"` to restore from archive, or `flag="fresh"` to rename the archive and create fresh. |
+| `CONFIRMATION_REQUIRED` | `owm_archive` delete path invoked without `confirmed=True`. Destructive/irreversible operation gate. | Re-call with `confirmed=True` after surfacing confirmation to the user. |
 
 Spec gaps: `DB_UNAVAILABLE` trigger not shown for any specific tool call.
 

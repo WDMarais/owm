@@ -61,32 +61,7 @@ validate against it explicitly), or move `[repos.meta]` to a separate top-level 
 
 ---
 
-## 4. Spec and implementation contradict each other on within-repo addons ordering
-
-**Risk:** spec.md shows:
-
-```
-instance with [multi-repo(feat, addons_paths=["primary_addons","secondary_addons"])]
-→ addons_path = multi-repo/secondary_addons, multi-repo/primary_addons
-# both folders contribute; reversed within the repo
-```
-
-ARCHITECTURE.md (resolved conventions table) says the opposite: "Within a repo's
-`addons_paths` list, declaration order is preserved (first-declared = highest
-priority; users write explicit priority order, same as PATH/PYTHONPATH convention)."
-
-The implementation (`addons.py` line 31) and the test
-(`test_addons_path_multi_path_repo_declaration_order_within_repo`, asserting
-`primary_idx < secondary_idx`) both follow ARCHITECTURE.md — preserved order. The
-spec example is wrong.
-
-**What needs addressing:** correct the spec.md example so it matches the implemented
-and tested behavior. The spec currently says reversed; both the code and the tests
-say preserved. An agent implementing against the spec example will get this wrong.
-
----
-
-## 5. `generate_instance_conf` returns a dict, not an ini string
+## 4. `generate_instance_conf` returns a dict, not an ini string
 
 **Risk:** `generate_instance_conf` in `config.py` currently returns a `dict`. Odoo
 expects an ini-format config file. ARCHITECTURE.md says "Pure transform → Odoo
@@ -103,7 +78,7 @@ returns string) to make the gap explicit.
 
 ---
 
-## 6. `dbfilter` set before subdomain model ships
+## 5. `dbfilter` set before subdomain model ships
 
 **Risk:** re-owm's `generate_instance_conf` sets `dbfilter = ^<instance_name>$`
 unconditionally. owm's DESIGN.md has an explicit note *against* this for local dev:
@@ -128,11 +103,18 @@ that the dbfilter change is only safe after subdomain routing is in place.
 
 ---
 
-## 7. `ARCHIVE_CONFLICT` and `CONFIRMATION_REQUIRED` are undocumented error codes
+## 6. `ARCHIVE_CONFLICT` and `CONFIRMATION_REQUIRED` are undocumented error codes
+
+**Risk:** `errors.py` defines `ARCHIVE_CONFLICT` and `CONFIRMATION_REQUIRED` (lines
+22–23) but neither appears in spec.md's error taxonomy table. An MCP consumer
+receiving these codes has no documented semantics for how to handle them.
+
+**What needs addressing:** add both codes to the spec.md error taxonomy table with
+their meaning, trigger conditions, and expected consumer behavior.
 
 ---
 
-## 8. `generate_instance_conf` is in `config.py`, not `instance.py`
+## 7. `generate_instance_conf` is in `config.py`, not `instance.py`
 
 **Issue:** `generate_instance_conf` is a generator (takes runtime params, produces
 Odoo config), not a parser. Parsers belong in `config.py`; generators belong in the
@@ -150,7 +132,7 @@ ARCHITECTURE.md placed it.
 
 ---
 
-## 9. `mcp.py` depends on `cli.py` — dependency direction is inverted
+## 8. `mcp.py` depends on `cli.py` — dependency direction is inverted
 
 **Issue:** `mcp.py` imports `delete_instance`, `rename_instance`, `show_logs`,
 `db_dump`, `db_restore` from `cli.py`. The intent is that these functions are shared
@@ -170,7 +152,7 @@ can import without the naming confusion.
 
 ---
 
-## 10. `find_conflicting_process` and `get_eviction_log` are permanent dead stubs
+## 9. `find_conflicting_process` and `get_eviction_log` are permanent dead stubs
 
 **Issue:** Two functions in `ports.py` have no implementation and no injection
 parameter path that would ever exercise real behavior:
@@ -199,10 +181,3 @@ line" conflict surface.
 harness can exercise the callers that depend on them (`check_port_at_start`,
 `eviction_count_in_window`), or document explicitly that these are integration-only
 and note what the real implementation calls (e.g. `psutil`, `/proc`, `ss -tlnp`).
-
-**Risk:** `errors.py` defines `ARCHIVE_CONFLICT` and `CONFIRMATION_REQUIRED` (lines
-22–23) but neither appears in spec.md's error taxonomy table. An MCP consumer
-receiving these codes has no documented semantics for how to handle them.
-
-**What needs addressing:** add both codes to the spec.md error taxonomy table with
-their meaning, trigger conditions, and expected consumer behavior.
