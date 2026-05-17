@@ -172,7 +172,7 @@ body {
   border-radius: 20px;
 }
 .status-badge.running  { background: var(--c-running-bg); color: #166534; }
-.status-badge.stopped  { background: var(--c-stopped-bg); color: #475569; }
+.status-badge.stopped  { background: var(--c-stopped-bg); color: #475569; border: 1px solid #cbd5e1; }
 .status-badge.degraded { background: var(--c-err-bg);     color: #991b1b; }
 
 .instance-actions { display: flex; gap: 8px; }
@@ -230,6 +230,7 @@ body {
 }
 .health-value        { font-family: var(--mono); font-size: 13px; font-weight: 600; }
 .health-value.ok     { color: var(--c-running); }
+.health-value.muted  { color: var(--muted); }
 .health-value.warn   { color: var(--c-warn); }
 .health-value.err    { color: var(--c-err); }
 
@@ -286,10 +287,12 @@ body {
 .repo-col.repo-name  { font-family: var(--mono); font-weight: 600; width: 130px; }
 .repo-col.branch     { font-family: var(--mono); color: var(--muted); flex: 1; min-width: 0;
                         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.repo-col.sync-state { font-size: 12px; font-weight: 600; width: 90px; }
+.repo-col.sync-state      { font-size: 12px; font-weight: 600; width: 90px; }
+.repo-col.sync-state-cell { font-size: 12px; font-weight: 600; flex: 1; min-width: 0; }
 .repo-col.repo-action { width: 56px; text-align: right; }
 .sync-state.clean  { color: var(--c-running); }
 .sync-state.behind { color: var(--c-warn); }
+.sync-state.ahead  { color: #3b82f6; }
 .sync-state.dirty  { color: var(--c-err); }
 
 .btn-sync {
