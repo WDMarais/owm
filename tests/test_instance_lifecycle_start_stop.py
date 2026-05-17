@@ -4,23 +4,8 @@ Covers: Instance lifecycle — start/stop section.
 """
 import pytest
 
-# TODO: from owm.instance import start_instance, stop_instance, kill_instance
-# TODO: from owm.instance import restart_instance, health_check
-
-def start_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def stop_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def kill_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def restart_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def health_check(*args, **kwargs):
-    raise NotImplementedError
+from owm.instance import start_instance, stop_instance, kill_instance
+from owm.instance import restart_instance, health_check
 
 
 # ---------------------------------------------------------------------------

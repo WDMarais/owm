@@ -4,14 +4,8 @@ Covers: Instance lifecycle — create, Workspace init sections.
 """
 import pytest
 
-# TODO: from owm.instance import new_instance, create_instance
+from owm.instance import new_instance, create_instance
 from owm.workspace import init_workspace
-
-def new_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def create_instance(*args, **kwargs):
-    raise NotImplementedError
 
 
 # ---------------------------------------------------------------------------

@@ -213,15 +213,13 @@ def test_eviction_threshold_configurable():
 # Gevent / workers
 # ---------------------------------------------------------------------------
 
-# TODO: from owm.config import generate_odoo_conf
-def generate_odoo_conf(*args, **kwargs):
-    raise NotImplementedError
+from owm.config import generate_instance_conf
 
 
 @pytest.mark.port_assignment
 @pytest.mark.ports_gevent
 def test_odoo_conf_includes_longpolling_port():
-    conf = generate_odoo_conf(
+    conf = generate_instance_conf(
         instance_name="feat-789",
         http_port=8142,
         gevent_port=8143,
@@ -233,7 +231,7 @@ def test_odoo_conf_includes_longpolling_port():
 @pytest.mark.port_assignment
 @pytest.mark.ports_gevent
 def test_odoo_conf_workers_default_two():
-    conf = generate_odoo_conf(
+    conf = generate_instance_conf(
         instance_name="feat-789",
         http_port=8142,
         gevent_port=8143,
@@ -247,7 +245,7 @@ def test_odoo_conf_workers_default_two():
 @pytest.mark.ports_gevent
 def test_odoo_conf_includes_dbfilter_for_subdomain():
     """dbfilter set to ^<instance_name>$ for subdomain isolation."""
-    conf = generate_odoo_conf(
+    conf = generate_instance_conf(
         instance_name="feat-789",
         http_port=8142,
         gevent_port=8143,

@@ -197,11 +197,11 @@ def test_pg_reachability_check_uses_pg_isready():
 @pytest.mark.database_auth
 def test_odoo_conf_includes_dbfilter():
     """Generated instance.conf sets dbfilter = ^<name>$ for subdomain isolation."""
-    # TODO: from owm.config import generate_odoo_conf
-    def generate_odoo_conf(*args, **kwargs):
+    # TODO: from owm.config import generate_instance_conf
+    def generate_instance_conf(*args, **kwargs):
         raise NotImplementedError
 
-    conf = generate_odoo_conf(instance_name="feat-789", http_port=8142, gevent_port=8143, workers=2)  # TODO: wire up
+    conf = generate_instance_conf(instance_name="feat-789", http_port=8142, gevent_port=8143, workers=2)  # TODO: wire up
     dbfilter = conf.get("dbfilter") if isinstance(conf, dict) else None
     assert dbfilter == "^feat-789$" or "dbfilter = ^feat-789$" in str(conf)
 
