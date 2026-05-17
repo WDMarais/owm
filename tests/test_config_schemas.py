@@ -361,9 +361,7 @@ pg_port = 5432
 # Requirements patching
 # ---------------------------------------------------------------------------
 
-# TODO: from owm.venv import resolve_patches
-def resolve_patches(*args, **kwargs):
-    raise NotImplementedError
+from owm.venv import resolve_patches
 
 
 @pytest.mark.config_schemas

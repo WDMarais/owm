@@ -4,23 +4,8 @@ Covers: Venv management section.
 """
 import pytest
 
-# TODO: from owm.venv import create_venv, sync_venv_if_needed, rebuild_venv
-# TODO: from owm.venv import compute_stamp, stamp_changed
-
-def create_venv(*args, **kwargs):
-    raise NotImplementedError
-
-def sync_venv_if_needed(*args, **kwargs):
-    raise NotImplementedError
-
-def rebuild_venv(*args, **kwargs):
-    raise NotImplementedError
-
-def compute_stamp(*args, **kwargs):
-    raise NotImplementedError
-
-def stamp_changed(*args, **kwargs):
-    raise NotImplementedError
+from owm.venv import create_venv, sync_venv_if_needed, rebuild_venv
+from owm.venv import compute_stamp, stamp_changed
 
 
 # ---------------------------------------------------------------------------
