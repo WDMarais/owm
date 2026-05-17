@@ -5,21 +5,8 @@ Covers: Script runner section.
 import pytest
 import json
 
-# TODO: from owm.scripts import run_script, parse_ndjson_output
-# TODO: from owm.scripts import ScriptContract, compare_instances
-# TODO: from owm.scripts import scaffold_script
-
-def run_script(*args, **kwargs):
-    raise NotImplementedError
-
-def parse_ndjson_output(*args, **kwargs):
-    raise NotImplementedError
-
-def compare_instances(*args, **kwargs):
-    raise NotImplementedError
-
-def scaffold_script(*args, **kwargs):
-    raise NotImplementedError
+from owm.scripts import run_script, parse_ndjson_output
+from owm.scripts import compare_instances, scaffold_script
 
 
 # ---------------------------------------------------------------------------
