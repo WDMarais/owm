@@ -45,9 +45,21 @@ def test_error_response_no_extra_required_keys():
 
 # ---------------------------------------------------------------------------
 # Code constants exist and are uppercase strings
+#
+# permanently_green: these tests verify static properties of the ErrorCode
+# enum (well-formed values, no collisions). They were green before any
+# implementation and must stay green throughout.
+#
+# TODO(rework): currently validates the enum definition itself. A stronger
+# version would use AST/import analysis to assert that every OwmError raise
+# site passes a valid ErrorCode member rather than a raw string — enforcing
+# the convention at call sites, not just at declaration. Needs static analysis
+# infrastructure (e.g. a custom pytest plugin or ruff rule) that doesn't
+# exist yet.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.error_taxonomy
+@pytest.mark.permanently_green
 def test_all_codes_are_uppercase_strings():
     codes = [
         NOT_FOUND, ALREADY_EXISTS, INSTANCE_RUNNING, DIRTY_WORKTREE,
@@ -62,6 +74,7 @@ def test_all_codes_are_uppercase_strings():
 
 
 @pytest.mark.error_taxonomy
+@pytest.mark.permanently_green
 def test_all_codes_are_distinct():
     codes = [
         NOT_FOUND, ALREADY_EXISTS, INSTANCE_RUNNING, DIRTY_WORKTREE,
