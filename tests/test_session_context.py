@@ -13,38 +13,41 @@ from owm.session_context import build_agent_context, status_has_setup_md
 # ---------------------------------------------------------------------------
 
 @pytest.mark.session_context
-def test_absent_setup_md_is_happy_path():
-    files = get_context_files(instance_dir="/ws/instances/feat-789", files_present=[])  # TODO: wire up
+def test_absent_setup_md_is_happy_path(tmp_path):
+    instance_dir = tmp_path / "feat-789"
+    instance_dir.mkdir()
+    files = get_context_files(str(instance_dir))
     assert files.setup_md is None
     assert files.happy_path is True
 
 
 @pytest.mark.session_context
-def test_present_setup_md_surfaced_in_status():
-    result = status_has_setup_md(
-        instance="feat-789",
-        instance_dir="/ws/instances/feat-789",
-        setup_md_present=True,
-    )  # TODO: wire up
+def test_present_setup_md_surfaced_in_status(tmp_path):
+    instance_dir = tmp_path / "feat-789"
+    instance_dir.mkdir()
+    (instance_dir / "setup.md").write_text("# Setup")
+    result = status_has_setup_md(instance="feat-789", instance_dir=str(instance_dir))
     assert result.setup_md_present is True
     assert result.surfaced_in_status is True
 
 
 @pytest.mark.session_context
-def test_notes_md_present():
-    files = get_context_files(
-        instance_dir="/ws/instances/feat-789",
-        files_present=["notes.md"],
-    )  # TODO: wire up
+def test_notes_md_present(tmp_path):
+    instance_dir = tmp_path / "feat-789"
+    instance_dir.mkdir()
+    (instance_dir / "notes.md").write_text("# Notes")
+    files = get_context_files(str(instance_dir))
     assert files.notes_md is not None
 
 
 @pytest.mark.session_context
-def test_review_dir_contains_dated_snapshots():
-    files = get_context_files(
-        instance_dir="/ws/instances/feat-789",
-        files_present=["review/2026-05-16-initial.md", "review/2026-05-17-post-rebase.md"],
-    )  # TODO: wire up
+def test_review_dir_contains_dated_snapshots(tmp_path):
+    instance_dir = tmp_path / "feat-789"
+    review_dir = instance_dir / "review"
+    review_dir.mkdir(parents=True)
+    (review_dir / "2026-05-16-initial.md").write_text("# Review 1")
+    (review_dir / "2026-05-17-post-rebase.md").write_text("# Review 2")
+    files = get_context_files(str(instance_dir))
     assert len(files.review_snapshots) == 2
 
 
@@ -53,54 +56,60 @@ def test_review_dir_contains_dated_snapshots():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.session_context
-def test_review_file_naming_initial():
+def test_review_file_naming_initial(tmp_path):
+    instance_dir = tmp_path / "feat-789"
+    instance_dir.mkdir()
     result = write_review_snapshot(
         instance="feat-789",
-        instance_dir="/ws/instances/feat-789",
+        instance_dir=str(instance_dir),
         trigger="initial",
         date="2026-05-16",
         content="# Review\nLGTM",
-    )  # TODO: wire up
-    assert result.path == "/ws/instances/feat-789/review/2026-05-16-initial.md"
+    )
+    assert result.path == str(instance_dir / "review" / "2026-05-16-initial.md")
 
 
 @pytest.mark.session_context
-def test_review_file_naming_post_rebase():
+def test_review_file_naming_post_rebase(tmp_path):
+    instance_dir = tmp_path / "feat-789"
+    instance_dir.mkdir()
     result = write_review_snapshot(
         instance="feat-789",
-        instance_dir="/ws/instances/feat-789",
+        instance_dir=str(instance_dir),
         trigger="post-rebase",
         date="2026-05-17",
         content="# Post-rebase review",
-    )  # TODO: wire up
+    )
     assert result.path.endswith("2026-05-17-post-rebase.md")
 
 
 @pytest.mark.session_context
-def test_review_write_never_overwrites_existing():
+def test_review_write_never_overwrites_existing(tmp_path):
     """Agent writes blind review → always appends new dated file, never overwrites."""
-    existing = ["review/2026-05-16-initial.md"]
+    instance_dir = tmp_path / "feat-789"
+    review_dir = instance_dir / "review"
+    review_dir.mkdir(parents=True)
+    (review_dir / "2026-05-16-initial.md").write_text("# Existing review")
+
     result = write_review_snapshot(
         instance="feat-789",
-        instance_dir="/ws/instances/feat-789",
+        instance_dir=str(instance_dir),
         trigger="initial",
         date="2026-05-16",
         content="# New review",
-        existing_files=existing,
-    )  # TODO: wire up
-    assert result.path not in existing
-    assert "2026-05-16-initial" not in result.path or result.path != "/ws/instances/feat-789/review/2026-05-16-initial.md"
+    )
+    assert result.path != str(review_dir / "2026-05-16-initial.md")
+    assert (instance_dir / "review" / "2026-05-16-initial.md").read_text() == "# Existing review"
 
 
 @pytest.mark.session_context
-def test_review_latest_file_is_canonical():
-    files = get_context_files(
-        instance_dir="/ws/instances/feat-789",
-        files_present=[
-            "review/2026-05-16-initial.md",
-            "review/2026-05-17-post-rebase.md",
-        ],
-    )  # TODO: wire up
+def test_review_latest_file_is_canonical(tmp_path):
+    instance_dir = tmp_path / "feat-789"
+    review_dir = instance_dir / "review"
+    review_dir.mkdir(parents=True)
+    (review_dir / "2026-05-16-initial.md").write_text("# Review 1")
+    (review_dir / "2026-05-17-post-rebase.md").write_text("# Review 2")
+    files = get_context_files(str(instance_dir))
     assert "post-rebase" in files.latest_review or files.latest_review.endswith("post-rebase.md")
 
 
@@ -117,7 +126,7 @@ def test_agent_context_reads_notes_and_latest_review():
         instance_notes="## Instance notes",
         review_files=["review/2026-05-16-initial.md", "review/2026-05-17-post-rebase.md"],
         setup_md=None,
-    )  # TODO: wire up
+    )
     assert "## Instance notes" in result.context
     assert "post-rebase" in result.context or "2026-05-17" in result.context
 
@@ -132,7 +141,7 @@ def test_agent_context_excludes_review_history():
         instance_notes="## Notes",
         review_files=["review/2026-05-16-initial.md", "review/2026-05-17-post-rebase.md"],
         setup_md=None,
-    )  # TODO: wire up
+    )
     assert "2026-05-16-initial" not in result.context
 
 
@@ -145,7 +154,7 @@ def test_agent_context_missing_notes_not_an_error():
         instance_notes=None,
         review_files=[],
         setup_md=None,
-    )  # TODO: wire up
+    )
     assert result.sources["instance"] is None
     assert result.context is not None
 

@@ -42,11 +42,12 @@ def test_script_run_appends_structured_entry():
 
 
 @pytest.mark.audit_log
-def test_log_is_append_only():
+def test_log_is_append_only(tmp_path):
     """Each entry appended, never overwrites previous content."""
-    append_log_entry(log_path="/tmp/test_owm.log", operation="start", instance="a", result="spawned", pid=1)  # TODO: wire up
-    append_log_entry(log_path="/tmp/test_owm.log", operation="stop", instance="a", result="stopped", pid=1)  # TODO: wire up
-    tail = read_log_tail(log_path="/tmp/test_owm.log", n=10)  # TODO: wire up
+    log = str(tmp_path / "owm.log")
+    append_log_entry(log_path=log, operation="start", instance="a", result="spawned", pid=1)
+    append_log_entry(log_path=log, operation="stop", instance="a", result="stopped", pid=1)
+    tail = read_log_tail(log_path=log, n=10)
     assert len(tail) == 2
 
 
@@ -88,13 +89,12 @@ def test_log_captures_cli_and_ui_and_agent_operations():
 
 
 @pytest.mark.audit_log
-def test_log_read_tail_returns_n_lines():
-    tail = read_log_tail(
-        log_path="/ws/owm.log",
-        n=50,
-        simulated_line_count=200,
-    )  # TODO: wire up
-    assert len(tail) <= 50
+def test_log_read_tail_returns_n_lines(tmp_path):
+    log = str(tmp_path / "owm.log")
+    for i in range(200):
+        append_log_entry(log_path=log, operation="start", instance=f"inst-{i}", result="spawned")
+    tail = read_log_tail(log_path=log, n=50)
+    assert len(tail) == 50
 
 
 # ---------------------------------------------------------------------------

@@ -29,29 +29,16 @@ class StatusResult:
     surfaced_in_status: bool
 
 
-def get_context_files(
-    instance_dir: str,
-    *,
-    files_present: list[str] | None = None,
-) -> ContextFiles:
-    if files_present is not None:
-        names = set(files_present)
-        setup_md = "setup.md" if "setup.md" in names else None
-        context_md = "context.md" if "context.md" in names else None
-        notes_md = "notes.md" if "notes.md" in names else None
-        snapshots = sorted(f for f in files_present if f.startswith("review/"))
-    else:
-        setup_md = _file_or_none(instance_dir, "setup.md")
-        context_md = _file_or_none(instance_dir, "context.md")
-        notes_md = _file_or_none(instance_dir, "notes.md")
-        review_dir = os.path.join(instance_dir, "review")
-        try:
-            entries = os.listdir(review_dir)
-            snapshots = sorted(
-                f"review/{e}" for e in entries if e.endswith(".md")
-            )
-        except OSError:
-            snapshots = []
+def get_context_files(instance_dir: str) -> ContextFiles:
+    setup_md = _file_or_none(instance_dir, "setup.md")
+    context_md = _file_or_none(instance_dir, "context.md")
+    notes_md = _file_or_none(instance_dir, "notes.md")
+    review_dir = os.path.join(instance_dir, "review")
+    try:
+        entries = os.listdir(review_dir)
+        snapshots = sorted(f"review/{e}" for e in entries if e.endswith(".md"))
+    except OSError:
+        snapshots = []
 
     latest = snapshots[-1] if snapshots else None
     return ContextFiles(
@@ -70,31 +57,18 @@ def write_review_snapshot(
     trigger: str,
     date: str,
     content: str,
-    *,
-    existing_files: list[str] | None = None,
 ) -> SnapshotResult:
     review_dir = os.path.join(instance_dir, "review")
     base = f"{date}-{trigger}"
-
-    if existing_files is not None:
-        existing_rels = set(existing_files)
-        rel = f"review/{base}.md"
-        if rel in existing_rels:
-            suffix = 2
-            while f"review/{base}-{suffix}.md" in existing_rels:
-                suffix += 1
-            rel = f"review/{base}-{suffix}.md"
-        abs_path = os.path.join(instance_dir, rel)
-    else:
-        abs_path = os.path.join(review_dir, f"{base}.md")
-        if os.path.exists(abs_path):
-            suffix = 2
-            while os.path.exists(os.path.join(review_dir, f"{base}-{suffix}.md")):
-                suffix += 1
-            abs_path = os.path.join(review_dir, f"{base}-{suffix}.md")
+    abs_path = os.path.join(review_dir, f"{base}.md")
+    if os.path.exists(abs_path):
+        suffix = 2
+        while os.path.exists(os.path.join(review_dir, f"{base}-{suffix}.md")):
+            suffix += 1
+        abs_path = os.path.join(review_dir, f"{base}-{suffix}.md")
 
     try:
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        os.makedirs(review_dir, exist_ok=True)
         with open(abs_path, "w") as f:
             f.write(content)
     except OSError:
@@ -141,15 +115,9 @@ def build_agent_context(
     )
 
 
-def status_has_setup_md(
-    instance: str,
-    instance_dir: str,
-    setup_md_present: bool,
-) -> StatusResult:
-    return StatusResult(
-        setup_md_present=setup_md_present,
-        surfaced_in_status=setup_md_present,
-    )
+def status_has_setup_md(instance: str, instance_dir: str) -> StatusResult:
+    present = os.path.exists(os.path.join(instance_dir, "setup.md"))
+    return StatusResult(setup_md_present=present, surfaced_in_status=present)
 
 
 def _file_or_none(instance_dir: str, filename: str) -> str | None:

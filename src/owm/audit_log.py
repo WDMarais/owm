@@ -42,15 +42,7 @@ def append_log_entry(
     return entry
 
 
-def read_log_tail(
-    log_path: str,
-    n: int,
-    *,
-    simulated_line_count: int | None = None,
-) -> list[dict]:
-    if simulated_line_count is not None:
-        return [{} for _ in range(min(n, simulated_line_count))]
-
+def read_log_tail(log_path: str, n: int) -> list[dict]:
     try:
         with open(log_path) as f:
             lines = f.readlines()

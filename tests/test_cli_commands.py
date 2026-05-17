@@ -312,16 +312,21 @@ def test_rotation_not_needed_within_thresholds():
 
 
 @pytest.mark.log_rotation
-def test_local_rotation_discards_log():
-    result = rotate_log(log_path="/ws/owm.log", mode="local")  # TODO: wire up
+def test_local_rotation_discards_log(tmp_path):
+    log = tmp_path / "owm.log"
+    log.write_text("entry\n")
+    result = rotate_log(log_path=str(log), mode="local")
     assert result.discarded is True
     assert result.summarised is False
+    assert not log.exists()
 
 
 @pytest.mark.log_rotation
-def test_non_local_rotation_raises_not_implemented():
+def test_non_local_rotation_raises_not_implemented(tmp_path):
+    log = tmp_path / "owm.log"
+    log.write_text("entry\n")
     with pytest.raises(NotImplementedError):
-        rotate_log(log_path="/ws/owm.log", mode="summarise")
+        rotate_log(log_path=str(log), mode="summarise")
 
 
 # === SPEC GAPS ===
