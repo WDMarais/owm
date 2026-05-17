@@ -22,7 +22,10 @@ Stable terms used throughout owm. Reference here to avoid ambiguity.
 | per-instance worktree | `instances/<name>/<repo>/` — owned by one instance |
 | port pair | `[http_port, http_port+1]` — consecutive pair; N is HTTP, N+1 is gevent |
 | stamp | Hash of requirements files + patch files; gates venv re-sync |
-| `review/` | Per-instance folder of dated Markdown artifacts from any participant |
+| `setup.md` | Environment onboarding for this instance: auth steps, first-run commands, external deps. Agent reads at session start. Intent: mechanisable over time — structured enough that a future agent could execute it, not just read it. |
+| `context.md` | Curated stable anchor for agent context: PR-wide invariants, notable divergences from standard setup, open review points that persist across cycles. Written/maintained by the developer. Always included in `build_agent_context` output. Distinct from personal notes and from point-in-time review snapshots. |
+| `notes.md` | Freeform personal log: raw ticket notes, evolving thoughts, scratch. Human-only; not included in agent context by default. |
+| `review/` | Append-only dated Markdown snapshots from any participant (agent reviews, received feedback, pr-ism syncs). Each snapshot is point-in-time; relies on `context.md` for stable PR-wide background. Default agent context includes latest snapshot only. |
 
 ---
 
@@ -51,9 +54,10 @@ Stable terms used throughout owm. Reference here to avoid ambiguity.
       state.json                 — {status, pid, http_port, started_at, ...}
       instance.log               — odoo-bin stdout/stderr
       instance.conf              — generated Odoo runtime config (written by owm create)
-      setup.md                   — optional: agent reads this at session start
-      notes.md                   — optional: evolving personal log
-      review/                    — append-only dated context artifacts (any participant)
+      setup.md                   — optional: environment onboarding; intent: mechanisable
+      context.md                 — optional: curated PR-wide anchor (invariants, divergences, open points)
+      notes.md                   — optional: freeform personal log; not agent-read by default
+      review/                    — append-only dated snapshots; rely on context.md for background
         YYYY-MM-DD-<trigger>.md
       .venv/                     — per-instance virtualenv
       <repo-name>/               — per-instance worktrees
@@ -65,10 +69,17 @@ Stable terms used throughout owm. Reference here to avoid ambiguity.
 ```
 Written by owm on start/stop/adopt/kill. Read by `owm_ps`, `health_check`, `owm_status`. Absent = stopped.
 
-**`review/` semantics:** Dated Markdown artifacts from any participant — agent-written reviews,
-received human feedback, pr-ism snapshots, discussion notes. Trigger label distinguishes type
-(`initial`, `post-rebase`, `received-feedback`, `pr-ism-sync`, `discussion`). Append-only;
-never overwritten. Name collision: append `-2`, `-3` suffix.
+**`review/` semantics:** Dated Markdown snapshots from any participant — agent-written reviews,
+received human feedback, pr-ism syncs, discussion notes. Each snapshot is point-in-time and
+self-contained relative to `context.md` (which holds the stable PR-wide background). Trigger
+label distinguishes type (`initial`, `post-rebase`, `received-feedback`, `pr-ism-sync`,
+`discussion`). Append-only; never overwritten. Name collision: append `-2`, `-3` suffix.
+
+**Agent context bundle (default):** `setup.md` (if present) + `context.md` (if present) +
+latest `review/` snapshot (if any). `notes.md` excluded by default — personal log, not curated
+for agents. `review_include` parameter controls how many snapshots to include: `"latest"`
+(default), `"all"`, or `N: int` (past N). Non-default values raise `NotImplementedError` until
+implemented.
 
 ---
 
@@ -292,7 +303,8 @@ def rotate_log(log_path: str, mode: str) -> RotationResult:
 ```python
 def get_context_files(instance_dir: str, *,
                       files_present: list[str] | None = None) -> ContextFiles:
-    # Returns {setup_md, notes_md, review_snapshots, latest_review, happy_path}
+    # Returns {setup_md, context_md, notes_md, review_snapshots, latest_review, happy_path}
+    # context_md = content/path of context.md (stable PR anchor); notes_md = personal log
 
 def write_review_snapshot(instance: str, instance_dir: str, trigger: str,
                            date: str, content: str, *,
@@ -301,10 +313,13 @@ def write_review_snapshot(instance: str, instance_dir: str, trigger: str,
 
 def build_agent_context(instance: str, *, role: str | None,
                          workspace_boilerplate: str, instance_notes: str | None,
-                         review_files: list[str], setup_md: str | None) -> AgentContext:
+                         review_files: list[str], setup_md: str | None,
+                         review_include: str | int = "latest") -> AgentContext:
     # Returns {context: str, sources: {role_template, workspace, instance}}
-    # Includes ALL review/ files (not just latest); grouped by type, not latest-only.
-    # Pre-impl decision: grouping strategy not yet specced — flag when implementing.
+    # instance_notes = content of context.md (stable PR anchor; NOT notes.md)
+    # review_include: "latest" (default) | "all" | int (past N)
+    # Non-default review_include raises NotImplementedError until implemented.
+    # Default bundle: setup_md + instance_notes (context.md) + latest review snapshot.
 
 def status_has_setup_md(instance: str, instance_dir: str,
                           setup_md_present: bool) -> StatusResult: ...
@@ -312,8 +327,8 @@ def status_has_setup_md(instance: str, instance_dir: str,
 
 Spec gaps:
 - Collision disambiguation strategy (suffix) — resolved as `-2`, `-3`
-- `setup.md` include format in `build_agent_context` (concatenated? referenced?)
-- `build_agent_context` all-review-files grouping strategy not specced (pre-impl decision)
+- `setup.md` include format in `build_agent_context` — concatenated into context string
+- `review_include` non-default paths deferred (raise NotImplementedError)
 
 ---
 

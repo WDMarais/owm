@@ -4,20 +4,8 @@ Covers: Session context files section.
 """
 import pytest
 
-# TODO: from owm.session_context import get_context_files, write_review_snapshot
-# TODO: from owm.session_context import build_agent_context, status_has_setup_md
-
-def get_context_files(*args, **kwargs):
-    raise NotImplementedError
-
-def write_review_snapshot(*args, **kwargs):
-    raise NotImplementedError
-
-def build_agent_context(*args, **kwargs):
-    raise NotImplementedError
-
-def status_has_setup_md(*args, **kwargs):
-    raise NotImplementedError
+from owm.session_context import get_context_files, write_review_snapshot
+from owm.session_context import build_agent_context, status_has_setup_md
 
 
 # ---------------------------------------------------------------------------
