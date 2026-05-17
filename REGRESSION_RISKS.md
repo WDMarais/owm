@@ -8,20 +8,23 @@ structural issues — not "not yet implemented" gaps.
 
 ## 1. Readonly/shared worktree checkout — `wt/` branch gap
 
-**Risk:** git will refuse to add the same branch in two worktrees simultaneously.
-The incumbent solves this with shadow branches (`wt/<instance>/<repo>/<base>`) so
-each instance gets a distinct local branch tracking the same remote ref. re-owm
-uses `shared=true` and `readonly=true` flags but neither spec.md nor ARCHITECTURE.md
-describes how readonly per-instance worktrees are checked out when the branch is
-already live in another instance.
+**Resolution:** re-owm deliberately does not use owm-style shadow branches.
+`wt/` existed in owm because `_shared/` did not — instances each got their own
+checkout of dev, hence per-instance shadow branches. re-owm's `_shared/<repo>/<branch>/`
+convention makes them unnecessary: one canonical checkout per branch, all instances
+read from the same path.
 
-Example: `feat-789` and `review-101` both declare `product-core = "dev:dev+readonly"`.
-Both attempt `git worktree add instances/feat-789/product-core dev`. The second call
-fails because `dev` is already checked out. No recovery path is documented.
+For the `readonly+same-branch` case (two instances declaring the same branch as
+readonly), re-owm uses `_shared/<repo>/<branch>/` rather than per-instance worktrees.
+If two instances want independent edits to the same base, that's the
+`feat-789-dev:dev` pattern — an instance-owned branch rebased on the shared base,
+not simultaneous checkouts of the same branch.
 
-**What needs addressing:** either document that `readonly` implies a `wt/`-style
-shadow branch (e.g. `wt/<instance>/<repo>/<base>`) and specify the branch naming and
-lifecycle, or explain the mechanism that avoids the git conflict.
+The update-propagation risk (fast-forwarding `_shared/` affects all instances at
+once) is addressed by the checkpoint mechanism: save confirmed-working repo hashes
++ DB state before updating, roll back if the fast-forward breaks something.
+
+See ARCHITECTURE.md → owm.worktrees for the full convention.
 
 ---
 

@@ -486,6 +486,30 @@ Spec gaps:
 - Override flag config key name in instance.toml (pre-impl: propose `[repos.<name>] override = true`).
 - Shared worktree creation at init vs create boundary.
 
+**Worktree checkout convention (no shadow branches):**
+
+re-owm does not use owm-style shadow branches (`wt/<instance>/<repo>/<base>`).
+Shadow branches exist to solve the git constraint that a branch can only be
+checked out in one worktree at a time. re-owm solves the same problem differently:
+
+- `shared=True` → single checkout at `_shared/<repo>/<branch>/`, all instances
+  read from the same directory. No per-instance worktree, no collision.
+- `readonly=True` on a branch shared across instances → treat the same as
+  `shared=True`: use `_shared/<repo>/<branch>/` rather than creating N per-instance
+  worktrees with shadow branches. The `readonly` flag restricts push regardless of
+  where the checkout lives.
+- `shared=False, readonly=False` → per-instance checkout at
+  `instances/<instance>/<repo>/` on an instance-owned branch. No collision because
+  each instance has a distinct branch.
+
+**Shared-worktree update risk and mitigation:** a fetch that fast-forwards
+`_shared/<repo>/<branch>/` affects all instances simultaneously. The mitigation
+is the checkpoint mechanism (`record_checkpoint`): save a confirmed-working
+snapshot of repo hashes + DB state before updating. If the fast-forward breaks
+something, `rollback_to_checkpoint` restores all worktrees and the DB to the
+saved hashes. `fetch_workspace` already takes `db_snapshots` for instances on
+affected shared worktrees — the pieces are in place.
+
 ---
 
 ### owm.database
