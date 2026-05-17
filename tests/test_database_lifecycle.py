@@ -217,11 +217,9 @@ def test_odoo_conf_includes_dbfilter():
 @pytest.mark.database_auth
 def test_init_creates_operator_superuser_role_if_absent():
     """owm init: createuser --superuser $(whoami) if role absent; idempotent."""
-    result = init_workspace(
-        pg_port=5432,
-        operator_user="devuser",
-        superuser_exists=False,
-    )  # TODO: wire up
+    with patch("owm.workspace._superuser_exists", return_value=False), \
+         patch("owm.workspace.subprocess.run"):
+        result = init_workspace(pg_port=5432, operator_user="devuser")
     assert result.postgres.superuser_created is True
     assert result.postgres.superuser_role == "devuser"
 
@@ -229,11 +227,8 @@ def test_init_creates_operator_superuser_role_if_absent():
 @pytest.mark.database_lifecycle
 @pytest.mark.database_auth
 def test_init_superuser_already_exists_is_idempotent():
-    result = init_workspace(
-        pg_port=5432,
-        operator_user="devuser",
-        superuser_exists=True,
-    )  # TODO: wire up
+    with patch("owm.workspace._superuser_exists", return_value=True):
+        result = init_workspace(pg_port=5432, operator_user="devuser")
     assert result.postgres.superuser_created is False
     assert result.postgres.skipped is True
 
