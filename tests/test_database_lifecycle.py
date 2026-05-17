@@ -4,24 +4,9 @@ Covers: Database lifecycle, Database auth sections.
 """
 import pytest
 
-# TODO: from owm.database import create_db, reset_db, sync_db_from_template
-# TODO: from owm.database import check_template_staleness, check_pg_reachability
-# TODO: from owm.database import DatabaseConfig, TemplateStatus
-
-def create_db(*args, **kwargs):
-    raise NotImplementedError
-
-def reset_db(*args, **kwargs):
-    raise NotImplementedError
-
-def sync_db_from_template(*args, **kwargs):
-    raise NotImplementedError
-
-def check_template_staleness(*args, **kwargs):
-    raise NotImplementedError
-
-def check_pg_reachability(*args, **kwargs):
-    raise NotImplementedError
+from owm.database import create_db, reset_db, sync_db_from_template
+from owm.database import check_template_staleness, check_pg_reachability
+from owm.database import DatabaseConfig, TemplateStatus
 
 
 # ---------------------------------------------------------------------------
