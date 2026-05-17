@@ -4,20 +4,8 @@ Covers: Archive section.
 """
 import pytest
 
-# TODO: from owm.archive import archive_instance, create_from_archive
-# TODO: from owm.archive import delete_archive, detect_archive_conflict
-
-def archive_instance(*args, **kwargs):
-    raise NotImplementedError
-
-def create_from_archive(*args, **kwargs):
-    raise NotImplementedError
-
-def delete_archive(*args, **kwargs):
-    raise NotImplementedError
-
-def detect_archive_conflict(*args, **kwargs):
-    raise NotImplementedError
+from owm.archive import archive_instance, create_from_archive
+from owm.archive import delete_archive, detect_archive_conflict
 
 
 # ---------------------------------------------------------------------------
