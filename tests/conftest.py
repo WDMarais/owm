@@ -22,6 +22,18 @@ from pathlib import Path
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _audit_log_isolation(request):
+    """Remove /tmp/test_owm.log before and after each audit_log-marked test."""
+    if request.node.get_closest_marker("audit_log"):
+        log = Path("/tmp/test_owm.log")
+        log.unlink(missing_ok=True)
+        yield
+        log.unlink(missing_ok=True)
+    else:
+        yield
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
