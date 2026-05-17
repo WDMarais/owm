@@ -203,16 +203,25 @@ def owm_sync(instance, repo=None, rebase=False, simulate_repo_states=None, **kwa
 
 
 def owm_push(instance, repo, simulate_diverged=False, **kwargs):
-    # Shared repos are always refused; review instances never own branches.
-    if repo == "odoo":
-        return format_error("odoo is a shared repo", "SHARED_REPO",
-                            hint=f"git -C _shared/odoo/... push origin HEAD")
-    if instance.startswith("review-"):
-        return format_error(f"instance {instance!r} does not own {repo!r}", "NOT_OWNED")
-    if simulate_diverged:
-        return format_error("branch has diverged from origin", "DIVERGED")
+    # Derive context — in real impl these come from workspace/instance config.
+    shared = (repo == "odoo")
+    owned = not instance.startswith("review-")
     branch = f"{instance}-dev"
-    return {"status": "pushed", "repo": repo, "branch": branch}
+    try:
+        result = push_instance(
+            instance,
+            repo=repo,
+            shared=shared,
+            owned=owned,
+            branch_status="diverged" if simulate_diverged else None,
+        )
+    except OwmError as e:
+        err = _e(e)
+        if e.code == "SHARED_REPO":
+            err["hint"] = f"git -C _shared/{repo}/... push origin HEAD"
+        return err
+    result["branch"] = branch
+    return result
 
 
 def owm_reset(instance, repo, force=False, simulate_dirty=False, **kwargs):
