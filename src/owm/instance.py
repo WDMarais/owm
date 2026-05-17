@@ -1,4 +1,6 @@
+import json
 import os
+import signal
 import subprocess
 import time
 import urllib.error
@@ -66,25 +68,59 @@ class RestartResult:
     url: str | None = None
 
 
-def _pid_file_path(instance: str, workspace_root: str) -> str:
-    return os.path.join(workspace_root, "instances", instance, ".owm.pid")
+_PID_UNSET = "UNSET"
 
 
-def _write_pid(instance: str, workspace_root: str, pid: int) -> None:
-    with open(_pid_file_path(instance, workspace_root), "w") as f:
-        f.write(str(pid))
+def _state_file_path(instance: str, workspace_root: str) -> str:
+    return os.path.join(workspace_root, "instances", instance, "state.json")
+
+
+def _read_state(instance: str, workspace_root: str) -> dict:
+    try:
+        with open(_state_file_path(instance, workspace_root)) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_state(instance: str, workspace_root: str, state: dict) -> None:
+    with open(_state_file_path(instance, workspace_root), "w") as f:
+        json.dump(state, f)
 
 
 def _read_pid(instance: str, workspace_root: str) -> int | None:
-    try:
-        with open(_pid_file_path(instance, workspace_root)) as f:
-            return int(f.read().strip())
-    except (OSError, ValueError):
+    state = _read_state(instance, workspace_root)
+    if not state:
+        return None  # state.json absent — never started
+    pid_val = state["pid"]  # KeyError = malformed state.json, let it propagate
+    if pid_val == _PID_UNSET:
         return None
+    return int(pid_val)
+
+
+def _write_pid(instance: str, workspace_root: str, pid: int) -> None:
+    state = _read_state(instance, workspace_root)
+    state["pid"] = pid
+    _write_state(instance, workspace_root, state)
+
+
+def _clear_pid(instance: str, workspace_root: str) -> None:
+    state = _read_state(instance, workspace_root)
+    state["pid"] = _PID_UNSET
+    _write_state(instance, workspace_root, state)
 
 
 def _process_alive(pid: int) -> bool:
     return psutil.pid_exists(pid)
+
+
+def _wait_for_stop(pid: int, timeout_seconds: int) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if not _process_alive(pid):
+            return True
+        time.sleep(1)
+    return False
 
 
 def _build_start_command(instance: str, workspace_root: str, conf: InstanceConfig) -> list[str]:
@@ -100,7 +136,6 @@ def _wait_for_http(port: int, timeout_seconds: int) -> None:
     # Any HTTP response (200, 3xx, 4xx) means the server is accepting connections.
     # Only connection errors (refused, timeout) mean it is not ready yet.
     # TODO: use /web/health on Odoo 16+ for structured health status (DB, modules).
-    import urllib.error
     deadline = time.monotonic() + timeout_seconds
     url = f"http://localhost:{port}/web"
     while time.monotonic() < deadline:
@@ -217,23 +252,29 @@ def start_instance(
 
 def stop_instance(
     instance: str,
+    workspace_root: str,
     *,
     wait: bool = False,
-    simulate_clean_exit: bool | None = None,
-    timeout_seconds: int | None = None,
-    running: bool = True,
+    timeout_seconds: int = 30,
 ) -> StopResult:
-    if not running:
+    pid = _read_pid(instance, workspace_root)
+    if pid is None or not _process_alive(pid):
         return StopResult(status="not_running", message=f"{instance} is not running")
-    if wait and simulate_clean_exit is False:
-        return StopResult(
-            status="stop_timeout",
-            force_killed=False,
-            hint="run owm kill to force-stop the instance",
-        )
-    if wait:
-        return StopResult(status="stopped", pid=1234, events_emitted=["instance_stopped"])
-    return StopResult(status="stopping", pid=1234)
+
+    os.kill(pid, signal.SIGTERM)
+
+    if not wait:
+        return StopResult(status="stopping", pid=pid)
+
+    if _wait_for_stop(pid, timeout_seconds):
+        _clear_pid(instance, workspace_root)
+        return StopResult(status="stopped", pid=pid, events_emitted=["instance_stopped"])
+
+    return StopResult(
+        status="stop_timeout",
+        force_killed=False,
+        hint="run owm kill to force-stop the instance",
+    )
 
 
 def kill_instance(instance: str, *, running: bool, pid: int | None = None) -> KillResult:
