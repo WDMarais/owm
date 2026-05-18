@@ -21,6 +21,8 @@ from owm.mcp import (
     owm_db_dump, owm_db_restore, owm_logs,
     owm_agent_context,
 )
+from owm.errors import OwmError, ALREADY_EXISTS
+from owm.operations import LogsResult
 
 
 # ---------------------------------------------------------------------------
@@ -68,9 +70,9 @@ def test_owm_ps_returns_managed_and_unmanaged():
 
 @pytest.mark.mcp_surface
 def test_owm_ps_managed_entry_shape():
-    result = owm_ps(
-        simulated_managed=[{"instance": "feat-789", "pid": 1234, "port": 8142, "url": "https://feat-789.localhost", "status": "healthy"}]
-    )  # TODO: wire up
+    fake = [{"instance": "feat-789", "pid": 1234, "port": 8142, "url": "https://feat-789.localhost", "status": "healthy"}]
+    with patch("owm.mcp.list_running_instances", return_value=fake):
+        result = owm_ps()
     entry = result["managed"][0]
     assert "instance" in entry
     assert "pid" in entry
@@ -169,7 +171,8 @@ def test_owm_new_returns_toml_path_and_content():
 
 @pytest.mark.mcp_surface
 def test_owm_new_already_exists_error():
-    result = owm_new(instance="feat-789", repos={}, already_exists=True)  # TODO: wire up
+    with patch("owm.mcp.new_instance", side_effect=OwmError("already exists", code=ALREADY_EXISTS)):
+        result = owm_new(instance="feat-789", repos={})
     assert result == {"error": "instance already exists", "code": "ALREADY_EXISTS"}
 
 
@@ -652,7 +655,9 @@ def test_owm_db_restore_running_error():
 
 @pytest.mark.mcp_surface
 def test_owm_logs_default():
-    result = owm_logs(instance="feat-789", n=50)  # TODO: wire up
+    fake = LogsResult(lines=[], log_path="instances/feat-789/instance.log")
+    with patch("owm.mcp.show_logs", return_value=fake):
+        result = owm_logs(instance="feat-789", n=50)
     assert "lines" in result
     assert "log_path" in result
     assert len(result["lines"]) <= 50
@@ -660,14 +665,18 @@ def test_owm_logs_default():
 
 @pytest.mark.mcp_surface
 def test_owm_logs_level_filter():
-    result = owm_logs(instance="feat-789", n=200, level="ERROR")  # TODO: wire up
+    fake = LogsResult(lines=[], log_path="instances/feat-789/instance.log")
+    with patch("owm.mcp.show_logs", return_value=fake):
+        result = owm_logs(instance="feat-789", n=200, level="ERROR")
     assert "lines" in result
 
 
 @pytest.mark.mcp_surface
 def test_owm_logs_no_search_parameter():
     """owm_logs has no search/filter param; LOG_FILE path is returned for grep."""
-    result = owm_logs(instance="feat-789", n=50)  # TODO: wire up
+    fake = LogsResult(lines=[], log_path="instances/feat-789/instance.log")
+    with patch("owm.mcp.show_logs", return_value=fake):
+        result = owm_logs(instance="feat-789", n=50)
     assert "log_path" in result
     # no search param in signature — spec explicitly defers to LOG_FILE + grep
 

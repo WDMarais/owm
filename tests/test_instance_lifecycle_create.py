@@ -49,14 +49,16 @@ def test_new_instance_toml_contains_autofilled_db_name():
 
 
 @pytest.mark.instance_lifecycle_create
-def test_new_instance_already_exists_returns_error():
+def test_new_instance_already_exists_returns_error(tmp_path):
+    inst_dir = tmp_path / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True)
+    (inst_dir / "instance.toml").write_text("[repos]\n")
     with pytest.raises(Exception) as exc_info:
         new_instance(
             name="feat-789",
             repos={"odoo": "19.0:shared"},
-            workspace_root="/ws",
-            already_exists=True,
-        )  # TODO: wire up
+            workspace_root=str(tmp_path),
+        )
     assert "ALREADY_EXISTS" in str(exc_info.value)
 
 

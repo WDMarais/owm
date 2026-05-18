@@ -7,7 +7,7 @@ No business logic lives here.
 from owm.errors import OwmError, format_error, START_TIMEOUT, STOP_TIMEOUT
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
-    kill_instance, restart_instance, health_check,
+    kill_instance, restart_instance, health_check, list_running_instances,
 )
 from owm.archive import archive_instance
 from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
@@ -40,9 +40,9 @@ def owm_status(instance=None, include_repos=True, include_ports=True, include_un
     return result
 
 
-def owm_ps(simulated_managed=None):
+def owm_ps(workspace_root=".", **kwargs):
     return {
-        "managed": simulated_managed or [],
+        "managed": list_running_instances(workspace_root),
         "unmanaged": [],
     }
 
@@ -82,10 +82,9 @@ def owm_audit_log(n=50, level=None, since=None):
 # Lifecycle tools
 # ---------------------------------------------------------------------------
 
-def owm_new(instance, repos, already_exists=False, **kwargs):
+def owm_new(instance, repos, workspace_root=".", **kwargs):
     try:
-        result = new_instance(name=instance, repos=repos, workspace_root=".",
-                              already_exists=already_exists)
+        result = new_instance(name=instance, repos=repos, workspace_root=workspace_root)
         return {"path": result.toml_path, "content": result.toml_content}
     except OwmError as e:
         return {"error": "instance already exists", "code": "ALREADY_EXISTS"}
@@ -305,8 +304,8 @@ def owm_db_restore(instance, path, running=False, **kwargs):
 # Context tools
 # ---------------------------------------------------------------------------
 
-def owm_logs(instance, n=50, level=None, **kwargs):
-    result = show_logs(instance=instance, n=n, follow=False, level=level)
+def owm_logs(instance, n=50, level=None, workspace_root=".", **kwargs):
+    result = show_logs(instance=instance, n=n, follow=False, level=level, workspace_root=workspace_root)
     return {"lines": result.lines, "log_path": result.log_path}
 
 

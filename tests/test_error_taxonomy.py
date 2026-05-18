@@ -106,7 +106,8 @@ def test_not_found_for_missing_instance():
 
 @pytest.mark.error_taxonomy
 def test_already_exists_on_duplicate_new():
-    result = owm_new(instance="feat-789", repos={}, already_exists=True)  # TODO: wire up
+    with patch("owm.mcp.new_instance", side_effect=OwmError("already exists", code=ALREADY_EXISTS)):
+        result = owm_new(instance="feat-789", repos={})
     assert result["code"] == ALREADY_EXISTS
 
 

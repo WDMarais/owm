@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -133,11 +134,11 @@ def compare_instances(
     instance: str,
     *,
     base: str | None = None,
+    workspace_root: str = ".",
     workspace_compare_pairs: list | None = None,
     base_rows: list | None = None,
     feat_rows: list | None = None,
     expected_changes: list | None = None,
-    base_instance_exists: bool = True,
 ) -> CompareResult:
     base_instance = base
     feat_instance = instance
@@ -148,12 +149,14 @@ def compare_instances(
                 base_instance = next(p for p in pair if p != instance)
                 break
 
-    if not base_instance_exists:
+    if base_instance and base_rows is None and not os.path.isdir(
+        os.path.join(workspace_root, "instances", base_instance)
+    ):
         return CompareResult(
             status="error",
             base_instance=base_instance,
             feat_instance=feat_instance,
-            error=f"{base_instance or 'base instance'} not found",
+            error=f"{base_instance} not found",
             missing_instance=base_instance,
         )
 

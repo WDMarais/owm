@@ -62,31 +62,31 @@ def test_archive_running_instance_hard_error():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.archive
-def test_create_detects_archived_instance_prompts_human():
+def test_create_detects_archived_instance_prompts_human(tmp_path):
+    (tmp_path / "_archive" / "pd-123").mkdir(parents=True)
     result = detect_archive_conflict(
         name="pd-123",
-        workspace_root="/ws",
-        archive_exists=True,
+        workspace_root=str(tmp_path),
         archive_date="2026-01-15",
         mode="human",
-    )  # TODO: wire up
+    )
     assert result.conflict is True
     assert result.archive_date == "2026-01-15"
     assert result.options == ["restore", "fresh"] or set(result.options) == {"restore", "fresh"}
 
 
 @pytest.mark.archive
-def test_create_detects_archived_instance_hard_error_for_agent():
+def test_create_detects_archived_instance_hard_error_for_agent(tmp_path):
     """Agent path: hard error unless --restore or --fresh flag provided."""
+    (tmp_path / "_archive" / "pd-123").mkdir(parents=True)
     with pytest.raises(Exception) as exc_info:
         detect_archive_conflict(
             name="pd-123",
-            workspace_root="/ws",
-            archive_exists=True,
+            workspace_root=str(tmp_path),
             archive_date="2026-01-15",
             mode="agent",
             flag=None,
-        )  # TODO: wire up
+        )
     assert "archive" in str(exc_info.value).lower() or "restore" in str(exc_info.value).lower()
 
 
