@@ -17,7 +17,7 @@ def test_create_installs_missing_modules():
         instance="feat-789",
         configured_modules=["my_module", "other_module"],
         installed_modules=[],
-    )  # TODO: wire up
+    )
     assert result.installed == ["my_module", "other_module"] or set(result.installed) == {"my_module", "other_module"}
     assert result.odoo_bin_called is True
 
@@ -28,7 +28,7 @@ def test_start_skips_install_when_all_modules_present():
         instance="feat-789",
         configured_modules=["my_module", "other_module"],
         installed_modules=["my_module", "other_module"],
-    )  # TODO: wire up
+    )
     assert result.installed == []
     assert result.skipped is True
 
@@ -39,7 +39,7 @@ def test_install_includes_dependencies_and_auto_installs():
         instance="feat-789",
         configured_modules=["my_module"],
         installed_modules=[],
-    )  # TODO: wire up
+    )
     assert result.odoo_bin_args is not None
     # odoo-bin is called; it handles dependency resolution internally
     assert result.odoo_bin_called is True
@@ -54,7 +54,7 @@ def test_upgrade_stops_runs_update_all_restarts():
     result = upgrade_modules(
         instance="feat-789",
         modules=None,  # None means -u all
-    )  # TODO: wire up
+    )
     assert result.stopped_before is True
     assert result.odoo_bin_args == "-u all" or result.modules == "all"
     assert result.restarted is True
@@ -65,7 +65,7 @@ def test_upgrade_specific_modules():
     result = upgrade_modules(
         instance="feat-789",
         modules=["my_module", "other_module"],
-    )  # TODO: wire up
+    )
     assert result.stopped_before is True
     assert set(result.modules) == {"my_module", "other_module"}
     assert result.restarted is True
@@ -78,7 +78,7 @@ def test_upgrade_reinstall_forces_reinstall():
         instance="feat-789",
         modules=None,
         reinstall=True,
-    )  # TODO: wire up
+    )
     assert result.reinstall is True
     assert result.odoo_bin_called is True
 

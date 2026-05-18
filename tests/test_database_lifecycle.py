@@ -24,7 +24,7 @@ def test_create_db_clones_from_template_when_available():
         odoo_version="19",
         template="odoo19_base",
         pg_port=5432,
-    )  # TODO: wire up
+    )
     assert result.source == "template"
     assert result.template == "odoo19_base"
     assert result.full_install_required is False
@@ -38,7 +38,7 @@ def test_create_db_blank_slate_when_no_template():
         odoo_version="19",
         template=None,
         pg_port=5432,
-    )  # TODO: wire up
+    )
     assert result.source == "blank"
     assert result.full_install_required is True
     assert result.warning is not None
@@ -52,7 +52,7 @@ def test_create_db_uses_unix_socket_connection():
         odoo_version="19",
         template=None,
         pg_port=5432,
-    )  # TODO: wire up
+    )
     assert result.connection.host.startswith("/var/run/postgresql") or result.connection.host is None
     assert result.connection.password is None
 
@@ -65,7 +65,7 @@ def test_create_db_owned_by_operator_user():
         odoo_version="19",
         template=None,
         pg_port=5432,
-    )  # TODO: wire up
+    )
     assert result.owner == result.operator_user
     assert result.per_instance_role is False
 
@@ -81,7 +81,7 @@ def test_db_reset_restores_from_base_template():
         template="odoo19_base",
         pg_port=5432,
         seed_script=None,
-    )  # TODO: wire up
+    )
     assert result.restored_from == "odoo19_base"
 
 
@@ -92,7 +92,7 @@ def test_db_reset_with_seed_script_reruns_it():
         template="odoo19_base",
         pg_port=5432,
         seed_script="scripts/seed.py",
-    )  # TODO: wire up
+    )
     assert result.restored_from == "odoo19_base"
     assert result.seed_script_run is True
     assert result.seed_script == "scripts/seed.py"
@@ -105,7 +105,7 @@ def test_db_reset_no_seed_script_warns_instance_state_not_restored():
         template="odoo19_base",
         pg_port=5432,
         seed_script=None,
-    )  # TODO: wire up
+    )
     assert result.warning is not None
     assert "instance-specific state" in result.warning.lower() or "not restored" in result.warning.lower()
 
@@ -121,7 +121,7 @@ def test_template_refresh_does_not_sync_existing_instances():
         template="odoo19_base",
         instances=["feat-789", "review-101"],
         auto_sync=False,
-    )  # TODO: wire up
+    )
     assert result.synced_instances == []
     assert result.affected_instances == ["feat-789", "review-101"]
 
@@ -133,7 +133,7 @@ def test_template_staleness_warning_on_status_check():
         template_age_days=35,
         threshold_days=30,
         instance="feat-789",
-    )  # TODO: wire up
+    )
     assert result.stale is True
     assert result.warning is not None
 
@@ -144,7 +144,7 @@ def test_template_staleness_no_warning_within_threshold():
         template_age_days=20,
         threshold_days=30,
         instance="feat-789",
-    )  # TODO: wire up
+    )
     assert result.stale is False
     assert result.warning is None
 
@@ -185,7 +185,7 @@ def test_template_sync_opt_out_no_action():
         template="odoo19_base",
         instance="feat-789",
         opt_in=False,
-    )  # TODO: wire up
+    )
     assert result.synced is False
     assert result.backup_created is False
 
@@ -198,7 +198,7 @@ def test_template_sync_opt_out_no_action():
 @pytest.mark.database_auth
 def test_pg_reachability_check_uses_pg_isready():
     """Health check: pg_isready -h /var/run/postgresql -p <port>."""
-    result = check_pg_reachability(pg_host="/var/run/postgresql", pg_port=5432)  # TODO: wire up
+    result = check_pg_reachability(pg_host="/var/run/postgresql", pg_port=5432)
     assert result.method == "pg_isready"
     assert result.host == "/var/run/postgresql"
     assert result.port == 5432
@@ -208,7 +208,7 @@ def test_pg_reachability_check_uses_pg_isready():
 @pytest.mark.database_auth
 def test_odoo_conf_includes_dbfilter():
     """Generated instance.conf sets dbfilter = ^<name>$ for subdomain isolation."""
-    conf = generate_instance_conf(instance_name="feat-789", http_port=8142, gevent_port=8143, workers=2)  # TODO: wire up
+    conf = generate_instance_conf(instance_name="feat-789", http_port=8142, gevent_port=8143, workers=2)
     dbfilter = conf.get("dbfilter") if isinstance(conf, dict) else None
     assert dbfilter == "^feat-789$" or "dbfilter = ^feat-789$" in str(conf)
 

@@ -31,7 +31,7 @@ from owm.operations import LogsResult
 
 @pytest.mark.mcp_surface
 def test_owm_status_full_workspace():
-    result = owm_status()  # TODO: wire up
+    result = owm_status()
     assert "instances" in result
     assert "repos" in result or "worktrees" in result
     assert "ports" in result
@@ -40,20 +40,20 @@ def test_owm_status_full_workspace():
 
 @pytest.mark.mcp_surface
 def test_owm_status_single_instance():
-    result = owm_status(instance="feat-789")  # TODO: wire up
+    result = owm_status(instance="feat-789")
     assert result["instance"] == "feat-789" or "feat-789" in str(result)
 
 
 @pytest.mark.mcp_surface
 def test_owm_status_selective_include_repos_only():
-    result = owm_status(include_repos=True, include_ports=False, include_unmanaged=False)  # TODO: wire up
+    result = owm_status(include_repos=True, include_ports=False, include_unmanaged=False)
     assert "repos" in result or "worktrees" in result
     assert "ports" not in result or result.get("ports") is None
 
 
 @pytest.mark.mcp_surface
 def test_owm_status_instance_not_found():
-    result = owm_status(instance="nonexistent")  # TODO: wire up
+    result = owm_status(instance="nonexistent")
     assert result == {"error": "instance not found", "code": "NOT_FOUND"}
 
 
@@ -63,7 +63,7 @@ def test_owm_status_instance_not_found():
 
 @pytest.mark.mcp_surface
 def test_owm_ps_returns_managed_and_unmanaged():
-    result = owm_ps()  # TODO: wire up
+    result = owm_ps()
     assert "managed" in result
     assert "unmanaged" in result
 
@@ -88,7 +88,7 @@ def test_owm_ps_reads_only_state_json():
     test with subprocess mocking, not assertable here as a unit test.
     Structural check: result shape is correct regardless of source.
     """
-    result = owm_ps()  # TODO: wire up
+    result = owm_ps()
     assert "managed" in result
     assert "unmanaged" in result
 
@@ -99,7 +99,7 @@ def test_owm_ps_reads_only_state_json():
 
 @pytest.mark.mcp_surface
 def test_owm_validate_static_valid():
-    result = owm_validate(instance="feat-789")  # TODO: wire up
+    result = owm_validate(instance="feat-789")
     assert "valid" in result
     assert "errors" in result
     assert "warnings" in result
@@ -108,7 +108,7 @@ def test_owm_validate_static_valid():
 
 @pytest.mark.mcp_surface
 def test_owm_validate_live_richer_errors():
-    result = owm_validate(instance="feat-789", live=True)  # TODO: wire up
+    result = owm_validate(instance="feat-789", live=True)
     assert result["valid"] in (True, False)
     assert isinstance(result["errors"], list)
 
@@ -119,7 +119,7 @@ def test_owm_validate_live_richer_errors():
 
 @pytest.mark.mcp_surface
 def test_owm_env_returns_all_required_keys():
-    result = owm_env(instance="feat-789")  # TODO: wire up
+    result = owm_env(instance="feat-789")
     expected_keys = {
         "ODOO_BIN", "VENV_PYTHON", "PSQL", "DB_NAME", "DB_PORT",
         "INSTANCE_DIR", "LOG_FILE", "HTTP_PORT", "GEVENT_PORT",
@@ -134,21 +134,21 @@ def test_owm_env_returns_all_required_keys():
 
 @pytest.mark.mcp_surface
 def test_owm_audit_log_default_50_lines():
-    result = owm_audit_log(n=50)  # TODO: wire up
+    result = owm_audit_log(n=50)
     assert "lines" in result
     assert len(result["lines"]) <= 50
 
 
 @pytest.mark.mcp_surface
 def test_owm_audit_log_level_filter():
-    result = owm_audit_log(n=100, level="ERROR")  # TODO: wire up
+    result = owm_audit_log(n=100, level="ERROR")
     for line in result["lines"]:
         assert line.get("level") in ("ERROR", "CRITICAL")
 
 
 @pytest.mark.mcp_surface
 def test_owm_audit_log_since_timestamp():
-    result = owm_audit_log(since="2026-05-16T08:00:00")  # TODO: wire up
+    result = owm_audit_log(since="2026-05-16T08:00:00")
     assert "lines" in result
     for line in result["lines"]:
         assert line["timestamp"] >= "2026-05-16T08:00:00"
@@ -163,7 +163,7 @@ def test_owm_new_returns_toml_path_and_content():
     result = owm_new(
         instance="feat-789",
         repos={"odoo": "19.0:shared", "product-core": "feat-789-dev:dev"},
-    )  # TODO: wire up
+    )
     assert result["path"].endswith("instance.toml")
     assert result["content"] is not None
     assert "[repos]" in result["content"]
@@ -192,7 +192,7 @@ def test_owm_create_from_disk_returns_status_dict(standard_instance_toml, tmp_wo
 
 @pytest.mark.mcp_surface
 def test_owm_create_inline_toml_no_disk_roundtrip():
-    result = owm_create(instance="feat-789", toml='[repos]\nodoo = {branch = "19.0", shared = true}\n[database]\nname="feat"\npg_port=5432\n[server]\nhttp_port=8142\ngevent_port=8143\n')  # TODO: wire up
+    result = owm_create(instance="feat-789", toml='[repos]\nodoo = {branch = "19.0", shared = true}\n[database]\nname="feat"\npg_port=5432\n[server]\nhttp_port=8142\ngevent_port=8143\n')
     assert result["status"] == "ok"
 
 
@@ -358,43 +358,43 @@ def test_owm_health_unmanaged():
 
 @pytest.mark.mcp_surface
 def test_owm_archive_stopped_instance():
-    result = owm_archive(instance="feat-789")  # TODO: wire up
+    result = owm_archive(instance="feat-789")
     assert result == {"status": "archived", "path": "_archive/feat-789/"}
 
 
 @pytest.mark.mcp_surface
 def test_owm_archive_running_instance_error():
-    result = owm_archive(instance="feat-789", running=True)  # TODO: wire up
+    result = owm_archive(instance="feat-789", running=True)
     assert result == {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
 
 
 @pytest.mark.mcp_surface
 def test_owm_archive_discard_db():
-    result = owm_archive(instance="feat-789", discard_db=True)  # TODO: wire up
+    result = owm_archive(instance="feat-789", discard_db=True)
     assert result["status"] == "archived"
 
 
 @pytest.mark.mcp_surface
 def test_owm_delete_force_required_for_agents():
-    result = owm_delete(instance="feat-789", force=True)  # TODO: wire up
+    result = owm_delete(instance="feat-789", force=True)
     assert result == {"status": "deleted"}
 
 
 @pytest.mark.mcp_surface
 def test_owm_delete_running_error():
-    result = owm_delete(instance="feat-789", force=True, running=True)  # TODO: wire up
+    result = owm_delete(instance="feat-789", force=True, running=True)
     assert result == {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
 
 
 @pytest.mark.mcp_surface
 def test_owm_rename_stopped_instance():
-    result = owm_rename(instance="feat-789", new_name="pd-789")  # TODO: wire up
+    result = owm_rename(instance="feat-789", new_name="pd-789")
     assert result == {"status": "renamed", "old": "feat-789", "new": "pd-789", "url": "https://pd-789.localhost"}
 
 
 @pytest.mark.mcp_surface
 def test_owm_rename_running_error():
-    result = owm_rename(instance="feat-789", new_name="pd-789", running=True)  # TODO: wire up
+    result = owm_rename(instance="feat-789", new_name="pd-789", running=True)
     assert result["code"] == "INSTANCE_RUNNING"
 
 
@@ -670,7 +670,7 @@ def test_owm_compare_ad_hoc_base(tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_upgrade_ok():
-    result = owm_upgrade(instance="feat-789", modules=["my_module"])  # TODO: wire up
+    result = owm_upgrade(instance="feat-789", modules=["my_module"])
     assert result["status"] == "ok"
     assert result["modules"] == ["my_module"]
     assert result["restarted"] is True
@@ -678,7 +678,7 @@ def test_owm_upgrade_ok():
 
 @pytest.mark.mcp_surface
 def test_owm_upgrade_fail_includes_log_tail():
-    result = owm_upgrade(instance="feat-789", modules=["my_module"], simulate_failure=True)  # TODO: wire up
+    result = owm_upgrade(instance="feat-789", modules=["my_module"], simulate_failure=True)
     assert result["status"] == "fail"
     assert result["code"] == "UPGRADE_FAILED"
     assert result["log_tail"] is not None
@@ -686,7 +686,7 @@ def test_owm_upgrade_fail_includes_log_tail():
 
 @pytest.mark.mcp_surface
 def test_owm_upgrade_in_place_requires_workers():
-    result = owm_upgrade(instance="feat-789", modules=["my_module"], in_place=True, workers=0)  # TODO: wire up
+    result = owm_upgrade(instance="feat-789", modules=["my_module"], in_place=True, workers=0)
     assert result["code"] == "NO_WORKERS"
 
 
@@ -696,33 +696,33 @@ def test_owm_upgrade_in_place_requires_workers():
 
 @pytest.mark.mcp_surface
 def test_owm_db_reset():
-    result = owm_db_reset(instance="feat-789")  # TODO: wire up
+    result = owm_db_reset(instance="feat-789")
     assert result["status"] == "ok"
     assert result["restored_from"] is not None
 
 
 @pytest.mark.mcp_surface
 def test_owm_db_dump_default_path():
-    result = owm_db_dump(instance="feat-789")  # TODO: wire up
+    result = owm_db_dump(instance="feat-789")
     assert result["status"] == "ok"
     assert "_dumps/feat-789/" in result["path"]
 
 
 @pytest.mark.mcp_surface
 def test_owm_db_dump_explicit_path():
-    result = owm_db_dump(instance="feat-789", out="/explicit/path/snapshot.dump")  # TODO: wire up
+    result = owm_db_dump(instance="feat-789", out="/explicit/path/snapshot.dump")
     assert result["path"] == "/explicit/path/snapshot.dump"
 
 
 @pytest.mark.mcp_surface
 def test_owm_db_restore_relative_path():
-    result = owm_db_restore(instance="feat-789", path="2026-05-16T09:32.dump")  # TODO: wire up
+    result = owm_db_restore(instance="feat-789", path="2026-05-16T09:32.dump")
     assert result["status"] == "ok"
 
 
 @pytest.mark.mcp_surface
 def test_owm_db_restore_running_error():
-    result = owm_db_restore(instance="feat-789", path="snap.dump", running=True)  # TODO: wire up
+    result = owm_db_restore(instance="feat-789", path="snap.dump", running=True)
     assert result == {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
 
 
@@ -764,7 +764,7 @@ def test_owm_logs_no_search_parameter():
 
 @pytest.mark.mcp_surface
 def test_owm_agent_context_with_role():
-    result = owm_agent_context(instance="feat-789", role="reviewer")  # TODO: wire up
+    result = owm_agent_context(instance="feat-789", role="reviewer")
     assert "context" in result
     assert "sources" in result
     assert result["sources"]["role_template"] is not None
@@ -774,14 +774,14 @@ def test_owm_agent_context_with_role():
 
 @pytest.mark.mcp_surface
 def test_owm_agent_context_no_role():
-    result = owm_agent_context(instance="feat-789")  # TODO: wire up
+    result = owm_agent_context(instance="feat-789")
     assert "context" in result
     assert result["sources"].get("role_template") is None
 
 
 @pytest.mark.mcp_surface
 def test_owm_agent_context_no_instance_notes_not_an_error():
-    result = owm_agent_context(instance="feat-789", has_instance_notes=False)  # TODO: wire up
+    result = owm_agent_context(instance="feat-789", has_instance_notes=False)
     assert "context" in result
     assert result["sources"]["instance"] is None
 
@@ -819,7 +819,7 @@ def test_push_always_refuses_unowned_branch(tmp_workspace):
 @pytest.mark.safety_invariants
 def test_delete_operates_on_local_state_only():
     """delete removes local artefacts; no force-push or remote branch delete."""
-    result = owm_delete(instance="feat-789", force=True)  # TODO: wire up
+    result = owm_delete(instance="feat-789", force=True)
     assert result.get("remote_branches_deleted", []) == []
     assert result.get("force_pushed", False) is False
 
@@ -827,7 +827,7 @@ def test_delete_operates_on_local_state_only():
 @pytest.mark.mcp_surface
 @pytest.mark.safety_invariants
 def test_archive_operates_on_local_state_only():
-    result = owm_archive(instance="feat-789")  # TODO: wire up
+    result = owm_archive(instance="feat-789")
     assert result.get("remote_branches_deleted", []) == []
 
 

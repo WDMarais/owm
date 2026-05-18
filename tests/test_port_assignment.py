@@ -19,7 +19,7 @@ def test_assign_port_returns_first_free_pair_in_range():
     """Ports 8100–8142 occupied; next free pair is 8143/8144."""
     occupied = set(range(8100, 8143))  # 8100..8142 taken
     pool = {"range": [8100, 8299], "occupied": occupied}
-    result = assign_port(pool=pool)  # TODO: wire up
+    result = assign_port(pool=pool)
     assert result.http_port == 8143
     assert result.gevent_port == 8144
 
@@ -29,7 +29,7 @@ def test_assign_port_returns_lowest_free_pair():
     """Only 8100/8101 free."""
     occupied = set(range(8102, 8299))
     pool = {"range": [8100, 8299], "occupied": occupied}
-    result = assign_port(pool=pool)  # TODO: wire up
+    result = assign_port(pool=pool)
     assert result.http_port == 8100
     assert result.gevent_port == 8101
 
@@ -38,7 +38,7 @@ def test_assign_port_returns_lowest_free_pair():
 def test_assign_port_gevent_is_http_plus_one():
     occupied = set()
     pool = {"range": [8100, 8299], "occupied": occupied}
-    result = assign_port(pool=pool)  # TODO: wire up
+    result = assign_port(pool=pool)
     assert result.gevent_port == result.http_port + 1
 
 
@@ -48,7 +48,7 @@ def test_assign_port_range_exhausted_raises():
     occupied = set(range(8100, 8300))
     pool = {"range": [8100, 8299], "occupied": occupied}
     with pytest.raises(Exception) as exc_info:
-        assign_port(pool=pool)  # TODO: wire up
+        assign_port(pool=pool)
     assert "PORT_EXHAUSTED" in str(exc_info.value) or "port range exhausted" in str(exc_info.value).lower()
 
 
@@ -58,7 +58,7 @@ def test_assign_port_range_exhausted_error_message():
     occupied = set(range(8100, 8300))
     pool = {"range": [8100, 8299], "occupied": occupied}
     with pytest.raises(Exception) as exc_info:
-        assign_port(pool=pool)  # TODO: wire up
+        assign_port(pool=pool)
     msg = str(exc_info.value).lower()
     assert "archive" in msg or "delete" in msg
 
@@ -67,7 +67,7 @@ def test_assign_port_range_exhausted_error_message():
 def test_assign_port_records_in_instance_config():
     """Assigned port pair must be written back to instance config."""
     pool = {"range": [8100, 8299], "occupied": set()}
-    result = assign_port(pool=pool)  # TODO: wire up
+    result = assign_port(pool=pool)
     assert result.http_port is not None
     assert result.gevent_port is not None
 
@@ -76,7 +76,7 @@ def test_assign_port_records_in_instance_config():
 def test_assign_port_respects_owm_internal_range_exclusion():
     """[8090, 8099] is the owm-internal range; must never assign from it."""
     pool = {"range": [8100, 8299], "owm_range": [8090, 8099], "occupied": set()}
-    result = assign_port(pool=pool)  # TODO: wire up
+    result = assign_port(pool=pool)
     assert result.http_port >= 8100
     assert result.gevent_port >= 8100
 
@@ -93,7 +93,7 @@ def test_pinned_port_no_conflict_assigned():
     """instance.toml specifies explicit port; no conflict → honour it."""
     pinned = 8143
     occupied = set()
-    result = honour_pinned_port(pinned_http=pinned, occupied=occupied)  # TODO: wire up
+    result = honour_pinned_port(pinned_http=pinned, occupied=occupied)
     assert result.http_port == 8143
     assert result.gevent_port == 8144
 
@@ -107,7 +107,7 @@ def test_pinned_port_conflicts_with_stopped_instance_warns():
         pinned_http=pinned,
         occupied={8143},
         existing_instances=[stopped_holder],
-    )  # TODO: wire up
+    )
     assert result.conflict is not None
     assert result.conflict.instance == "review-101"
     assert result.conflict.running is False
@@ -124,7 +124,7 @@ def test_pinned_port_conflicts_with_running_instance_hard_error():
             pinned_http=pinned,
             occupied={8143},
             existing_instances=[running_holder],
-        )  # TODO: wire up
+        )
     assert "PORT_CONTESTED" in str(exc_info.value) or "running" in str(exc_info.value).lower()
 
 
@@ -138,7 +138,7 @@ from owm.ports import check_port_at_start
 @pytest.mark.port_assignment
 def test_start_port_bound_by_unrelated_process_surfaces_info():
     """Port bound by unrelated process → surfaces name, PID, cmdline."""
-    result = check_port_at_start(http_port=8142, bound_by={"pid": 9999, "name": "nginx", "cmdline": "nginx -g daemon off;"})  # TODO: wire up
+    result = check_port_at_start(http_port=8142, bound_by={"pid": 9999, "name": "nginx", "cmdline": "nginx -g daemon off;"})
     assert result.conflict is not None
     assert result.conflict.pid == 9999
     assert result.conflict.name == "nginx"
@@ -154,7 +154,7 @@ def test_start_port_conflict_reassign_updates_config_permanently():
         bound_by={"pid": 9999, "name": "nginx", "cmdline": "nginx -g daemon off;"},
         next_free_port=8200,
         resolution="reassign",
-    )  # TODO: wire up
+    )
     assert result.new_http_port == 8200
     assert result.config_updated is True
 
@@ -166,7 +166,7 @@ def test_start_port_conflict_kill_resolution_proceeds_on_original_port():
         http_port=8142,
         bound_by={"pid": 9999, "name": "nginx", "cmdline": "nginx -g daemon off;"},
         resolution="kill",
-    )  # TODO: wire up
+    )
     assert result.http_port == 8142
     assert result.config_updated is False
 
@@ -183,7 +183,7 @@ def test_port_eviction_is_logged():
         old_port=8142,
         new_port=8200,
         reason="conflict with nginx PID 9999",
-    )  # TODO: wire up
+    )
     assert result.logged is True
     assert result.old_port == 8142
     assert result.new_port == 8200
@@ -191,14 +191,14 @@ def test_port_eviction_is_logged():
 
 @pytest.mark.port_assignment
 def test_eviction_count_within_threshold_no_alert():
-    result = eviction_count_in_window(evictions=5, threshold=10, window_days=7)  # TODO: wire up
+    result = eviction_count_in_window(evictions=5, threshold=10, window_days=7)
     assert result.alert is False
 
 
 @pytest.mark.port_assignment
 def test_eviction_count_exceeds_threshold_surfaces_recommendation():
     """More than threshold evictions in rolling week → recommend port range shift."""
-    result = eviction_count_in_window(evictions=11, threshold=10, window_days=7)  # TODO: wire up
+    result = eviction_count_in_window(evictions=11, threshold=10, window_days=7)
     assert result.alert is True
     assert "port range" in result.recommendation.lower()
 
@@ -206,7 +206,7 @@ def test_eviction_count_exceeds_threshold_surfaces_recommendation():
 @pytest.mark.port_assignment
 def test_eviction_threshold_configurable():
     """Threshold is read from workspace.toml defaults, not hardcoded."""
-    result = eviction_count_in_window(evictions=3, threshold=2, window_days=7)  # TODO: wire up
+    result = eviction_count_in_window(evictions=3, threshold=2, window_days=7)
     assert result.alert is True
 
 
@@ -225,7 +225,7 @@ def test_odoo_conf_includes_longpolling_port():
         http_port=8142,
         gevent_port=8143,
         workers=2,
-    )  # TODO: wire up
+    )
     assert "longpolling_port = 8143" in conf or conf.get("longpolling_port") == 8143
 
 
@@ -237,7 +237,7 @@ def test_odoo_conf_workers_default_two():
         http_port=8142,
         gevent_port=8143,
         workers=2,
-    )  # TODO: wire up
+    )
     assert conf.get("workers") == 2 or "workers = 2" in conf
 
 
@@ -251,7 +251,7 @@ def test_odoo_conf_includes_dbfilter_for_subdomain():
         http_port=8142,
         gevent_port=8143,
         workers=2,
-    )  # TODO: wire up
+    )
     assert conf.get("dbfilter") == "^feat-789$" or "dbfilter = ^feat-789$" in conf
 
 

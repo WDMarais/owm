@@ -15,7 +15,7 @@ from owm.scripts import compare_instances, scaffold_script
 
 @pytest.mark.script_runner
 def test_ndjson_row_has_case_and_status():
-    rows = parse_ndjson_output('{"case": "test_login", "status": "OK"}\n{"case": "test_invoice", "status": "FAIL"}\n')  # TODO: wire up
+    rows = parse_ndjson_output('{"case": "test_login", "status": "OK"}\n{"case": "test_invoice", "status": "FAIL"}\n')
     assert len(rows) == 2
     assert rows[0] == {"case": "test_login", "status": "OK"}
     assert rows[1] == {"case": "test_invoice", "status": "FAIL"}
@@ -29,7 +29,7 @@ def test_ndjson_status_values_are_ok_fail_warn_none():
         '{"case": "b", "status": "FAIL"}\n'
         '{"case": "c", "status": "WARN"}\n'
         '{"case": "d", "status": "NONE"}\n'
-    )  # TODO: wire up
+    )
     for row in rows:
         assert row["status"] in valid_statuses
 
@@ -37,7 +37,7 @@ def test_ndjson_status_values_are_ok_fail_warn_none():
 @pytest.mark.script_runner
 def test_ndjson_each_row_is_valid_json():
     raw = '{"case": "test_x", "status": "OK", "result": "success"}\n'
-    rows = parse_ndjson_output(raw)  # TODO: wire up
+    rows = parse_ndjson_output(raw)
     assert rows[0]["result"] == "success"
 
 
@@ -56,7 +56,7 @@ def test_row_level_fail_does_not_abort_remaining_rows():
             '{"case": "b", "status": "FAIL"}\n'
             '{"case": "c", "status": "OK"}\n'
         ),
-    )  # TODO: wire up
+    )
     assert result.summary.total == 3
     assert result.summary.ok == 2
     assert result.summary.fail == 1
@@ -75,7 +75,7 @@ def test_row_level_summary_counts_all_statuses():
             '{"case": "c", "status": "WARN"}\n'
             '{"case": "d", "status": "NONE"}\n'
         ),
-    )  # TODO: wire up
+    )
     assert result.summary.ok == 1
     assert result.summary.fail == 1
     assert result.summary.warn == 1
@@ -98,7 +98,7 @@ def test_script_abort_signal_stops_early():
             '{"abort": true, "reason": "DB connection failed"}\n'
             '{"case": "c", "status": "OK"}\n'
         ),
-    )  # TODO: wire up
+    )
     assert result.status == "abort"
     assert result.abort_reason == "DB connection failed"
     assert result.rows_run == 1  # row c not run after abort
@@ -111,7 +111,7 @@ def test_script_abort_surfaces_blocker_reason():
         script_name="run",
         failure_mode="row_level",
         ndjson_output='{"abort": true, "reason": "DB connection failed"}\n',
-    )  # TODO: wire up
+    )
     assert "DB connection failed" in result.abort_reason
 
 
@@ -135,7 +135,7 @@ def test_contract_acceptable_failure_continues():
             '{"case": "missing_optional_field", "status": "FAIL"}\n'
             '{"case": "another_case", "status": "OK"}\n'
         ),
-    )  # TODO: wire up
+    )
     assert result.status == "ok" or result.status == "partial"
     assert result.summary.total == 2
 
@@ -155,7 +155,7 @@ def test_contract_blocking_failure_hard_stops():
             '{"case": "db_write", "status": "FAIL"}\n'
             '{"case": "another_case", "status": "OK"}\n'
         ),
-    )  # TODO: wire up
+    )
     assert result.status in ("abort", "fail")
     assert result.blocker == "db_write"
     assert result.rows_run == 1  # only db_write ran before hard stop
@@ -174,7 +174,7 @@ def test_contract_violation_surfaced_distinctly():
         failure_mode="contract",
         contract=contract,
         ndjson_output='{"case": "db_write", "status": "FAIL"}\n',
-    )  # TODO: wire up
+    )
     assert result.contract_violation is True
 
 
@@ -184,7 +184,7 @@ def test_contract_violation_surfaced_distinctly():
 
 @pytest.mark.script_runner
 def test_scaffold_script_produces_contract_level_template():
-    result = scaffold_script(instance="feat-789", script_name="setup")  # TODO: wire up
+    result = scaffold_script(instance="feat-789", script_name="setup")
     assert result.path is not None
     assert "contract" in result.content.lower() or "acceptable_failures" in result.content
 
@@ -198,7 +198,7 @@ def test_compare_resolves_target_from_workspace():
     result = compare_instances(
         instance="feat-789",
         workspace_compare_pairs=[["feat-789", "main"]],
-    )  # TODO: wire up
+    )
     assert result.base_instance == "main"
     assert result.feat_instance == "feat-789"
 
@@ -209,7 +209,7 @@ def test_compare_ad_hoc_against():
         instance="feat-789",
         base="main",
         workspace_compare_pairs=[],
-    )  # TODO: wire up
+    )
     assert result.base_instance == "main"
 
 
@@ -240,7 +240,7 @@ def test_compare_expected_change_declared_passes():
         base_rows=base_rows,
         feat_rows=feat_rows,
         expected_changes=expected_changes,
-    )  # TODO: wire up
+    )
     assert result.status in ("ok", "has_changes")
     assert result.summary.unexpected_changes == 0
 
@@ -256,7 +256,7 @@ def test_compare_undeclared_change_is_contract_violation():
         base_rows=base_rows,
         feat_rows=feat_rows,
         expected_changes=[],
-    )  # TODO: wire up
+    )
     assert result.status == "unexpected_changes"
     assert result.summary.unexpected_changes == 1
     assert result.unexpected[0]["case"] == "x"
@@ -284,13 +284,13 @@ def test_compare_symmetric_either_instance_can_initiate():
         workspace_compare_pairs=[["feat-789", "main"]],
         base_rows=[{"case": "a", "status": "OK"}],
         feat_rows=[{"case": "a", "status": "OK"}],
-    )  # TODO: wire up
+    )
     result_from_main = compare_instances(
         instance="main",
         workspace_compare_pairs=[["feat-789", "main"]],
         base_rows=[{"case": "a", "status": "OK"}],
         feat_rows=[{"case": "a", "status": "OK"}],
-    )  # TODO: wire up
+    )
     # Both should resolve the pair without error
     assert result_from_feat.status in ("ok", "has_changes", "unexpected_changes")
     assert result_from_main.status in ("ok", "has_changes", "unexpected_changes")

@@ -20,7 +20,7 @@ def test_new_instance_generates_toml_only():
         name="feat-789",
         repos={"odoo": "19.0:shared", "product-core": "feat-789-dev:dev", "customer-config": "feat-789-dev:dev"},
         workspace_root="/ws",
-    )  # TODO: wire up
+    )
     assert result.toml_path == "/ws/instances/feat-789/instance.toml"
     assert result.toml_content is not None
     assert result.materialised is False
@@ -32,7 +32,7 @@ def test_new_instance_toml_contains_autofilled_port():
         name="feat-789",
         repos={"odoo": "19.0:shared", "product-core": "feat-789-dev:dev"},
         workspace_root="/ws",
-    )  # TODO: wire up
+    )
     assert "[server]" in result.toml_content
     assert "http_port" in result.toml_content
 
@@ -43,7 +43,7 @@ def test_new_instance_toml_contains_autofilled_db_name():
         name="feat-789",
         repos={"odoo": "19.0:shared"},
         workspace_root="/ws",
-    )  # TODO: wire up
+    )
     assert "[database]" in result.toml_content
     assert "feat-789" in result.toml_content
 
@@ -73,7 +73,7 @@ def test_create_instance_materialises_all_resources():
         name="feat-789",
         workspace_root="/ws",
         instance_exists=False,
-    )  # TODO: wire up
+    )
     assert result.worktrees_created is True
     assert result.db_created is True
     assert result.port_reserved is True
@@ -89,7 +89,7 @@ def test_create_instance_idempotent_when_unchanged():
         workspace_root="/ws",
         instance_exists=True,
         toml_changed=False,
-    )  # TODO: wire up
+    )
     assert result.status == "up_to_date"
     assert result.created == []
     assert result.skipped != []
@@ -103,7 +103,7 @@ def test_create_instance_branch_changed_switches_worktree_if_clean():
         workspace_root="/ws",
         instance_exists=True,
         repo_changes=[{"repo": "product-core", "old_branch": "feat-789-dev", "new_branch": "feat-999-dev", "dirty": False}],
-    )  # TODO: wire up
+    )
     assert any(r["repo"] == "product-core" and r["action"] == "switched" for r in result.updated)
 
 
@@ -115,7 +115,7 @@ def test_create_instance_branch_changed_dirty_worktree_surfaces_prompt():
         workspace_root="/ws",
         instance_exists=True,
         repo_changes=[{"repo": "product-core", "old_branch": "feat-789-dev", "new_branch": "feat-999-dev", "dirty": True}],
-    )  # TODO: wire up
+    )
     assert result.status == "needs_resolution"
     conflict = next(r for r in result.conflicts if r["repo"] == "product-core")
     assert conflict["options"] == ["switch", "stash", "abort"] or set(conflict["options"]) == {"switch", "stash", "abort"}
@@ -129,7 +129,7 @@ def test_create_instance_new_repo_adds_worktree_only():
         workspace_root="/ws",
         instance_exists=True,
         new_repos=["scripts"],
-    )  # TODO: wire up
+    )
     assert any(r == "scripts" for r in result.created)
     # existing worktrees must not appear in updated or re-created
     assert all(r != "product-core" for r in result.created)
@@ -143,7 +143,7 @@ def test_create_instance_removed_repo_removes_worktree_keeps_branch():
         workspace_root="/ws",
         instance_exists=True,
         removed_repos=["customer-config"],
-    )  # TODO: wire up
+    )
     assert any(r == "customer-config" for r in result.removed_worktrees)
     assert result.branches_deleted == []
 

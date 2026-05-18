@@ -21,7 +21,7 @@ def test_shared_repo_resolves_to_shared_worktree_path():
         shared=True,
         workspace_root="/ws",
         instance_name="feat-789",
-    )  # TODO: wire up
+    )
     assert result.path == "/ws/_shared/odoo/19.0"
     assert result.per_instance is False
 
@@ -35,7 +35,7 @@ def test_per_instance_repo_resolves_to_instance_directory():
         shared=False,
         workspace_root="/ws",
         instance_name="feat-789",
-    )  # TODO: wire up
+    )
     assert result.path == "/ws/instances/feat-789/product-core"
     assert result.per_instance is True
 
@@ -49,7 +49,7 @@ def test_create_instance_links_shared_worktree():
         shared=True,
         workspace_root="/ws",
         instance_name="feat-789",
-    )  # TODO: wire up
+    )
     assert result.action == "linked"
     assert result.path == "/ws/_shared/odoo/19.0"
 
@@ -62,7 +62,7 @@ def test_create_instance_creates_per_instance_worktree():
         shared=False,
         workspace_root="/ws",
         instance_name="feat-789",
-    )  # TODO: wire up
+    )
     assert result.action == "created"
     assert "feat-789" in result.path
 
@@ -80,7 +80,7 @@ def test_push_owned_branch_succeeds():
         readonly=False,
         shared=False,
         override=False,
-    )  # TODO: wire up
+    )
     assert result.status == "pushed"
 
 
@@ -95,7 +95,7 @@ def test_push_readonly_branch_refused():
             readonly=True,
             shared=False,
             override=False,
-        )  # TODO: wire up
+        )
     assert "NOT_OWNED" in str(exc_info.value) or "not configured as owned" in str(exc_info.value).lower()
 
 
@@ -109,7 +109,7 @@ def test_push_readonly_branch_with_override_flag_allowed():
         readonly=True,
         shared=False,
         override=True,
-    )  # TODO: wire up
+    )
     assert result.status == "pushed"
 
 
@@ -125,7 +125,7 @@ def test_push_readonly_branch_override_flag_not_in_config_still_refused():
             shared=False,
             override=True,
             override_allowed_in_config=False,  # instance.toml does not permit override
-        )  # TODO: wire up
+        )
     assert "NOT_OWNED" in str(exc_info.value) or "not" in str(exc_info.value).lower()
 
 
@@ -140,7 +140,7 @@ def test_push_shared_branch_refused():
             readonly=False,
             shared=True,
             override=False,
-        )  # TODO: wire up
+        )
     assert "SHARED_REPO" in str(exc_info.value) or "shared" in str(exc_info.value).lower()
 
 
@@ -155,7 +155,7 @@ def test_push_shared_branch_error_includes_raw_git_command():
             readonly=False,
             shared=True,
             override=False,
-        )  # TODO: wire up
+        )
     except Exception as exc:
         msg = str(exc)
         assert "git" in msg and "push" in msg
@@ -174,7 +174,7 @@ def test_shared_worktree_commit_emits_warning():
         branch="19.0",
         shared=True,
         has_new_commit=True,
-    )  # TODO: wire up
+    )
     assert result.warning is True
     assert "shared" in result.message.lower() or "visible" in result.message.lower()
 
@@ -186,7 +186,7 @@ def test_per_instance_worktree_commit_no_warning():
         branch="feat-789-dev",
         shared=False,
         has_new_commit=True,
-    )  # TODO: wire up
+    )
     assert result.warning is False
 
 
@@ -200,7 +200,7 @@ from owm.worktrees import check_edit_allowed
 @pytest.mark.worktrees
 def test_edit_in_readonly_worktree_is_allowed():
     """readonly flag blocks push, not local edits or commits."""
-    result = check_edit_allowed(readonly=True)  # TODO: wire up
+    result = check_edit_allowed(readonly=True)
     assert result.allowed is True
 
 

@@ -18,7 +18,7 @@ def test_status_surfaces_unmanaged_odoo_processes():
         running_processes=[
             {"pid": 9999, "port": 8143, "cmdline": "python odoo-bin --http-port 8143"},
         ],
-    )  # TODO: wire up
+    )
     assert any(p["pid"] == 9999 for p in result.unmanaged)
 
 
@@ -30,7 +30,7 @@ def test_unmanaged_on_configured_port_surfaced_with_adopt_prompt():
         running_processes=[
             {"pid": 9999, "port": 8142, "cmdline": "python odoo-bin --http-port 8142"},
         ],
-    )  # TODO: wire up
+    )
     entry = next(p for p in result.instance_conflicts if p["instance"] == "feat-789")
     assert entry["unmanaged_pid"] == 9999
     assert "adopt" in entry["message"].lower() or "kill" in entry["message"].lower()
@@ -44,7 +44,7 @@ def test_unmanaged_no_matching_instance_shown_without_adopt_option():
         running_processes=[
             {"pid": 8888, "port": 9999, "cmdline": "python odoo-bin --http-port 9999"},
         ],
-    )  # TODO: wire up
+    )
     orphan = next(p for p in result.unmanaged if p["pid"] == 8888)
     assert orphan["adopt_available"] is False
 
@@ -60,7 +60,7 @@ def test_adopt_links_process_to_instance():
         pid=9999,
         configured_port=8142,
         process_port=8142,
-    )  # TODO: wire up
+    )
     assert result.status == "adopted"
     assert result.pid == 9999
     assert result.pid_written_to_state is True
@@ -74,7 +74,7 @@ def test_adopt_makes_instance_manageable_via_stop_kill_health():
         pid=9999,
         configured_port=8142,
         process_port=8142,
-    )  # TODO: wire up
+    )
     assert result.manageable is True
 
 
@@ -86,7 +86,7 @@ def test_adopt_port_mismatch_warns_requires_force():
         configured_port=8142,
         process_port=8150,
         force=False,
-    )  # TODO: wire up
+    )
     assert result.status == "needs_confirmation"
     assert result.warning is not None
     assert "port" in result.warning.lower()
@@ -100,7 +100,7 @@ def test_adopt_port_mismatch_force_proceeds():
         configured_port=8142,
         process_port=8150,
         force=True,
-    )  # TODO: wire up
+    )
     assert result.status == "adopted"
 
 

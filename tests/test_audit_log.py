@@ -19,7 +19,7 @@ def test_start_appends_structured_entry():
         instance="feat-789",
         result="spawned",
         pid=1234,
-    )  # TODO: wire up
+    )
     assert entry["timestamp"] is not None
     assert entry["operation"] == "start"
     assert entry["instance"] == "feat-789"
@@ -36,7 +36,7 @@ def test_script_run_appends_structured_entry():
         script="run",
         result="ok",
         summary={"ok": 8, "fail": 0, "warn": 0, "none": 2, "total": 10},
-    )  # TODO: wire up
+    )
     assert entry["operation"] == "run-script"
     assert entry["summary"]["total"] == 10
 
@@ -54,7 +54,7 @@ def test_log_is_append_only(tmp_path):
 @pytest.mark.audit_log
 def test_log_is_structured_json_per_line():
     entry_raw = '{"timestamp": "2026-05-16T09:00:00", "operation": "start", "instance": "feat-789", "result": "spawned", "pid": 1234}'
-    entry = parse_log_entry(entry_raw)  # TODO: wire up
+    entry = parse_log_entry(entry_raw)
     assert entry["operation"] == "start"
     assert entry["instance"] == "feat-789"
 
@@ -69,7 +69,7 @@ def test_log_independent_of_dashboard():
         result="spawned",
         pid=1234,
         dashboard_open=False,
-    )  # TODO: wire up
+    )
     assert entry is not None
 
 
@@ -84,7 +84,7 @@ def test_log_captures_cli_and_ui_and_agent_operations():
             result="spawned",
             pid=1234,
             source=source,
-        )  # TODO: wire up
+        )
         assert entry is not None
 
 

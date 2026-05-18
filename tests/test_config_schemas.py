@@ -53,7 +53,7 @@ scripts_dir = "scripts/workspace"
 [proxy]
 domain_suffix = "localhost"
 """
-    config = parse_workspace_config(toml)  # TODO: wire up
+    config = parse_workspace_config(toml)
     assert config.repos["odoo"] == "git@github.com:odoo/odoo.git"
     assert config.repos["scripts"] == "git@bitbucket.org:org/scripts.git"
     assert config.repos_meta["odoo"].has_addons is True
@@ -83,7 +83,7 @@ odoo = "git@github.com:odoo/odoo.git"
 [clusters]
 "19" = {pg_version = "16", port = 5432}
 """
-    config = parse_workspace_config(toml)  # TODO: wire up
+    config = parse_workspace_config(toml)
     assert "odoo" in config.repos
     assert config.patches == {}
     assert config.compare_pairs == []
@@ -96,7 +96,7 @@ def test_parse_workspace_config_missing_repos_raises():
 "19" = {pg_version = "16", port = 5432}
 """
     with pytest.raises(Exception) as exc_info:  # ValidationError or equivalent
-        parse_workspace_config(toml)  # TODO: wire up
+        parse_workspace_config(toml)
     assert not isinstance(exc_info.value, NotImplementedError), "stub not wired up"
 
 
@@ -107,7 +107,7 @@ def test_parse_workspace_config_missing_clusters_raises():
 odoo = "git@github.com:odoo/odoo.git"
 """
     with pytest.raises(Exception) as exc_info:
-        parse_workspace_config(toml)  # TODO: wire up
+        parse_workspace_config(toml)
     assert not isinstance(exc_info.value, NotImplementedError), "stub not wired up"
 
 
@@ -140,7 +140,7 @@ odoo = "git@github.com:odoo/odoo.git"
 http_port_range = "not-a-list"
 """
     with pytest.raises(Exception) as exc_info:
-        parse_workspace_config(toml)  # TODO: wire up
+        parse_workspace_config(toml)
     assert not isinstance(exc_info.value, NotImplementedError), "stub not wired up"
 
 
@@ -154,7 +154,7 @@ odoo = "git@github.com:odoo/odoo.git"
 [clusters]
 "19" = {pg_version = "16", port = 5432}
 """
-    config = parse_workspace_config(toml)  # TODO: wire up
+    config = parse_workspace_config(toml)
     assert config.defaults.http_port_range == [8100, 8299]
     assert config.defaults.workers == 2
     assert config.defaults.eviction_threshold == 10
@@ -170,7 +170,7 @@ from owm.config import parse_repo_spec
 
 @pytest.mark.config_schemas
 def test_repo_spec_owned_branch():
-    spec = parse_repo_spec("feat-789-dev:dev")  # TODO: wire up
+    spec = parse_repo_spec("feat-789-dev:dev")
     assert spec.branch == "feat-789-dev"
     assert spec.base == "dev"
     assert spec.shared is False
@@ -180,7 +180,7 @@ def test_repo_spec_owned_branch():
 
 @pytest.mark.config_schemas
 def test_repo_spec_shared():
-    spec = parse_repo_spec("19.0:shared")  # TODO: wire up
+    spec = parse_repo_spec("19.0:shared")
     assert spec.branch == "19.0"
     assert spec.shared is True
     assert spec.readonly is False
@@ -188,7 +188,7 @@ def test_repo_spec_shared():
 
 @pytest.mark.config_schemas
 def test_repo_spec_readonly():
-    spec = parse_repo_spec("feat-789-dev:dev+readonly")  # TODO: wire up
+    spec = parse_repo_spec("feat-789-dev:dev+readonly")
     assert spec.branch == "feat-789-dev"
     assert spec.base == "dev"
     assert spec.readonly is True
@@ -198,7 +198,7 @@ def test_repo_spec_readonly():
 
 @pytest.mark.config_schemas
 def test_repo_spec_exists_flag():
-    spec = parse_repo_spec("feat-789-dev:dev+exists")  # TODO: wire up
+    spec = parse_repo_spec("feat-789-dev:dev+exists")
     assert spec.branch == "feat-789-dev"
     assert spec.exists is True
     assert spec.readonly is False
@@ -206,7 +206,7 @@ def test_repo_spec_exists_flag():
 
 @pytest.mark.config_schemas
 def test_repo_spec_multiple_flags():
-    spec = parse_repo_spec("reviews/feat-789:dev+readonly")  # TODO: wire up
+    spec = parse_repo_spec("reviews/feat-789:dev+readonly")
     assert spec.branch == "reviews/feat-789"
     assert spec.base == "dev"
     assert spec.readonly is True
@@ -214,7 +214,7 @@ def test_repo_spec_multiple_flags():
 
 @pytest.mark.config_schemas
 def test_repo_spec_exists_and_readonly():
-    spec = parse_repo_spec("feat-789-dev:dev+exists+readonly")  # TODO: wire up
+    spec = parse_repo_spec("feat-789-dev:dev+exists+readonly")
     assert spec.exists is True
     assert spec.readonly is True
 
@@ -323,7 +323,7 @@ target = "main"
 [template]
 sync_opt_in = false
 """
-    config = parse_instance_config(toml)  # TODO: wire up
+    config = parse_instance_config(toml)
     assert config.repos["odoo"].shared is True
     assert config.repos["product-core"].branch == "feat-789-dev"
     assert config.repos["customer-config"].exists is True
@@ -361,7 +361,7 @@ http_port   = 8142
 gevent_port = 8150
 """
     with pytest.raises(Exception) as exc_info:
-        parse_instance_config(toml)  # TODO: wire up
+        parse_instance_config(toml)
     assert not isinstance(exc_info.value, NotImplementedError), "stub not wired up"
 
 
@@ -380,7 +380,7 @@ pg_port = 5432
 http_port   = 8142
 gevent_port = 8143
 """
-    config = parse_instance_config(toml)  # TODO: wire up
+    config = parse_instance_config(toml)
     assert config.database.template is None
 
 
@@ -399,7 +399,7 @@ pg_port = 5432
 http_port   = 8142
 gevent_port = 8143
 """
-    config = parse_instance_config(toml)  # TODO: wire up
+    config = parse_instance_config(toml)
     assert config.python is None or config.python.version is None
 
 
@@ -414,7 +414,7 @@ http_port   = 8142
 gevent_port = 8143
 """
     with pytest.raises(Exception) as exc_info:
-        parse_instance_config(toml)  # TODO: wire up
+        parse_instance_config(toml)
     assert not isinstance(exc_info.value, NotImplementedError), "stub not wired up"
 
 
@@ -429,7 +429,7 @@ name    = "odoo19_feat789"
 pg_port = 5432
 """
     with pytest.raises(Exception) as exc_info:
-        parse_instance_config(toml)  # TODO: wire up
+        parse_instance_config(toml)
     assert not isinstance(exc_info.value, NotImplementedError), "stub not wired up"
 
 
@@ -447,7 +447,7 @@ def test_resolve_patches_returns_files_for_matching_version():
         "12.0": ["requirements_patches/odoo12_compat.txt"],
         "19.0": ["requirements_patches/odoo19_fix.txt"],
     }
-    result = resolve_patches(odoo_version="19.0", patches=patches)  # TODO: wire up
+    result = resolve_patches(odoo_version="19.0", patches=patches)
     assert result == ["requirements_patches/odoo19_fix.txt"]
 
 
@@ -457,7 +457,7 @@ def test_resolve_patches_returns_empty_for_unmatched_version():
     patches = {
         "12.0": ["requirements_patches/odoo12_compat.txt"],
     }
-    result = resolve_patches(odoo_version="17.0", patches=patches)  # TODO: wire up
+    result = resolve_patches(odoo_version="17.0", patches=patches)
     assert result == []
 
 
@@ -467,7 +467,7 @@ def test_resolve_patches_returns_multiple_files():
     patches = {
         "19" : ["requirements_patches/fix1.txt", "requirements_patches/fix2.txt"],
     }
-    result = resolve_patches(odoo_version="19", patches=patches)  # TODO: wire up
+    result = resolve_patches(odoo_version="19", patches=patches)
     assert result == ["requirements_patches/fix1.txt", "requirements_patches/fix2.txt"]
 
 
@@ -478,7 +478,7 @@ def test_resolve_patches_major_version_key_matches():
     patches = {
         "19": ["requirements_patches/odoo19_fix.txt"],
     }
-    result = resolve_patches(odoo_version="19", patches=patches)  # TODO: wire up
+    result = resolve_patches(odoo_version="19", patches=patches)
     assert result == ["requirements_patches/odoo19_fix.txt"]
 
 

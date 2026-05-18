@@ -20,7 +20,7 @@ def test_create_venv_pins_python_version():
         requirements_files=["odoo/requirements.txt"],
         patches=[],
         venv_dir="/ws/instances/feat-789/.venv",
-    )  # TODO: wire up
+    )
     assert result.python_version == "3.12"
     assert result.created is True
 
@@ -34,7 +34,7 @@ def test_create_venv_uses_uv():
         requirements_files=["odoo/requirements.txt"],
         patches=[],
         venv_dir="/ws/instances/feat-789/.venv",
-    )  # TODO: wire up
+    )
     assert result.tool == "uv"
 
 
@@ -46,7 +46,7 @@ def test_create_venv_applies_workspace_patches():
         requirements_files=["odoo/requirements.txt"],
         patches=["requirements_patches/odoo19_fix.txt"],
         venv_dir="/ws/instances/feat-789/.venv",
-    )  # TODO: wire up
+    )
     assert result.patches_applied == ["requirements_patches/odoo19_fix.txt"]
 
 
@@ -59,7 +59,7 @@ def test_create_venv_writes_stamp():
         requirements_files=["odoo/requirements.txt"],
         patches=["requirements_patches/odoo19_fix.txt"],
         venv_dir="/ws/instances/feat-789/.venv",
-    )  # TODO: wire up
+    )
     assert result.stamp is not None
     assert result.stamp_written is True
 
@@ -73,25 +73,25 @@ def test_stamp_is_hash_of_requirements_and_patches():
     stamp1 = compute_stamp(
         requirements_files=["odoo/requirements.txt"],
         patches=["requirements_patches/fix.txt"],
-    )  # TODO: wire up
+    )
     stamp2 = compute_stamp(
         requirements_files=["odoo/requirements.txt"],
         patches=["requirements_patches/fix.txt"],
-    )  # TODO: wire up
+    )
     assert stamp1 == stamp2
 
 
 @pytest.mark.venv_management
 def test_stamp_differs_when_requirements_change():
-    stamp1 = compute_stamp(requirements_files=["odoo/requirements.txt"], patches=[])  # TODO: wire up
-    stamp2 = compute_stamp(requirements_files=["odoo/requirements_v2.txt"], patches=[])  # TODO: wire up
+    stamp1 = compute_stamp(requirements_files=["odoo/requirements.txt"], patches=[])
+    stamp2 = compute_stamp(requirements_files=["odoo/requirements_v2.txt"], patches=[])
     assert stamp1 != stamp2
 
 
 @pytest.mark.venv_management
 def test_stamp_differs_when_patches_change():
-    stamp1 = compute_stamp(requirements_files=["odoo/requirements.txt"], patches=[])  # TODO: wire up
-    stamp2 = compute_stamp(requirements_files=["odoo/requirements.txt"], patches=["fix.txt"])  # TODO: wire up
+    stamp1 = compute_stamp(requirements_files=["odoo/requirements.txt"], patches=[])
+    stamp2 = compute_stamp(requirements_files=["odoo/requirements.txt"], patches=["fix.txt"])
     assert stamp1 != stamp2
 
 
@@ -107,7 +107,7 @@ def test_start_skips_venv_sync_when_stamp_unchanged():
         recorded_stamp="abc123",
         requirements_files=["odoo/requirements.txt"],
         patches=[],
-    )  # TODO: wire up
+    )
     assert result.synced is False
     assert result.reason == "stamp_unchanged"
 
@@ -120,7 +120,7 @@ def test_start_syncs_venv_when_stamp_changed():
         recorded_stamp="abc123",
         requirements_files=["odoo/requirements.txt"],
         patches=[],
-    )  # TODO: wire up
+    )
     assert result.synced is True
     assert result.stamp_updated is True
 
@@ -133,7 +133,7 @@ def test_start_reapplies_patches_on_sync():
         recorded_stamp="abc123",
         requirements_files=["odoo/requirements.txt"],
         patches=["requirements_patches/odoo19_fix.txt"],
-    )  # TODO: wire up
+    )
     assert result.patches_applied == ["requirements_patches/odoo19_fix.txt"]
 
 
@@ -149,7 +149,7 @@ def test_rebuild_deletes_and_recreates_venv():
         requirements_files=["odoo/requirements.txt"],
         patches=["requirements_patches/odoo19_fix.txt"],
         venv_dir="/ws/instances/feat-789/.venv",
-    )  # TODO: wire up
+    )
     assert result.deleted is True
     assert result.created is True
     assert result.patches_applied == ["requirements_patches/odoo19_fix.txt"]
@@ -164,7 +164,7 @@ def test_rebuild_uses_uv():
         requirements_files=["odoo/requirements.txt"],
         patches=[],
         venv_dir="/ws/instances/feat-789/.venv",
-    )  # TODO: wire up
+    )
     assert result.tool == "uv"
 
 

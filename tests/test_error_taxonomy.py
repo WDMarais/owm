@@ -33,21 +33,21 @@ from owm.ports import assign_port, honour_pinned_port
 
 @pytest.mark.error_taxonomy
 def test_error_response_has_error_and_code_keys():
-    result = format_error(message="instance not found", code=NOT_FOUND)  # TODO: wire up
+    result = format_error(message="instance not found", code=NOT_FOUND)
     assert "error" in result
     assert "code" in result
 
 
 @pytest.mark.error_taxonomy
 def test_error_response_code_is_string():
-    result = format_error(message="instance not found", code=NOT_FOUND)  # TODO: wire up
+    result = format_error(message="instance not found", code=NOT_FOUND)
     assert isinstance(result["code"], str)
 
 
 @pytest.mark.error_taxonomy
 def test_error_response_no_extra_required_keys():
     """Base error shape is just {error, code}; extra keys (hint, repo, etc.) are optional."""
-    result = format_error(message="instance not found", code=NOT_FOUND)  # TODO: wire up
+    result = format_error(message="instance not found", code=NOT_FOUND)
     assert set(result.keys()) >= {"error", "code"}
 
 
@@ -100,7 +100,7 @@ def test_all_codes_are_distinct():
 
 @pytest.mark.error_taxonomy
 def test_not_found_for_missing_instance():
-    result = owm_status(instance="nonexistent")  # TODO: wire up
+    result = owm_status(instance="nonexistent")
     assert result["code"] == NOT_FOUND
 
 
@@ -113,25 +113,25 @@ def test_already_exists_on_duplicate_new():
 
 @pytest.mark.error_taxonomy
 def test_instance_running_on_delete_while_running():
-    result = owm_delete(instance="feat-789", force=True, running=True)  # TODO: wire up
+    result = owm_delete(instance="feat-789", force=True, running=True)
     assert result["code"] == INSTANCE_RUNNING
 
 
 @pytest.mark.error_taxonomy
 def test_instance_running_on_archive_while_running():
-    result = owm_archive(instance="feat-789", running=True)  # TODO: wire up
+    result = owm_archive(instance="feat-789", running=True)
     assert result["code"] == INSTANCE_RUNNING
 
 
 @pytest.mark.error_taxonomy
 def test_instance_running_on_rename_while_running():
-    result = owm_rename(instance="feat-789", new_name="pd-789", running=True)  # TODO: wire up
+    result = owm_rename(instance="feat-789", new_name="pd-789", running=True)
     assert result["code"] == INSTANCE_RUNNING
 
 
 @pytest.mark.error_taxonomy
 def test_instance_running_on_db_restore_while_running():
-    result = owm_db_restore(instance="feat-789", path="snap.dump", running=True)  # TODO: wire up
+    result = owm_db_restore(instance="feat-789", path="snap.dump", running=True)
     assert result["code"] == INSTANCE_RUNNING
 
 
@@ -236,21 +236,21 @@ def test_stop_timeout_code_and_hint():
 
 @pytest.mark.error_taxonomy
 def test_upgrade_failed_includes_log_tail():
-    result = owm_upgrade(instance="feat-789", modules=["my_module"], simulate_failure=True)  # TODO: wire up
+    result = owm_upgrade(instance="feat-789", modules=["my_module"], simulate_failure=True)
     assert result["code"] == UPGRADE_FAILED
     assert "log_tail" in result
 
 
 @pytest.mark.error_taxonomy
 def test_no_workers_on_in_place_upgrade_without_workers():
-    result = owm_upgrade(instance="feat-789", modules=["my_module"], in_place=True, workers=0)  # TODO: wire up
+    result = owm_upgrade(instance="feat-789", modules=["my_module"], in_place=True, workers=0)
     assert result["code"] == NO_WORKERS
 
 
 @pytest.mark.error_taxonomy
 def test_port_exhausted_when_range_full():
     with pytest.raises(Exception) as exc_info:
-        assign_port(pool={"range": [8100, 8299], "occupied": set(range(8100, 8300))})  # TODO: wire up
+        assign_port(pool={"range": [8100, 8299], "occupied": set(range(8100, 8300))})
     assert PORT_EXHAUSTED in str(exc_info.value)
 
 
@@ -261,7 +261,7 @@ def test_port_contested_when_running_instance_holds_pinned_port():
             pinned_http=8143,
             occupied={8143},
             existing_instances=[{"instance": "review-101", "running": True, "http_port": 8143}],
-        )  # TODO: wire up
+        )
     assert PORT_CONTESTED in str(exc_info.value)
 
 

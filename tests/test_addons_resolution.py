@@ -35,7 +35,7 @@ def test_addons_path_full_instance_declaration_order():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert result == [
         "/ws/instances/feat-789/customer-config/addons",
         "/ws/instances/feat-789/product-core/addons",
@@ -63,7 +63,7 @@ def test_addons_path_excludes_repo_not_in_instance():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert "/ws/instances/feat-789/customer-config/addons" not in result
     assert result == [
         "/ws/instances/feat-789/product-core/addons",
@@ -89,7 +89,7 @@ def test_addons_path_excludes_repo_without_has_addons():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert all("scripts" not in p for p in result)
 
 
@@ -108,7 +108,7 @@ def test_addons_path_shared_worktree_resolves_each_configured_path():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert "/ws/_shared/odoo/19.0/addons" in result
     assert "/ws/_shared/odoo/19.0/odoo/addons" in result
 
@@ -135,7 +135,7 @@ def test_addons_path_default_addons_paths_is_repo_root():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert result == ["/ws/instances/feat-789/product-core"]
 
 
@@ -154,7 +154,7 @@ def test_addons_path_explicit_root_dot():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert result == ["/ws/instances/feat-789/product-core"]
 
 
@@ -173,7 +173,7 @@ def test_addons_path_explicit_named_subfolders():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert "/ws/instances/feat-789/product-core/primary_addons" in result
     assert "/ws/instances/feat-789/product-core/extras" in result
 
@@ -193,7 +193,7 @@ def test_addons_path_multi_path_repo_both_folders_included():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert "/ws/instances/feat-789/multi-repo/secondary_addons" in result
     assert "/ws/instances/feat-789/multi-repo/primary_addons" in result
 
@@ -214,7 +214,7 @@ def test_addons_path_multi_path_repo_declaration_order_within_repo():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     if not isinstance(paths, list):
         paths = list(paths)
     primary_idx   = next(i for i, p in enumerate(paths) if "primary_addons" in p)
@@ -239,7 +239,7 @@ def test_addons_path_exclusion_produces_no_warning():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     warnings = getattr(result, "warnings", []) if not isinstance(result, list) else []
     assert warnings == []
 
@@ -266,7 +266,7 @@ def test_addons_path_ordering_matches_workspace_declaration_order():
         workspace_root="/ws",
         instance_name="feat-789",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     if not isinstance(paths, list):
         paths = list(paths)
     customer_idx = next(i for i, p in enumerate(paths) if "customer-config" in p)

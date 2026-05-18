@@ -18,7 +18,7 @@ from owm.log_rotation import check_rotation_needed, rotate_log
 @pytest.mark.cli_commands
 def test_delete_running_instance_hard_error():
     with pytest.raises(Exception) as exc_info:
-        delete_instance(instance="feat-789", running=True, force=False)  # TODO: wire up
+        delete_instance(instance="feat-789", running=True, force=False)
     assert "INSTANCE_RUNNING" in str(exc_info.value) or "stop" in str(exc_info.value).lower()
 
 
@@ -30,7 +30,7 @@ def test_delete_stopped_no_force_shows_checklist():
         force=False,
         has_session_notes=True,
         open_compare_pairs=["main"],
-    )  # TODO: wire up
+    )
     assert result.status == "pending_confirmation"
     assert result.checklist is not None
     assert len(result.checklist) > 0
@@ -42,7 +42,7 @@ def test_delete_force_skips_checklist_and_removes_all():
         instance="feat-789",
         running=False,
         force=True,
-    )  # TODO: wire up
+    )
     assert result.status == "deleted"
     assert result.worktrees_removed is True
     assert result.db_dropped is True
@@ -58,7 +58,7 @@ def test_delete_force_cleans_workspace_toml_references():
         running=False,
         force=True,
         workspace_compare_pairs=[["feat-789", "main"]],
-    )  # TODO: wire up
+    )
     assert result.workspace_toml_updated is True
     assert ["feat-789", "main"] not in result.remaining_compare_pairs
 
@@ -70,7 +70,7 @@ def test_delete_force_cleans_workspace_toml_references():
 @pytest.mark.cli_commands
 def test_rename_running_instance_hard_error():
     with pytest.raises(Exception) as exc_info:
-        rename_instance(instance="feat-789", new_name="pd-789", running=True)  # TODO: wire up
+        rename_instance(instance="feat-789", new_name="pd-789", running=True)
     assert "INSTANCE_RUNNING" in str(exc_info.value) or "stop" in str(exc_info.value).lower()
 
 
@@ -80,7 +80,7 @@ def test_rename_stopped_instance_updates_all_references():
         instance="feat-789",
         new_name="pd-789",
         running=False,
-    )  # TODO: wire up
+    )
     assert result.status == "renamed"
     assert result.old_name == "feat-789"
     assert result.new_name == "pd-789"
@@ -96,14 +96,14 @@ def test_rename_updates_workspace_toml_compare_pairs():
         new_name="pd-789",
         running=False,
         workspace_compare_pairs=[["feat-789", "main"]],
-    )  # TODO: wire up
+    )
     assert ["pd-789", "main"] in result.remaining_compare_pairs
     assert ["feat-789", "main"] not in result.remaining_compare_pairs
 
 
 @pytest.mark.cli_commands
 def test_rename_updates_proxy_subdomain():
-    result = rename_instance(instance="feat-789", new_name="pd-789", running=False)  # TODO: wire up
+    result = rename_instance(instance="feat-789", new_name="pd-789", running=False)
     assert result.old_url == "https://feat-789.localhost"
     assert result.new_url == "https://pd-789.localhost"
 
@@ -158,14 +158,14 @@ def test_logs_level_filter_returns_only_matching_levels(tmp_path):
 
 @pytest.mark.cli_commands
 def test_db_dump_default_path():
-    result = db_dump(instance="feat-789", out=None, workspace_root="/ws")  # TODO: wire up
+    result = db_dump(instance="feat-789", out=None, workspace_root="/ws")
     assert result.path.startswith("/ws/_dumps/feat-789/")
     assert result.path.endswith(".dump")
 
 
 @pytest.mark.cli_commands
 def test_db_dump_explicit_path():
-    result = db_dump(instance="feat-789", out="/tmp/snapshot.dump", workspace_root="/ws")  # TODO: wire up
+    result = db_dump(instance="feat-789", out="/tmp/snapshot.dump", workspace_root="/ws")
     assert result.path == "/tmp/snapshot.dump"
 
 
@@ -176,7 +176,7 @@ def test_db_restore_relative_path_resolves_to_dumps_dir():
         path="2026-05-16T09:32.dump",
         workspace_root="/ws",
         running=False,
-    )  # TODO: wire up
+    )
     assert result.resolved_path == "/ws/_dumps/feat-789/2026-05-16T09:32.dump"
 
 
@@ -187,14 +187,14 @@ def test_db_restore_absolute_path_used_as_is():
         path="/explicit/path/snapshot.dump",
         workspace_root="/ws",
         running=False,
-    )  # TODO: wire up
+    )
     assert result.resolved_path == "/explicit/path/snapshot.dump"
 
 
 @pytest.mark.cli_commands
 def test_db_restore_running_instance_hard_error():
     with pytest.raises(Exception) as exc_info:
-        db_restore(instance="feat-789", path="snap.dump", workspace_root="/ws", running=True)  # TODO: wire up
+        db_restore(instance="feat-789", path="snap.dump", workspace_root="/ws", running=True)
     assert "INSTANCE_RUNNING" in str(exc_info.value) or "stop" in str(exc_info.value).lower()
 
 
@@ -210,7 +210,7 @@ def test_validate_static_valid_instance():
         toml_valid=True,
         port_contested=False,
         branch_format_valid=True,
-    )  # TODO: wire up
+    )
     assert result.valid is True
     assert result.errors == []
 
@@ -222,7 +222,7 @@ def test_validate_static_missing_required_field():
         live=False,
         toml_valid=False,
         missing_fields=["database.name"],
-    )  # TODO: wire up
+    )
     assert result.valid is False
     assert any("database.name" in e for e in result.errors)
 
@@ -233,7 +233,7 @@ def test_validate_static_only_no_live_checks():
     result = validate_instance(
         instance="feat-789",
         live=False,
-    )  # TODO: wire up
+    )
     assert result.live_checks_run is False
 
 
@@ -246,7 +246,7 @@ def test_validate_live_checks_worktrees_db_venv_proxy():
         db_reachable=True,
         venv_resolves=True,
         nginx_block_active=True,
-    )  # TODO: wire up
+    )
     assert result.valid is True
     assert result.live_checks_run is True
 
@@ -261,7 +261,7 @@ def test_cwd_inside_instance_dir_infers_instance():
         cwd="/ws/instances/feat-789/product-core",
         workspace_root="/ws",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert result.instance == "feat-789"
 
 
@@ -271,7 +271,7 @@ def test_cwd_at_workspace_root_infers_no_instance():
         cwd="/ws",
         workspace_root="/ws",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert result.instance is None
 
 
@@ -281,7 +281,7 @@ def test_cwd_inside_instance_root_infers_instance():
         cwd="/ws/instances/feat-789",
         workspace_root="/ws",
         instances_dir="instances",
-    )  # TODO: wire up
+    )
     assert result.instance == "feat-789"
 
 
@@ -293,7 +293,7 @@ def test_explicit_instance_name_overrides_cwd_inference():
         workspace_root="/ws",
         instances_dir="instances",
         explicit_name="review-101",
-    )  # TODO: wire up
+    )
     assert result.instance == "review-101"
 
 
@@ -303,21 +303,21 @@ def test_explicit_instance_name_overrides_cwd_inference():
 
 @pytest.mark.log_rotation
 def test_rotation_needed_when_line_count_exceeds_20k():
-    result = check_rotation_needed(line_count=20001, log_age_days=3, threshold_lines=20000, threshold_days=7)  # TODO: wire up
+    result = check_rotation_needed(line_count=20001, log_age_days=3, threshold_lines=20000, threshold_days=7)
     assert result.needed is True
     assert result.reason in ("line_count", "lines")
 
 
 @pytest.mark.log_rotation
 def test_rotation_needed_when_age_exceeds_one_week():
-    result = check_rotation_needed(line_count=100, log_age_days=8, threshold_lines=20000, threshold_days=7)  # TODO: wire up
+    result = check_rotation_needed(line_count=100, log_age_days=8, threshold_lines=20000, threshold_days=7)
     assert result.needed is True
     assert result.reason in ("age", "days")
 
 
 @pytest.mark.log_rotation
 def test_rotation_not_needed_within_thresholds():
-    result = check_rotation_needed(line_count=100, log_age_days=3, threshold_lines=20000, threshold_days=7)  # TODO: wire up
+    result = check_rotation_needed(line_count=100, log_age_days=3, threshold_lines=20000, threshold_days=7)
     assert result.needed is False
 
 

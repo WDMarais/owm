@@ -17,7 +17,7 @@ def test_fetch_fetches_repos_with_updates_in_parallel():
     result = fetch_workspace(
         repos=["odoo", "product-core", "customer-config"],
         repos_with_updates=["odoo", "product-core"],
-    )  # TODO: wire up
+    )
     assert "odoo" in result.fetched
     assert "product-core" in result.fetched
     assert result.skipped == ["customer-config"]
@@ -29,7 +29,7 @@ def test_fetch_fast_forwards_shared_worktrees():
         repos=["odoo"],
         repos_with_updates=["odoo"],
         shared_worktrees={"odoo/19.0": {"branch": "19.0"}},
-    )  # TODO: wire up
+    )
     assert "odoo/19.0" in result.shared_worktrees_fast_forwarded
 
 
@@ -39,13 +39,13 @@ def test_fetch_logs_previous_hash_before_fast_forward():
         repos=["odoo"],
         repos_with_updates=["odoo"],
         shared_worktrees={"odoo/19.0": {"branch": "19.0", "current_hash": "abc123"}},
-    )  # TODO: wire up
+    )
     assert result.shared_worktree_hashes_logged["odoo/19.0"] == "abc123"
 
 
 @pytest.mark.fetch_sync
 def test_fetch_emits_fetch_completed_event():
-    result = fetch_workspace(repos=["odoo"], repos_with_updates=[])  # TODO: wire up
+    result = fetch_workspace(repos=["odoo"], repos_with_updates=[])
     assert "fetch_completed" in result.events_emitted
 
 
@@ -55,7 +55,7 @@ def test_fetch_unreachable_repo_warns_and_continues():
         repos=["odoo", "product-core"],
         repos_with_updates=["odoo"],
         unreachable_repos=["product-core"],
-    )  # TODO: wire up
+    )
     assert "product-core" in result.warnings
     assert "odoo" in result.fetched
 
@@ -66,7 +66,7 @@ def test_fetch_shared_worktree_with_local_commits_hard_stops_that_worktree():
         repos=["odoo"],
         repos_with_updates=["odoo"],
         shared_worktrees={"odoo/19.0": {"branch": "19.0", "has_local_commits": True}},
-    )  # TODO: wire up
+    )
     assert "odoo/19.0" in result.blocked_worktrees
     assert result.blocked_worktrees["odoo/19.0"]["reason"] == "local_commits"
 
@@ -79,7 +79,7 @@ def test_fetch_db_snapshot_before_migration_fast_forward():
         repos_with_updates=["odoo"],
         shared_worktrees={"odoo/19.0": {"branch": "19.0", "has_migration": True}},
         instances_on_shared=["feat-789"],
-    )  # TODO: wire up
+    )
     assert result.db_snapshots_taken != []
 
 
@@ -92,7 +92,7 @@ def test_sync_fast_forwards_when_purely_behind():
     result = sync_instance(
         instance="feat-789",
         repo_states={"product-core": {"status": "behind", "behind_by": 3}},
-    )  # TODO: wire up
+    )
     assert result["product-core"]["status"] == "fast-forwarded"
     assert result["product-core"]["from"] is not None
     assert result["product-core"]["to"] is not None
@@ -103,7 +103,7 @@ def test_sync_surfaces_divergence_and_instructs_rebase():
     result = sync_instance(
         instance="feat-789",
         repo_states={"customer-config": {"status": "diverged"}},
-    )  # TODO: wire up
+    )
     assert result["customer-config"]["status"] == "diverged"
     assert "rebase" in result["customer-config"]["hint"].lower()
 
@@ -115,7 +115,7 @@ def test_sync_rebase_resolves_divergence():
         repo_states={"customer-config": {"status": "diverged"}},
         rebase=True,
         repo="customer-config",
-    )  # TODO: wire up
+    )
     assert result["customer-config"]["status"] == "rebased"
 
 
@@ -124,7 +124,7 @@ def test_sync_skips_dirty_repo_with_reason():
     result = sync_instance(
         instance="feat-789",
         repo_states={"product-core": {"status": "dirty"}},
-    )  # TODO: wire up
+    )
     assert result["product-core"]["status"] == "skipped"
     assert "uncommitted" in result["product-core"]["reason"].lower()
 
@@ -134,7 +134,7 @@ def test_sync_skips_shared_worktree():
     result = sync_instance(
         instance="feat-789",
         repo_states={"odoo": {"status": "behind", "shared": True}},
-    )  # TODO: wire up
+    )
     assert result["odoo"]["status"] == "skipped"
     assert "shared" in result["odoo"]["reason"].lower()
 
@@ -151,7 +151,7 @@ def test_push_owned_branch_ahead_of_origin():
         branch_status="ahead",
         owned=True,
         shared=False,
-    )  # TODO: wire up
+    )
     assert result["status"] == "pushed"
     assert result["repo"] == "product-core"
 
@@ -165,7 +165,7 @@ def test_push_diverged_branch_refused():
             branch_status="diverged",
             owned=True,
             shared=False,
-        )  # TODO: wire up
+        )
     assert "DIVERGED" in str(exc_info.value)
 
 
@@ -178,7 +178,7 @@ def test_push_unowned_branch_refused():
             branch_status="ahead",
             owned=False,
             shared=False,
-        )  # TODO: wire up
+        )
     assert "NOT_OWNED" in str(exc_info.value)
 
 
@@ -192,7 +192,7 @@ def test_push_shared_branch_refused_with_git_hint():
             branch_status="ahead",
             owned=False,
             shared=True,
-        )  # TODO: wire up
+        )
     err = str(exc_info.value)
     assert "SHARED_REPO" in err
     assert "git" in err and "push" in err
@@ -207,7 +207,7 @@ def test_push_all_pushes_owned_skips_shared():
             "product-core": {"owned": True, "shared": False, "status": "ahead"},
             "odoo":          {"owned": False, "shared": True},
         },
-    )  # TODO: wire up
+    )
     assert result["product-core"]["status"] == "pushed"
     assert result["odoo"]["status"] == "skipped"
     assert "shared" in result["odoo"]["reason"].lower()
@@ -223,7 +223,7 @@ def test_reset_hard_resets_worktrees_to_origin():
         instance="review-101",
         repo="product-core",
         dirty=False,
-    )  # TODO: wire up
+    )
     assert result["status"] == "reset"
     assert result["to"].startswith("origin/")
 
@@ -235,7 +235,7 @@ def test_reset_warns_about_local_commits():
         repo="product-core",
         dirty=False,
         has_local_commits=True,
-    )  # TODO: wire up
+    )
     assert result["warning"] is not None
     assert "local commits" in result["warning"].lower() or "origin" in result["warning"].lower()
 
@@ -248,7 +248,7 @@ def test_reset_dirty_worktree_requires_force():
             repo="product-core",
             dirty=True,
             force=False,
-        )  # TODO: wire up
+        )
     assert "DIRTY_WORKTREE" in str(exc_info.value)
 
 
@@ -259,7 +259,7 @@ def test_reset_force_discards_changes():
         repo="product-core",
         dirty=True,
         force=True,
-    )  # TODO: wire up
+    )
     assert result["status"] == "reset"
     assert result["discarded_changes"] is True
 
@@ -270,7 +270,7 @@ def test_reset_skips_shared_worktrees():
         instance="review-101",
         all_repos=True,
         repo_states={"odoo": {"shared": True}, "product-core": {"shared": False, "dirty": False}},
-    )  # TODO: wire up
+    )
     assert result["odoo"]["status"] == "skipped"
     assert "shared" in result["odoo"]["reason"].lower()
 
@@ -286,7 +286,7 @@ def test_checkpoint_recorded_when_all_checks_pass():
         repo_hashes={"product-core": "abc123", "customer-config": "def456"},
         db_snapshot_path="_dumps/feat-789/cp-2026-05-16.dump",
         manual=False,
-    )  # TODO: wire up
+    )
     assert result.timestamp is not None
     assert result.hashes == {"product-core": "abc123", "customer-config": "def456"}
     assert result.db_snapshot == "_dumps/feat-789/cp-2026-05-16.dump"
@@ -301,7 +301,7 @@ def test_manual_checkpoint_marked_as_manual():
         db_snapshot_path="_dumps/feat-789/cp-2026-05-16.dump",
         manual=True,
         note="integration tests green",
-    )  # TODO: wire up
+    )
     assert result.manual is True
     assert result.note == "integration tests green"
 
@@ -311,7 +311,7 @@ def test_rollback_reverts_worktrees_and_db():
     result = rollback_to_checkpoint(
         instance="feat-789",
         checkpoint={"hashes": {"product-core": "abc123"}, "db_snapshot": "_dumps/feat-789/cp.dump"},
-    )  # TODO: wire up
+    )
     assert result.worktrees_reverted is True
     assert result.db_restored is True
     assert result.checkpoint_used is not None
@@ -323,7 +323,7 @@ def test_rollback_surfaces_what_changed_since_checkpoint():
         instance="feat-789",
         checkpoint={"hashes": {"product-core": "abc123"}, "db_snapshot": "_dumps/feat-789/cp.dump"},
         current_hashes={"product-core": "xyz789"},
-    )  # TODO: wire up
+    )
     assert result.changes_since is not None
 
 
