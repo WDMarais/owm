@@ -8,8 +8,8 @@ name    = "staging"
 pg_port = 5432
 
 [server]
-http_port   = 8104
-gevent_port = 8105
+http_port   = 8106
+gevent_port = 8107
 
 [scripts]
 default = "setup"
