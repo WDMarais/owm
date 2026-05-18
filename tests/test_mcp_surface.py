@@ -181,8 +181,9 @@ def test_owm_new_already_exists_error():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.mcp_surface
-def test_owm_create_from_disk_returns_status_dict():
-    result = owm_create(instance="feat-789")  # TODO: wire up
+def test_owm_create_from_disk_returns_status_dict(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "clean"}):
+        result = owm_create(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["status"] == "ok"
     assert "created" in result
     assert "updated" in result
@@ -196,20 +197,22 @@ def test_owm_create_inline_toml_no_disk_roundtrip():
 
 
 @pytest.mark.mcp_surface
-def test_owm_create_branch_not_found_with_exists_flag():
-    result = owm_create(
-        instance="feat-789",
-        repos={"product-core": "feat-789-dev:dev+exists"},
-        simulate_branch_missing=True,
-    )  # TODO: wire up
+def test_owm_create_branch_not_found_with_exists_flag(tmp_workspace):
+    with patch("owm.mcp.branch_exists_on_origin", return_value=False):
+        result = owm_create(
+            instance="feat-789",
+            repos={"product-core": "feat-789-dev:dev+exists"},
+            workspace_root=str(tmp_workspace),
+        )
     assert result == {"error": "branch feat-789-dev not found on origin", "code": "BRANCH_NOT_FOUND"}
 
 
 @pytest.mark.mcp_surface
-def test_owm_create_dirty_worktree_error():
-    result = owm_create(instance="feat-789", simulate_dirty_repo="product-core")  # TODO: wire up
+def test_owm_create_dirty_worktree_error(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}):
+        result = owm_create(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["code"] == "DIRTY_WORKTREE"
-    assert result["repo"] == "product-core"
+    assert result["repo"] == "product_core"
 
 
 # ---------------------------------------------------------------------------

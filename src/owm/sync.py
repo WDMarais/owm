@@ -72,6 +72,13 @@ def git_push(worktree_path: str) -> None:
     git_run(["push", "origin", "HEAD"], cwd=worktree_path)
 
 
+def branch_exists_on_origin(bare_path: str, branch: str) -> bool:
+    """Return True if the branch ref exists in a bare repo (i.e. has been fetched)."""
+    r = git_run(["rev-parse", "--verify", f"refs/heads/{branch}"],
+                cwd=bare_path, check=False)
+    return r.returncode == 0
+
+
 def git_reset_hard(worktree_path: str) -> None:
     git_run(["reset", "--hard", "@{u}"], cwd=worktree_path)
     git_run(["clean", "-fd"], cwd=worktree_path)

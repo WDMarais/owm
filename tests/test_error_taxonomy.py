@@ -136,8 +136,9 @@ def test_instance_running_on_db_restore_while_running():
 
 
 @pytest.mark.error_taxonomy
-def test_dirty_worktree_on_create_branch_switch():
-    result = owm_create(instance="feat-789", simulate_dirty_repo="product-core")  # TODO: wire up
+def test_dirty_worktree_on_create_branch_switch(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}):
+        result = owm_create(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["code"] == DIRTY_WORKTREE
 
 
@@ -151,12 +152,13 @@ def test_dirty_worktree_on_reset_without_force(standard_instance_toml, tmp_works
 
 
 @pytest.mark.error_taxonomy
-def test_branch_not_found_on_create_with_exists_flag():
-    result = owm_create(
-        instance="feat-789",
-        repos={"product-core": "feat-789-dev:dev+exists"},
-        simulate_branch_missing=True,
-    )  # TODO: wire up
+def test_branch_not_found_on_create_with_exists_flag(tmp_workspace):
+    with patch("owm.mcp.branch_exists_on_origin", return_value=False):
+        result = owm_create(
+            instance="feat-789",
+            repos={"product-core": "feat-789-dev:dev+exists"},
+            workspace_root=str(tmp_workspace),
+        )
     assert result["code"] == BRANCH_NOT_FOUND
 
 

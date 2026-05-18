@@ -7,17 +7,20 @@ No business logic lives here.
 import json
 import os
 
-from owm.errors import OwmError, format_error, START_TIMEOUT, STOP_TIMEOUT, NO_COMPARE_TARGET
+from owm.errors import (
+    OwmError, format_error,
+    START_TIMEOUT, STOP_TIMEOUT, NO_COMPARE_TARGET, BRANCH_NOT_FOUND, DIRTY_WORKTREE,
+)
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
     kill_instance, restart_instance, health_check, list_running_instances,
 )
 from owm.archive import archive_instance
-from owm.config import parse_workspace_config, parse_instance_config
+from owm.config import parse_workspace_config, parse_instance_config, parse_repo_spec
 from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
 from owm.sync import (
     fetch_workspace, sync_instance, push_instance, reset_instance,
-    read_repo_state, has_local_commits,
+    read_repo_state, has_local_commits, branch_exists_on_origin,
     git_fetch_bare, git_fast_forward, git_rebase, git_push, git_reset_hard,
 )
 from owm.worktrees import resolve_worktree_path
@@ -100,12 +103,30 @@ def owm_new(instance, repos, workspace_root=".", **kwargs):
         return {"error": "instance already exists", "code": "ALREADY_EXISTS"}
 
 
-def owm_create(instance, toml=None, repos=None, *,
-               simulate_branch_missing=False, simulate_dirty_repo=None, **kwargs):
-    if simulate_branch_missing:
-        return {"error": "branch feat-789-dev not found on origin", "code": "BRANCH_NOT_FOUND"}
-    if simulate_dirty_repo:
-        return format_error("dirty worktree", "DIRTY_WORKTREE", repo=simulate_dirty_repo)
+def owm_create(instance, toml=None, repos=None, workspace_root=".", **kwargs):
+    if toml:
+        conf = parse_instance_config(toml)
+        specs = conf.repos
+    elif repos:
+        specs = {name: parse_repo_spec(spec) for name, spec in repos.items()}
+    else:
+        toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+        with open(toml_path) as f:
+            conf = parse_instance_config(f.read())
+        specs = conf.repos
+
+    for name, spec in specs.items():
+        if spec.shared:
+            continue
+        if spec.exists:
+            bare = os.path.join(workspace_root, "_repos", f"{name}.git")
+            if not branch_exists_on_origin(bare, spec.branch):
+                return format_error(f"branch {spec.branch} not found on origin",
+                                    BRANCH_NOT_FOUND)
+        wt = resolve_worktree_path(name, spec.branch, spec.shared, workspace_root, instance)
+        if read_repo_state(wt.path)["status"] == "dirty":
+            return format_error("dirty worktree", DIRTY_WORKTREE, repo=name)
+
     return {"status": "ok", "created": [], "updated": [], "skipped": []}
 
 
