@@ -3,6 +3,7 @@
 // ── State ──────────────────────────────────────────────────────────────────
 
 let _selectedInstance = null;
+let _activeTab        = "owm";
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ function renderCentre(inst) {
     renderScripts(inst);
     renderRepos(inst);
     renderCommands(inst);
+    renderTabStrip(inst);
 }
 
 function renderHeader(inst) {
@@ -205,4 +207,73 @@ function toggleLeftPane() {
     const btn  = pane.querySelector(".collapse-btn");
     const collapsed = pane.classList.toggle("collapsed");
     btn.textContent = collapsed ? "›" : "‹";
+}
+
+// ── Right pane: logs ───────────────────────────────────────────────────────
+
+function renderTabStrip(inst) {
+    const strip = document.querySelector(".tab-strip");
+    strip.innerHTML = "";
+
+    const tabs = [
+        { key: "owm",  label: "owm.log",  cls: "" },
+        { key: "odoo", label: "odoo.log", cls: "" },
+        ...inst.scripts.map(s => ({ key: `script:${s.name}`, label: s.name, cls: "tab-runner" })),
+    ];
+
+    for (const t of tabs) {
+        const btn = document.createElement("button");
+        btn.className = `tab${t.cls ? " " + t.cls : ""}`;
+        btn.dataset.tab = t.key;
+        btn.textContent = t.label;
+        btn.addEventListener("click", () => _activateTab(t.key));
+        strip.appendChild(btn);
+    }
+
+    _activateTab("owm");
+}
+
+function _activateTab(key) {
+    _activeTab = key;
+    document.querySelectorAll(".tab-strip .tab").forEach(el => {
+        el.classList.toggle("active", el.dataset.tab === key);
+    });
+    _loadTabLogs(key);
+}
+
+async function _loadTabLogs(key) {
+    const viewport = document.querySelector(".log-viewport");
+    if (key.startsWith("script:")) {
+        viewport.innerHTML = `<div class="log-line log-info">— runner log not yet available —</div>`;
+        return;
+    }
+    try {
+        const data = await api(`/api/logs/${_selectedInstance}/${key}`);
+        _renderLogLines(data.lines);
+    } catch (e) {
+        viewport.innerHTML = `<div class="log-line log-err">${e.message}</div>`;
+    }
+}
+
+function _renderLogLines(lines) {
+    const viewport = document.querySelector(".log-viewport");
+    viewport.innerHTML = "";
+    for (const line of lines) {
+        const cls    = _levelClass(line.level);
+        const prefix = line.ts ? `[${line.ts.slice(11, 19)}] ` : "";
+        const el     = document.createElement("div");
+        el.className = `log-line${cls ? " " + cls : ""}`;
+        el.textContent = prefix + line.text;
+        viewport.appendChild(el);
+    }
+    viewport.scrollTop = viewport.scrollHeight;
+}
+
+function _levelClass(level) {
+    if (!level) return "";
+    const l = level.toLowerCase();
+    if (l === "warning" || l === "warn") return "log-warn";
+    if (l === "error"   || l === "err")  return "log-err";
+    if (l === "ok"      || l === "success") return "log-ok";
+    return "log-info";
 }
