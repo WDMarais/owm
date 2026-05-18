@@ -215,22 +215,28 @@ function renderTabStrip(inst) {
     const strip = document.querySelector(".tab-strip");
     strip.innerHTML = "";
 
-    const tabs = [
-        { key: "owm",  label: "owm.log",  cls: "" },
-        { key: "odoo", label: "odoo.log", cls: "" },
-        ...inst.scripts.map(s => ({ key: `script:${s.name}`, label: s.name, cls: "tab-runner" })),
-    ];
+    strip.appendChild(_makeTab({ key: "owm", label: "owm.log", cls: "" }));
 
-    for (const t of tabs) {
-        const btn = document.createElement("button");
-        btn.className = `tab${t.cls ? " " + t.cls : ""}`;
-        btn.dataset.tab = t.key;
-        btn.textContent = t.label;
-        btn.addEventListener("click", () => _activateTab(t.key));
-        strip.appendChild(btn);
+    const sep = document.createElement("span");
+    sep.className = "tab-sep";
+    sep.textContent = inst.name;
+    strip.appendChild(sep);
+
+    strip.appendChild(_makeTab({ key: "odoo", label: "odoo.log", cls: "" }));
+    for (const s of inst.scripts) {
+        strip.appendChild(_makeTab({ key: `script:${s.name}`, label: s.name, cls: "tab-runner" }));
     }
 
     _activateTab("owm");
+}
+
+function _makeTab(t) {
+    const btn = document.createElement("button");
+    btn.className = `tab${t.cls ? " " + t.cls : ""}`;
+    btn.dataset.tab = t.key;
+    btn.textContent = t.label;
+    btn.addEventListener("click", () => _activateTab(t.key));
+    return btn;
 }
 
 function _activateTab(key) {
