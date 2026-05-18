@@ -2,6 +2,7 @@
 Tests for remaining CLI commands: delete, rename, logs, shell, db-dump/restore, validate.
 Also covers: CWD inference, Log rotation sections.
 """
+import json
 import pytest
 
 from owm.operations import delete_instance, rename_instance, show_logs
@@ -112,32 +113,41 @@ def test_rename_updates_proxy_subdomain():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.cli_commands
-def test_logs_default_returns_last_n_lines():
-    result = show_logs(instance="feat-789", n=50, follow=False, level=None)  # TODO: wire up
+def test_logs_default_returns_last_n_lines(tmp_path):
+    inst_dir = tmp_path / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True)
+    (inst_dir / "instance.log").write_text("")
+    result = show_logs(instance="feat-789", n=50, follow=False, level=None,
+                       workspace_root=str(tmp_path))
     assert len(result.lines) <= 50
     assert result.log_path is not None
 
 
 @pytest.mark.cli_commands
-def test_logs_custom_n():
-    result = show_logs(instance="feat-789", n=200, follow=False, level=None)  # TODO: wire up
+def test_logs_custom_n(tmp_path):
+    inst_dir = tmp_path / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True)
+    (inst_dir / "instance.log").write_text("")
+    result = show_logs(instance="feat-789", n=200, follow=False, level=None,
+                       workspace_root=str(tmp_path))
     assert len(result.lines) <= 200
 
 
 @pytest.mark.cli_commands
-def test_logs_level_filter_returns_only_matching_levels():
-    result = show_logs(
-        instance="feat-789",
-        n=100,
-        follow=False,
-        level="ERROR",
-        simulated_lines=[
-            {"level": "INFO", "msg": "started"},
-            {"level": "ERROR", "msg": "crash"},
-            {"level": "WARNING", "msg": "warn"},
-            {"level": "ERROR", "msg": "crash2"},
-        ],
-    )  # TODO: wire up
+def test_logs_level_filter_returns_only_matching_levels(tmp_path):
+    inst_dir = tmp_path / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True)
+    lines = [
+        {"level": "INFO", "msg": "started"},
+        {"level": "ERROR", "msg": "crash"},
+        {"level": "WARNING", "msg": "warn"},
+        {"level": "ERROR", "msg": "crash2"},
+    ]
+    (inst_dir / "instance.log").write_text(
+        "\n".join(json.dumps(l) for l in lines) + "\n"
+    )
+    result = show_logs(instance="feat-789", n=100, follow=False, level="ERROR",
+                       workspace_root=str(tmp_path))
     for line in result.lines:
         assert line["level"] in ("ERROR", "CRITICAL")
 

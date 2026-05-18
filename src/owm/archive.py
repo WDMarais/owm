@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 
 from owm.errors import OwmError, INSTANCE_RUNNING, ARCHIVE_CONFLICT, CONFIRMATION_REQUIRED
@@ -91,12 +92,11 @@ def detect_archive_conflict(
     name: str,
     workspace_root: str,
     *,
-    archive_exists: bool,
     archive_date: str,
     mode: str,
     flag: str | None = None,
 ) -> ConflictResult:
-    if not archive_exists:
+    if not os.path.isdir(os.path.join(workspace_root, "_archive", name)):
         return ConflictResult(conflict=False)
 
     if mode == "agent":

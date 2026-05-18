@@ -1,7 +1,9 @@
+import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.errors import OwmError, INSTANCE_RUNNING
+from owm.errors import OwmError, INSTANCE_RUNNING, NOT_FOUND
 
 
 @dataclass
@@ -33,6 +35,7 @@ class RenameResult:
 class LogsResult:
     lines: list
     log_path: str
+    warning: str | None = None
 
 
 @dataclass
@@ -132,13 +135,29 @@ def show_logs(
     follow: bool,
     level: str | None,
     *,
-    simulated_lines: list | None = None,
+    workspace_root: str = ".",
 ) -> LogsResult:
-    log_path = f"instances/{instance}/instance.log"
-    lines = simulated_lines or []
+    instance_dir = os.path.join(workspace_root, "instances", instance)
+    if not os.path.isdir(instance_dir):
+        raise OwmError(f"instance {instance!r} not found", code=NOT_FOUND)
+    log_path = os.path.join(instance_dir, "instance.log")
+    lines = []
+    warning = None
+    try:
+        with open(log_path) as f:
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    lines.append(json.loads(raw))
+                except json.JSONDecodeError:
+                    lines.append({"raw": raw})
+    except FileNotFoundError:
+        warning = "no log file yet; instance may not have been started"
     if level:
         lines = [l for l in lines if l.get("level") in (level, "CRITICAL")]
-    return LogsResult(lines=lines[:n], log_path=log_path)
+    return LogsResult(lines=lines[-n:], log_path=log_path, warning=warning)
 
 
 def db_dump(instance: str, out: str | None, workspace_root: str) -> DumpResult:

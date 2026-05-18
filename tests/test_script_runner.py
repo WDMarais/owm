@@ -263,13 +263,15 @@ def test_compare_undeclared_change_is_contract_violation():
 
 
 @pytest.mark.script_runner
-def test_compare_deleted_instance_surfaces_in_status():
+def test_compare_deleted_instance_surfaces_in_status(tmp_path):
     """compare_pair in workspace.toml with one instance deleted → surfaced in status."""
+    (tmp_path / "instances" / "feat-789").mkdir(parents=True)
+    # "main" instance dir intentionally absent
     result = compare_instances(
         instance="feat-789",
         base="main",
-        base_instance_exists=False,
-    )  # TODO: wire up
+        workspace_root=str(tmp_path),
+    )
     assert result.status == "error" or result.error is not None
     assert "not found" in (result.error or "").lower() or result.missing_instance == "main"
 

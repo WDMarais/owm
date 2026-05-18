@@ -164,8 +164,9 @@ def _wait_for_http(port: int, timeout_seconds: int) -> None:
     )
 
 
-def new_instance(name: str, repos: dict, workspace_root: str, *, already_exists: bool = False) -> NewResult:
-    if already_exists:
+def new_instance(name: str, repos: dict, workspace_root: str) -> NewResult:
+    toml_path_check = os.path.join(workspace_root, "instances", name, "instance.toml")
+    if os.path.exists(toml_path_check):
         raise OwmError(f"instance {name!r} already exists", code=ALREADY_EXISTS)
     toml_path = f"{workspace_root}/instances/{name}/instance.toml"
     repo_lines = "\n".join(f'{repo} = "{spec}"' for repo, spec in repos.items())
@@ -348,6 +349,38 @@ def health_check(
         return {"status": "healthy", "pid": pid, "http_alive": True, "url": f"https://{instance}.localhost"}
     except OwmError:
         return {"status": "unhealthy", "pid": pid, "http_alive": False}
+
+
+def list_running_instances(workspace_root: str) -> list[dict]:
+    instances_dir = os.path.join(workspace_root, "instances")
+    result = []
+    try:
+        entries = list(os.scandir(instances_dir))
+    except OSError:
+        return result
+    for entry in entries:
+        if not entry.is_dir():
+            continue
+        pid = _read_pid(entry.name, workspace_root)
+        if pid is None or not _process_alive(pid):
+            continue
+        h = health_check(entry.name, workspace_root)
+        conf_path = os.path.join(entry.path, "instance.toml")
+        port = None
+        try:
+            with open(conf_path) as f:
+                conf = parse_instance_config(f.read())
+            port = conf.server.http_port
+        except Exception:
+            pass
+        result.append({
+            "instance": entry.name,
+            "pid": pid,
+            "port": port,
+            "url": h.get("url"),
+            "status": h.get("status"),
+        })
+    return result
 
 
 def generate_instance_conf(
