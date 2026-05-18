@@ -255,15 +255,19 @@ async function _loadTabLogs(key) {
     }
 }
 
+// ANSI CSI escape sequences (colours, bold, reset, etc.)
+const _ANSI_RE = /\x1b\[[0-9;]*m/g;
+
 function _renderLogLines(lines) {
     const viewport = document.querySelector(".log-viewport");
     viewport.innerHTML = "";
     for (const line of lines) {
-        const cls    = _levelClass(line.level);
+        const text   = (line.text ?? "").replace(_ANSI_RE, "");
+        const cls    = _levelClass(line.level ?? _detectLevel(text));
         const prefix = line.ts ? `[${line.ts.slice(11, 19)}] ` : "";
         const el     = document.createElement("div");
         el.className = `log-line${cls ? " " + cls : ""}`;
-        el.textContent = prefix + line.text;
+        el.textContent = prefix + text;
         viewport.appendChild(el);
     }
     viewport.scrollTop = viewport.scrollHeight;
@@ -276,4 +280,12 @@ function _levelClass(level) {
     if (l === "error"   || l === "err")  return "log-err";
     if (l === "ok"      || l === "success") return "log-ok";
     return "log-info";
+}
+
+// Detect level from plain-text Odoo log lines: "... INFO ...", "... WARNING ..."
+function _detectLevel(text) {
+    if (/\bERROR\b/.test(text))              return "err";
+    if (/\bWARNING\b|\bWARN\b/.test(text))  return "warn";
+    if (/\bINFO\b/.test(text))              return "info";
+    return "";
 }
