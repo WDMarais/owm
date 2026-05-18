@@ -253,13 +253,20 @@ function _renderProcessSection(page, label, rows, rowFn) {
     page.appendChild(sec);
 }
 
+function _pill(port, label) {
+    return label
+        ? `<span class="port-pill"><span class="port-label">${label}</span>:${port}</span>`
+        : `<span class="port-pill">:${port}</span>`;
+}
+
 function _managedRow(p) {
     const el = document.createElement("div");
     el.className = "process-row";
-    const ports = [p.http && `:${p.http}`, p.gevent && `:${p.gevent}`].filter(Boolean).join(" ");
+    const pills = [p.http && _pill(p.http, "http"), p.gevent && _pill(p.gevent, "gevent")]
+        .filter(Boolean).join("");
     el.innerHTML = `<span class="dot dot-${p.status === "running" ? "running" : "stopped"}"></span>
                     <span class="proc-name">${p.name}</span>
-                    <span class="proc-ports">${ports}</span>
+                    <span class="proc-ports">${pills}</span>
                     <span class="proc-pid">pid ${p.pid}</span>`;
     return el;
 }
@@ -267,10 +274,10 @@ function _managedRow(p) {
 function _orphanedRow(p) {
     const el = document.createElement("div");
     el.className = "process-row";
-    const ports = p.ports.map(n => `:${n}`).join(" ");
+    const pills = p.ports.map(n => _pill(n, null)).join("");
     el.innerHTML = `<span class="dot dot-warn"></span>
                     <span class="proc-name">${p.name}</span>
-                    <span class="proc-ports">${ports}</span>
+                    <span class="proc-ports">${pills}</span>
                     <span class="proc-pid">pid ${p.pid}</span>
                     <button class="btn-readopt" data-pid="${p.pid}">Re-adopt</button>`;
     return el;
@@ -279,10 +286,10 @@ function _orphanedRow(p) {
 function _unregisteredRow(p) {
     const el = document.createElement("div");
     el.className = "process-row";
-    const ports = p.ports.map(n => `:${n}`).join(" ");
+    const pills = p.ports.map(n => _pill(n, null)).join("");
     el.innerHTML = `<span class="dot dot-warn"></span>
                     <span class="proc-name">${p.cmd}</span>
-                    <span class="proc-ports">${ports}</span>
+                    <span class="proc-ports">${pills}</span>
                     <span class="proc-pid">pid ${p.pid}</span>
                     <button class="btn-adopt-flow" data-pid="${p.pid}">Adopt…</button>`;
     return el;
@@ -291,10 +298,10 @@ function _unregisteredRow(p) {
 function _squatterRow(p) {
     const el = document.createElement("div");
     el.className = "process-row";
-    const ports = p.ports.map(n => `:${n}`).join(" ");
+    const pills = p.ports.map(n => _pill(n, null)).join("");
     el.innerHTML = `<span class="dot dot-err"></span>
                     <span class="proc-name">${p.cmd}</span>
-                    <span class="proc-ports">${ports}</span>
+                    <span class="proc-ports">${pills}</span>
                     <span class="proc-pid">pid ${p.pid}</span>
                     <span class="proc-note">not owm-managed</span>`;
     return el;

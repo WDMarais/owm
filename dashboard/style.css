@@ -466,9 +466,29 @@ body {
 }
 .process-row:last-child { border-bottom: none; }
 .proc-name  { font-family: var(--mono); font-weight: 600; flex: 1; }
-.proc-ports { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-.proc-pid   { font-size: 12px; color: var(--muted); }
+.proc-ports { display: flex; gap: 4px; align-items: center; }
+.proc-pid   { font-size: 12px; color: var(--muted); padding-left: 10px;
+              border-left: 1px solid var(--border); margin-left: 4px; }
 .proc-note  { font-size: 12px; color: var(--muted); font-style: italic; }
+
+.port-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.port-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: var(--muted);
+}
 
 .btn-readopt, .btn-adopt-flow {
   padding: 3px 10px;

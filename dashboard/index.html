@@ -174,26 +174,7 @@
 
   </main>
 
-  <!-- ── Right log pane ───────────────────────────────────────────────── -->
-  <aside id="right-pane" class="pane pane-right">
-    <div class="tab-strip">
-      <button class="tab active">owm.log</button>
-      <button class="tab">odoo.log</button>
-      <button class="tab tab-runner">setup</button>
-      <!-- transient mutation tab — appears on start/stop/fetch, dismissed when done -->
-      <button class="tab tab-transient">stopping… <span class="tab-close">✕</span></button>
-    </div>
-    <div class="log-viewport">
-      <div class="log-line log-info">[10:23:01] instance dev started (pid 12345)</div>
-      <div class="log-line log-info">[10:22:58] starting odoo-bin on :8100</div>
-      <div class="log-line log-warn">[10:22:45] waiting for port 8100...</div>
-      <div class="log-line log-info">[10:22:30] venv activated</div>
-      <div class="log-line log-info">[10:22:28] workspace fetched (odoo: 2 new, customer-config: ok)</div>
-      <div class="log-line log-info">[10:21:10] owm started</div>
-    </div>
-  </aside>
-
-  <!-- ── Processes page (hidden by default) ───────────────────────────── -->
+  <!-- ── Processes page (hidden by default, sits in centre slot) ─────── -->
   <div id="processes-page" class="page hidden">
     <div class="page-header">
       <h2>Processes</h2>
@@ -239,6 +220,11 @@
     </div>
   </div>
 
+  <!-- ── Right log pane ───────────────────────────────────────────────── -->
+  <aside id="right-pane" class="pane pane-right">
+    <div class="tab-strip"></div>
+    <div class="log-viewport"></div>
+  </aside>
 
   <script src="/static/app.js"></script>
 </body>
