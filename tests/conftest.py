@@ -228,6 +228,24 @@ def workspace_toml(
     return "\n".join(lines) + "\n"
 
 
+def _spec_to_inline_table(spec: str) -> str:
+    """Convert string DSL spec to TOML inline-table string for on-disk fixtures."""
+    colon = spec.index(":")
+    branch = spec[:colon]
+    parts = spec[colon + 1:].split("+")
+    base_or_flag, flags = parts[0], set(parts[1:])
+    kvs = [f'branch = "{branch}"']
+    if base_or_flag == "shared":
+        kvs.append("shared = true")
+    else:
+        kvs.append(f'base = "{base_or_flag}"')
+    if "readonly" in flags:
+        kvs.append("readonly = true")
+    if "exists" in flags:
+        kvs.append("exists = true")
+    return "{" + ", ".join(kvs) + "}"
+
+
 def instance_toml(
     repos: dict,
     db_name: str,
@@ -239,13 +257,13 @@ def instance_toml(
     python_version: str | None = None,
 ) -> str:
     """
-    Build an instance.toml string.
+    Build an instance.toml string using inline-table repo specs.
 
-    repos: {"name": "branch:base+flags"}
+    repos: {"name": "branch:base+flags"}  — string DSL, emitted as inline-table on disk
     """
     lines = ["[repos]"]
     for name, spec in repos.items():
-        lines.append(f'{name} = "{spec}"')
+        lines.append(f"{name} = {_spec_to_inline_table(spec)}")
 
     lines.append("\n[database]")
     lines.append(f'name = "{db_name}"')

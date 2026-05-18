@@ -220,6 +220,66 @@ def test_repo_spec_exists_and_readonly():
 
 
 # ---------------------------------------------------------------------------
+# Repo spec inline-table parsing: {branch = "...", base = "...", flags...}
+# ---------------------------------------------------------------------------
+
+@pytest.mark.config_schemas
+def test_repo_spec_inline_table_owned():
+    spec = parse_repo_spec({"branch": "feat-789-dev", "base": "dev"})
+    assert spec.branch == "feat-789-dev"
+    assert spec.base == "dev"
+    assert spec.shared is False
+    assert spec.readonly is False
+    assert spec.exists is False
+
+
+@pytest.mark.config_schemas
+def test_repo_spec_inline_table_shared():
+    spec = parse_repo_spec({"branch": "19.0", "shared": True})
+    assert spec.branch == "19.0"
+    assert spec.shared is True
+    assert spec.base is None
+
+
+@pytest.mark.config_schemas
+def test_repo_spec_inline_table_readonly():
+    spec = parse_repo_spec({"branch": "feat-789-dev", "base": "main", "readonly": True})
+    assert spec.readonly is True
+    assert spec.shared is False
+    assert spec.exists is False
+
+
+@pytest.mark.config_schemas
+def test_repo_spec_inline_table_all_flags():
+    spec = parse_repo_spec({"branch": "feat-789-dev", "base": "dev", "readonly": True, "exists": True})
+    assert spec.readonly is True
+    assert spec.exists is True
+
+
+@pytest.mark.config_schemas
+def test_parse_instance_config_accepts_inline_table_repos():
+    toml = """
+[repos]
+odoo = {branch = "19.0", shared = true}
+product_core = {branch = "feat-789-dev", base = "main", readonly = true}
+
+[database]
+name = "feat_789"
+pg_port = 5432
+
+[server]
+http_port = 8142
+gevent_port = 8143
+"""
+    from owm.config import parse_instance_config
+    conf = parse_instance_config(toml)
+    assert conf.repos["odoo"].shared is True
+    assert conf.repos["odoo"].branch == "19.0"
+    assert conf.repos["product_core"].readonly is True
+    assert conf.repos["product_core"].base == "main"
+
+
+# ---------------------------------------------------------------------------
 # instance.toml — integration: parse full valid config
 # ---------------------------------------------------------------------------
 

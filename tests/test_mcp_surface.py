@@ -191,7 +191,7 @@ def test_owm_create_from_disk_returns_status_dict():
 
 @pytest.mark.mcp_surface
 def test_owm_create_inline_toml_no_disk_roundtrip():
-    result = owm_create(instance="feat-789", toml="[repos]\nodoo = '19.0:shared'\n[database]\nname='feat'\npg_port=5432\n[server]\nhttp_port=8142\ngevent_port=8143\n")  # TODO: wire up
+    result = owm_create(instance="feat-789", toml='[repos]\nodoo = {branch = "19.0", shared = true}\n[database]\nname="feat"\npg_port=5432\n[server]\nhttp_port=8142\ngevent_port=8143\n')  # TODO: wire up
     assert result["status"] == "ok"
 
 
@@ -472,7 +472,7 @@ def test_owm_push_not_owned_error(tmp_workspace):
     inst_dir = tmp_workspace / "instances" / "review-101"
     inst_dir.mkdir(parents=True)
     (inst_dir / "instance.toml").write_text(
-        '[repos]\nproduct_core = "feat-789-dev:main+readonly"\n\n'
+        '[repos]\nproduct_core = {branch = "feat-789-dev", base = "main", readonly = true}\n\n'
         '[database]\nname = "test"\npg_port = 5432\n\n'
         '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
     )
@@ -802,7 +802,7 @@ def test_push_always_refuses_unowned_branch(tmp_workspace):
     inst_dir = tmp_workspace / "instances" / "review-101"
     inst_dir.mkdir(parents=True)
     (inst_dir / "instance.toml").write_text(
-        '[repos]\nproduct_core = "feat-789-dev:main+readonly"\n\n'
+        '[repos]\nproduct_core = {branch = "feat-789-dev", base = "main", readonly = true}\n\n'
         '[database]\nname = "test"\npg_port = 5432\n\n'
         '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
     )

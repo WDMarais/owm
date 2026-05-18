@@ -116,7 +116,20 @@ class InstanceConfig:
     template: TemplateSection | None = None
 
 
-def parse_repo_spec(spec: str) -> RepoSpec:
+def parse_repo_spec(spec: str | dict) -> RepoSpec:
+    """Parse a repo spec from either string DSL or TOML inline-table form.
+
+    String DSL:   "feat-789-dev:main+readonly+exists"
+    Inline table: {branch = "feat-789-dev", base = "main", readonly = true, exists = true}
+    """
+    if isinstance(spec, dict):
+        return RepoSpec(
+            branch=spec["branch"],
+            base=spec.get("base"),
+            shared=spec.get("shared", False),
+            readonly=spec.get("readonly", False),
+            exists=spec.get("exists", False),
+        )
     colon = spec.index(":")
     branch = spec[:colon]
     parts = spec[colon + 1:].split("+")
