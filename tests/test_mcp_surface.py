@@ -400,87 +400,116 @@ def test_owm_rename_running_error():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.mcp_surface
-def test_owm_fetch_returns_repo_and_worktree_status():
-    result = owm_fetch()  # TODO: wire up
+def test_owm_fetch_returns_repo_and_worktree_status(tmp_workspace):
+    (tmp_workspace / "workspace.toml").write_text(
+        '[repos]\nproduct_core = "file:///fake"\n\n'
+        '[clusters]\n"19" = {pg_version = "16", port = 5432}\n'
+    )
+    with patch("owm.sync.git_fetch_bare", return_value=False):
+        result = owm_fetch(workspace_root=str(tmp_workspace))
     assert "repos" in result
     assert "shared_worktrees" in result
 
 
 @pytest.mark.mcp_surface
-def test_owm_sync_fast_forward():
-    result = owm_sync(
-        instance="feat-789",
-        simulate_repo_states={"product-core": "behind", "customer-config": "diverged", "odoo": "shared"},
-    )  # TODO: wire up
-    assert result["repos"]["product-core"]["status"] == "fast-forwarded"
-    assert result["repos"]["customer-config"]["status"] == "diverged"
-    assert result["repos"]["odoo"]["status"] == "skipped"
+def test_owm_sync_fast_forward(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "behind", "behind_by": 3}), \
+         patch("owm.mcp.git_fast_forward"):
+        result = owm_sync(instance="feat-789", workspace_root=str(tmp_workspace))
+    assert result["repos"]["product_core"]["status"] == "fast-forwarded"
+    assert result["repos"]["odoo_like"]["status"] == "skipped"   # shared worktree
 
 
 @pytest.mark.mcp_surface
-def test_owm_sync_rebase():
-    result = owm_sync(
-        instance="feat-789",
-        repo="customer-config",
-        rebase=True,
-        simulate_repo_states={"customer-config": "diverged"},
-    )  # TODO: wire up
-    assert result["repos"]["customer-config"]["status"] == "rebased"
+def test_owm_sync_rebase(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "diverged"}), \
+         patch("owm.mcp.git_rebase"):
+        result = owm_sync(instance="feat-789", repo="product_core",
+                          rebase=True, workspace_root=str(tmp_workspace))
+    assert result["repos"]["product_core"]["status"] == "rebased"
 
 
 @pytest.mark.mcp_surface
-def test_owm_sync_dirty_skipped():
-    result = owm_sync(
-        instance="feat-789",
-        repo="product-core",
-        simulate_repo_states={"product-core": "dirty"},
-    )  # TODO: wire up
-    assert result["repos"]["product-core"]["status"] == "skipped"
-    assert "uncommitted" in result["repos"]["product-core"]["reason"].lower()
+def test_owm_sync_dirty_skipped(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}):
+        result = owm_sync(instance="feat-789", repo="product_core",
+                          workspace_root=str(tmp_workspace))
+    assert result["repos"]["product_core"]["status"] == "skipped"
+    assert "uncommitted" in result["repos"]["product_core"]["reason"].lower()
 
 
 @pytest.mark.mcp_surface
-def test_owm_push_owned_branch():
-    result = owm_push(instance="feat-789", repo="product-core")  # TODO: wire up
-    assert result == {"status": "pushed", "repo": "product-core", "branch": "feat-789-dev"}
+def test_owm_push_owned_branch(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead", "ahead_by": 1}), \
+         patch("owm.mcp.git_push"):
+        result = owm_push(instance="feat-789", repo="product_core",
+                          workspace_root=str(tmp_workspace))
+    assert result["status"] == "pushed"
+    assert result["repo"] == "product_core"
+    assert result["branch"] == "feat-789-dev"
 
 
 @pytest.mark.mcp_surface
-def test_owm_push_diverged_error():
-    result = owm_push(instance="feat-789", repo="product-core", simulate_diverged=True)  # TODO: wire up
+def test_owm_push_diverged_error(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "diverged"}):
+        result = owm_push(instance="feat-789", repo="product_core",
+                          workspace_root=str(tmp_workspace))
     assert result["code"] == "DIVERGED"
 
 
 @pytest.mark.mcp_surface
-def test_owm_push_shared_error_with_hint():
-    result = owm_push(instance="feat-789", repo="odoo")  # TODO: wire up
+def test_owm_push_shared_error_with_hint(standard_instance_toml, tmp_workspace):
+    # odoo_like is declared shared in standard_instance_toml
+    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+        result = owm_push(instance="feat-789", repo="odoo_like",
+                          workspace_root=str(tmp_workspace))
     assert result["code"] == "SHARED_REPO"
     assert "git" in result["hint"]
 
 
 @pytest.mark.mcp_surface
-def test_owm_push_not_owned_error():
-    result = owm_push(instance="review-101", repo="product-core")  # TODO: wire up
+def test_owm_push_not_owned_error(tmp_workspace):
+    inst_dir = tmp_workspace / "instances" / "review-101"
+    inst_dir.mkdir(parents=True)
+    (inst_dir / "instance.toml").write_text(
+        '[repos]\nproduct_core = "feat-789-dev:main+readonly"\n\n'
+        '[database]\nname = "test"\npg_port = 5432\n\n'
+        '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
+    )
+    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+        result = owm_push(instance="review-101", repo="product_core",
+                          workspace_root=str(tmp_workspace))
     assert result["code"] == "NOT_OWNED"
 
 
 @pytest.mark.mcp_surface
-def test_owm_reset_clean():
-    result = owm_reset(instance="review-101", repo="product-core")  # TODO: wire up
+def test_owm_reset_clean(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "clean"}), \
+         patch("owm.mcp.has_local_commits", return_value=False), \
+         patch("owm.mcp.git_reset_hard"):
+        result = owm_reset(instance="feat-789", repo="product_core",
+                           workspace_root=str(tmp_workspace))
     assert result["status"] == "reset"
     assert result["to"].startswith("origin/")
 
 
 @pytest.mark.mcp_surface
-def test_owm_reset_dirty_requires_force():
-    result = owm_reset(instance="review-101", repo="product-core", simulate_dirty=True)  # TODO: wire up
+def test_owm_reset_dirty_requires_force(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}), \
+         patch("owm.mcp.has_local_commits", return_value=False):
+        result = owm_reset(instance="feat-789", repo="product_core",
+                           workspace_root=str(tmp_workspace))
     assert result["code"] == "DIRTY_WORKTREE"
     assert "force" in result["hint"].lower()
 
 
 @pytest.mark.mcp_surface
-def test_owm_reset_force_discards():
-    result = owm_reset(instance="review-101", repo="product-core", force=True, simulate_dirty=True)  # TODO: wire up
+def test_owm_reset_force_discards(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}), \
+         patch("owm.mcp.has_local_commits", return_value=False), \
+         patch("owm.mcp.git_reset_hard"):
+        result = owm_reset(instance="feat-789", repo="product_core",
+                           force=True, workspace_root=str(tmp_workspace))
     assert result["status"] == "reset"
     assert result["discarded_changes"] is True
 
@@ -715,15 +744,26 @@ def test_owm_agent_context_no_instance_notes_not_an_error():
 
 @pytest.mark.mcp_surface
 @pytest.mark.safety_invariants
-def test_push_always_refuses_shared_repo():
-    result = owm_push(instance="feat-789", repo="odoo")  # TODO: wire up
+def test_push_always_refuses_shared_repo(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+        result = owm_push(instance="feat-789", repo="odoo_like",
+                          workspace_root=str(tmp_workspace))
     assert result["code"] == "SHARED_REPO"
 
 
 @pytest.mark.mcp_surface
 @pytest.mark.safety_invariants
-def test_push_always_refuses_unowned_branch():
-    result = owm_push(instance="review-101", repo="product-core")  # TODO: wire up
+def test_push_always_refuses_unowned_branch(tmp_workspace):
+    inst_dir = tmp_workspace / "instances" / "review-101"
+    inst_dir.mkdir(parents=True)
+    (inst_dir / "instance.toml").write_text(
+        '[repos]\nproduct_core = "feat-789-dev:main+readonly"\n\n'
+        '[database]\nname = "test"\npg_port = 5432\n\n'
+        '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
+    )
+    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+        result = owm_push(instance="review-101", repo="product_core",
+                          workspace_root=str(tmp_workspace))
     assert result["code"] == "NOT_OWNED"
 
 
@@ -745,8 +785,12 @@ def test_archive_operates_on_local_state_only():
 
 @pytest.mark.mcp_surface
 @pytest.mark.safety_invariants
-def test_reset_operates_on_local_state_only():
-    result = owm_reset(instance="review-101", repo="product-core")  # TODO: wire up
+def test_reset_operates_on_local_state_only(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "clean"}), \
+         patch("owm.mcp.has_local_commits", return_value=False), \
+         patch("owm.mcp.git_reset_hard"):
+        result = owm_reset(instance="feat-789", repo="product_core",
+                           workspace_root=str(tmp_workspace))
     assert result.get("remote_reset", False) is False
 
 

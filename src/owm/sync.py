@@ -1,7 +1,80 @@
+import os
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from owm.errors import OwmError, DIVERGED, NOT_OWNED, SHARED_REPO, DIRTY_WORKTREE
+
+
+# ---------------------------------------------------------------------------
+# Git I/O helpers
+# ---------------------------------------------------------------------------
+
+def git_run(args: list[str], cwd: str, *, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=str(cwd), check=check,
+                          capture_output=True, text=True)
+
+
+def read_repo_state(worktree_path: str) -> dict:
+    """Return {"status": dirty|diverged|behind|ahead|clean, ...} from real git state."""
+    r = git_run(["status", "--porcelain"], cwd=worktree_path, check=False)
+    if r.returncode != 0:
+        return {"status": "clean"}
+    if r.stdout.strip():
+        return {"status": "dirty"}
+    lr = git_run(["rev-list", "--count", "--left-right", "HEAD...@{u}"],
+                 cwd=worktree_path, check=False)
+    if lr.returncode != 0:
+        return {"status": "clean"}
+    parts = lr.stdout.strip().split()
+    ahead  = int(parts[0]) if parts else 0
+    behind = int(parts[1]) if len(parts) > 1 else 0
+    if ahead and behind:
+        return {"status": "diverged", "ahead_by": ahead, "behind_by": behind}
+    if behind:
+        return {"status": "behind", "behind_by": behind}
+    if ahead:
+        return {"status": "ahead", "ahead_by": ahead}
+    return {"status": "clean"}
+
+
+def has_local_commits(worktree_path: str) -> bool:
+    r = git_run(["rev-list", "--count", "@{u}..HEAD"], cwd=worktree_path, check=False)
+    return r.returncode == 0 and int(r.stdout.strip() or "0") > 0
+
+
+def git_fetch_bare(bare_path: str) -> bool:
+    """Fetch a bare repo; returns True if any branch/tag refs were updated.
+
+    FETCH_HEAD always appears in --porcelain output even when nothing changed,
+    so we filter it out and only count real ref updates.
+    """
+    r = git_run(["fetch", "--prune", "--porcelain", "origin"], cwd=bare_path, check=False)
+    if r.returncode != 0:
+        return False
+    ref_lines = [l for l in r.stdout.splitlines() if "FETCH_HEAD" not in l]
+    return bool(ref_lines)
+
+
+def git_current_hash(path: str) -> str:
+    return git_run(["rev-parse", "HEAD"], cwd=path).stdout.strip()
+
+
+def git_fast_forward(worktree_path: str) -> None:
+    git_run(["pull", "--ff-only"], cwd=worktree_path)
+
+
+def git_rebase(worktree_path: str) -> None:
+    git_run(["rebase", "@{u}"], cwd=worktree_path)
+
+
+def git_push(worktree_path: str) -> None:
+    git_run(["push", "origin", "HEAD"], cwd=worktree_path)
+
+
+def git_reset_hard(worktree_path: str) -> None:
+    git_run(["reset", "--hard", "@{u}"], cwd=worktree_path)
+    git_run(["clean", "-fd"], cwd=worktree_path)
 
 
 @dataclass
@@ -159,7 +232,8 @@ def reset_instance(
             if state.get("shared"):
                 result[name] = {"status": "skipped", "reason": "shared worktree — skip"}
             elif state.get("dirty") and not force:
-                raise OwmError(f"{name} has uncommitted changes; use --force", code=DIRTY_WORKTREE)
+                raise OwmError(f"{name} has uncommitted changes; use --force",
+                               code=DIRTY_WORKTREE, hint="use --force to discard uncommitted changes")
             else:
                 branch = name
                 result[name] = {
@@ -170,7 +244,8 @@ def reset_instance(
         return result
 
     if dirty and not force:
-        raise OwmError(f"{repo!r} has uncommitted changes; use --force to discard", code=DIRTY_WORKTREE)
+        raise OwmError(f"{repo!r} has uncommitted changes; use --force to discard",
+                       code=DIRTY_WORKTREE, hint="use --force to discard uncommitted changes")
 
     branch = repo or "HEAD"
     out = {"status": "reset", "to": f"origin/{branch}"}

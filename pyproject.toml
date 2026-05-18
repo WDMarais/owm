@@ -53,4 +53,5 @@ markers = [
     "worktrees",
     "permanently_green: tests that were green before any implementation and must stay green throughout; see TODO comment for intended rework direction",
     "integration: requires external infrastructure (postgres); skip with -m 'not integration' in CI without postgres",
+    "smoke: real subprocess/filesystem calls, no mocks; slow but high-confidence wiring tests",
 ]

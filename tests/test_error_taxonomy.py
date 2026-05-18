@@ -142,8 +142,11 @@ def test_dirty_worktree_on_create_branch_switch():
 
 
 @pytest.mark.error_taxonomy
-def test_dirty_worktree_on_reset_without_force():
-    result = owm_reset(instance="review-101", repo="product-core", simulate_dirty=True)  # TODO: wire up
+def test_dirty_worktree_on_reset_without_force(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}), \
+         patch("owm.mcp.has_local_commits", return_value=False):
+        result = owm_reset(instance="feat-789", repo="product_core",
+                           workspace_root=str(tmp_workspace))
     assert result["code"] == DIRTY_WORKTREE
 
 
@@ -158,29 +161,44 @@ def test_branch_not_found_on_create_with_exists_flag():
 
 
 @pytest.mark.error_taxonomy
-def test_not_owned_on_push_readonly():
-    result = owm_push(instance="review-101", repo="product-core")  # TODO: wire up
+def test_not_owned_on_push_readonly(tmp_workspace):
+    inst_dir = tmp_workspace / "instances" / "review-101"
+    inst_dir.mkdir(parents=True)
+    (inst_dir / "instance.toml").write_text(
+        '[repos]\nproduct_core = "feat-789-dev:main+readonly"\n\n'
+        '[database]\nname = "test"\npg_port = 5432\n\n'
+        '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
+    )
+    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+        result = owm_push(instance="review-101", repo="product_core",
+                          workspace_root=str(tmp_workspace))
     assert result["code"] == NOT_OWNED
 
 
 @pytest.mark.error_taxonomy
-def test_shared_repo_on_push_shared():
-    result = owm_push(instance="feat-789", repo="odoo")  # TODO: wire up
+def test_shared_repo_on_push_shared(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+        result = owm_push(instance="feat-789", repo="odoo_like",
+                          workspace_root=str(tmp_workspace))
     assert result["code"] == SHARED_REPO
 
 
 @pytest.mark.error_taxonomy
-def test_shared_repo_error_includes_hint():
+def test_shared_repo_error_includes_hint(standard_instance_toml, tmp_workspace):
     """SHARED_REPO errors must include a raw git command hint."""
-    result = owm_push(instance="feat-789", repo="odoo")  # TODO: wire up
+    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+        result = owm_push(instance="feat-789", repo="odoo_like",
+                          workspace_root=str(tmp_workspace))
     assert result["code"] == SHARED_REPO
     assert "hint" in result
     assert "git" in result["hint"]
 
 
 @pytest.mark.error_taxonomy
-def test_diverged_on_push_diverged_branch():
-    result = owm_push(instance="feat-789", repo="product-core", simulate_diverged=True)  # TODO: wire up
+def test_diverged_on_push_diverged_branch(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.read_repo_state", return_value={"status": "diverged"}):
+        result = owm_push(instance="feat-789", repo="product_core",
+                          workspace_root=str(tmp_workspace))
     assert result["code"] == DIVERGED
 
 

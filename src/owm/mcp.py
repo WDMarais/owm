@@ -4,14 +4,22 @@ Each owm_* function calls the appropriate underlying module, converts
 OwmError to ErrorResponse dicts, and returns JSON-serialisable results.
 No business logic lives here.
 """
+import os
+
 from owm.errors import OwmError, format_error, START_TIMEOUT, STOP_TIMEOUT
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
     kill_instance, restart_instance, health_check, list_running_instances,
 )
 from owm.archive import archive_instance
+from owm.config import parse_workspace_config, parse_instance_config
 from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
-from owm.sync import fetch_workspace, sync_instance, push_instance, reset_instance
+from owm.sync import (
+    fetch_workspace, sync_instance, push_instance, reset_instance,
+    read_repo_state, has_local_commits,
+    git_fetch_bare, git_fast_forward, git_rebase, git_push, git_reset_hard,
+)
+from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
 from owm.session_context import build_agent_context
 
@@ -172,56 +180,120 @@ def owm_rename(instance, new_name, running=False, **kwargs):
 # Sync tools
 # ---------------------------------------------------------------------------
 
-def owm_fetch(**kwargs):
-    return {"repos": {}, "shared_worktrees": {}, "events": ["fetch_completed"]}
+def owm_fetch(workspace_root=".", **kwargs):
+    toml_path = os.path.join(workspace_root, "workspace.toml")
+    with open(toml_path) as f:
+        ws = parse_workspace_config(f.read())
 
+    updated, unreachable = [], []
+    for name in ws.repos:
+        bare = os.path.join(workspace_root, "_repos", f"{name}.git")
+        try:
+            if git_fetch_bare(bare):
+                updated.append(name)
+        except Exception:
+            unreachable.append(name)
 
-def owm_sync(instance, repo=None, rebase=False, simulate_repo_states=None, **kwargs):
-    _state_map = {
-        "behind":  lambda r: {"status": "behind", "behind_by": 3},
-        "diverged": lambda r: {"status": "diverged"},
-        "shared":  lambda r: {"status": "behind", "shared": True},
-        "dirty":   lambda r: {"status": "dirty"},
+    result = fetch_workspace(
+        repos=list(ws.repos),
+        repos_with_updates=updated,
+        unreachable_repos=unreachable,
+    )
+    return {
+        "repos": {r: "updated" for r in result.fetched} | {r: "skipped" for r in result.skipped},
+        "shared_worktrees": {},
+        "events": result.events_emitted,
+        "warnings": result.warnings,
     }
-    repo_states = {
-        r: _state_map.get(s, lambda r: {"status": s})(r)
-        for r, s in (simulate_repo_states or {}).items()
-    }
-    result = sync_instance(instance=instance, repo_states=repo_states,
-                           rebase=rebase, repo=repo)
-    return {"repos": result}
 
 
-def owm_push(instance, repo, simulate_diverged=False, **kwargs):
-    # Derive context — in real impl these come from workspace/instance config.
-    shared = (repo == "odoo")
-    owned = not instance.startswith("review-")
-    branch = f"{instance}-dev"
+def owm_sync(instance, repo=None, rebase=False, workspace_root=".", **kwargs):
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+
+    repo_states = {}
+    for name, spec in conf.repos.items():
+        if repo and name != repo:
+            continue
+        wt = resolve_worktree_path(name, spec.branch, spec.shared, workspace_root, instance)
+        repo_states[name] = (
+            {"status": "clean", "shared": True} if spec.shared
+            else read_repo_state(wt.path)
+        )
+
+    decisions = sync_instance(instance=instance, repo_states=repo_states,
+                               rebase=rebase, repo=repo)
+
+    for name, decision in decisions.items():
+        spec = conf.repos.get(name)
+        if not spec or spec.shared:
+            continue
+        wt = resolve_worktree_path(name, spec.branch, spec.shared, workspace_root, instance)
+        if decision["status"] == "fast-forwarded":
+            git_fast_forward(wt.path)
+        elif decision["status"] == "rebased":
+            git_rebase(wt.path)
+
+    return {"repos": decisions}
+
+
+def owm_push(instance, repo, workspace_root=".", **kwargs):
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+
+    spec = conf.repos[repo]
+    wt = resolve_worktree_path(repo, spec.branch, spec.shared, workspace_root, instance)
+    state = read_repo_state(wt.path)
+    branch_status = state["status"] if state["status"] in ("diverged", "ahead") else None
+
     try:
         result = push_instance(
             instance,
             repo=repo,
-            shared=shared,
-            owned=owned,
-            branch_status="diverged" if simulate_diverged else None,
+            shared=spec.shared,
+            owned=not spec.readonly,
+            branch_status=branch_status,
         )
     except OwmError as e:
         err = _e(e)
         if e.code == "SHARED_REPO":
             err["hint"] = f"git -C _shared/{repo}/... push origin HEAD"
         return err
-    result["branch"] = branch
+
+    git_push(wt.path)
+    result["branch"] = spec.branch
     return result
 
 
-def owm_reset(instance, repo, force=False, simulate_dirty=False, **kwargs):
-    if simulate_dirty and not force:
-        return format_error("dirty worktree", "DIRTY_WORKTREE",
-                            hint="use --force to discard uncommitted changes")
-    result = reset_instance(instance=instance, repo=repo, dirty=simulate_dirty, force=force)
+def owm_reset(instance, repo, force=False, workspace_root=".", **kwargs):
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+
+    spec = conf.repos[repo]
+    wt = resolve_worktree_path(repo, spec.branch, spec.shared, workspace_root, instance)
+    state = read_repo_state(wt.path)
+
+    try:
+        result = reset_instance(
+            instance=instance, repo=repo,
+            dirty=(state["status"] == "dirty"),
+            force=force,
+            has_local_commits=has_local_commits(wt.path),
+        )
+    except OwmError as e:
+        return _e(e)
+
+    if result.get("status") == "reset":
+        git_reset_hard(wt.path)
+
     out = {"status": result["status"], "to": result["to"]}
     if result.get("discarded_changes"):
         out["discarded_changes"] = True
+    if result.get("warning"):
+        out["warning"] = result["warning"]
     return out
 
 
