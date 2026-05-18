@@ -36,6 +36,22 @@ INSTANCE_REPOS_SYNC: dict[str, dict] = {
     },
 }
 
+PROCESSES: dict = {
+    "managed": [
+        {"name": "dev",     "pid": 12345, "ports": [8100, 8101]},
+        {"name": "staging", "pid": 18833, "ports": [8106, 8107]},
+    ],
+    "orphaned": [
+        {"name": "feat-123", "pid": 9981, "ports": [8102, 8103]},
+    ],
+    "unregistered": [
+        {"pid": 7732, "ports": [8104, 8105], "cmd": "python odoo-bin --http-port 8104 -d feat_789"},
+    ],
+    "squatters": [
+        {"pid": 4421, "ports": [8108], "cmd": "python3 manage.py runserver 0.0.0.0:8108"},
+    ],
+}
+
 INSTANCE_SCRIPTS: dict[str, dict] = {
     "dev": {
         "setup":     {"status": "ok",   "last_run_at": "2026-05-18T10:21:00Z"},

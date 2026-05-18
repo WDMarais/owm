@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from dashboard.fixtures import REPO_FETCH_AGES, INSTANCE_REPOS_SYNC, INSTANCE_SCRIPTS
+from dashboard.fixtures import REPO_FETCH_AGES, INSTANCE_REPOS_SYNC, INSTANCE_SCRIPTS, PROCESSES
 
 WORKSPACE = Path(__file__).parent.parent / "test_fixtures" / "workspace"
 DASHBOARD = Path(__file__).parent
@@ -126,6 +126,30 @@ def api_instance(name: str):
         "repos":      repos,
         "scripts":    scripts,
         "commands":   commands,
+    }
+
+
+@app.get("/api/processes")
+def api_processes():
+    managed = []
+    for entry in PROCESSES["managed"]:
+        name = entry["name"]
+        instance_dir = WORKSPACE / "instances" / name
+        state = _read_state(instance_dir)
+        cfg   = _read_toml(instance_dir / "instance.toml") if instance_dir.exists() else {}
+        srv   = cfg.get("server", {})
+        managed.append({
+            "name":   name,
+            "pid":    entry["pid"],
+            "http":   srv.get("http_port"),
+            "gevent": srv.get("gevent_port"),
+            "status": state["status"],
+        })
+    return {
+        "managed":      managed,
+        "orphaned":     PROCESSES["orphaned"],
+        "unregistered": PROCESSES["unregistered"],
+        "squatters":    PROCESSES["squatters"],
     }
 
 

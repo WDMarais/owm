@@ -11,6 +11,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadStatus();
     document.getElementById("left-pane").querySelector(".collapse-btn")
         .addEventListener("click", toggleLeftPane);
+    document.querySelector(".nav-item[data-page='processes']")
+        .addEventListener("click", e => { e.preventDefault(); showProcessesPage(); });
 });
 
 // ── API helpers ────────────────────────────────────────────────────────────
@@ -66,10 +68,13 @@ function renderRepoList(repos) {
 async function selectInstance(name) {
     _selectedInstance = name;
 
-    // Update left nav active state
+    document.getElementById("centre-pane").classList.remove("hidden");
+    document.getElementById("processes-page").classList.add("hidden");
+
     document.querySelectorAll(".instance-item").forEach(el => {
         el.classList.toggle("active", el.dataset.instance === name);
     });
+    document.querySelector(".nav-item[data-page='processes']").classList.remove("active");
 
     const data = await api(`/api/instance/${name}`);
     renderCentre(data);
@@ -207,6 +212,92 @@ function toggleLeftPane() {
     const btn  = pane.querySelector(".collapse-btn");
     const collapsed = pane.classList.toggle("collapsed");
     btn.textContent = collapsed ? "›" : "‹";
+}
+
+// ── Processes page ─────────────────────────────────────────────────────────
+
+async function showProcessesPage() {
+    document.getElementById("centre-pane").classList.add("hidden");
+    document.getElementById("processes-page").classList.remove("hidden");
+
+    document.querySelectorAll(".instance-item").forEach(el => el.classList.remove("active"));
+    document.querySelector(".nav-item[data-page='processes']").classList.add("active");
+
+    // Right pane: just owm.log, no instance context
+    const strip = document.querySelector(".tab-strip");
+    strip.innerHTML = "";
+    strip.appendChild(_makeTab({ key: "owm", label: "owm.log", cls: "" }));
+    _activateTab("owm");
+
+    const data = await api("/api/processes");
+    renderProcesses(data);
+}
+
+function renderProcesses(data) {
+    const page = document.getElementById("processes-page");
+
+    page.innerHTML = '<div class="page-header"><h2>Processes</h2></div>';
+
+    _renderProcessSection(page, "Managed",                  data.managed,      _managedRow);
+    _renderProcessSection(page, "Orphaned owm processes",   data.orphaned,     _orphanedRow);
+    _renderProcessSection(page, "Unregistered (owm-shaped)",data.unregistered, _unregisteredRow);
+    _renderProcessSection(page, "Port squatters",           data.squatters,    _squatterRow);
+}
+
+function _renderProcessSection(page, label, rows, rowFn) {
+    if (!rows.length) return;
+    const sec = document.createElement("div");
+    sec.className = "process-section";
+    sec.innerHTML = `<div class="section-label">${label}</div>`;
+    for (const r of rows) sec.appendChild(rowFn(r));
+    page.appendChild(sec);
+}
+
+function _managedRow(p) {
+    const el = document.createElement("div");
+    el.className = "process-row";
+    const ports = [p.http && `:${p.http}`, p.gevent && `:${p.gevent}`].filter(Boolean).join(" ");
+    el.innerHTML = `<span class="dot dot-${p.status === "running" ? "running" : "stopped"}"></span>
+                    <span class="proc-name">${p.name}</span>
+                    <span class="proc-ports">${ports}</span>
+                    <span class="proc-pid">pid ${p.pid}</span>`;
+    return el;
+}
+
+function _orphanedRow(p) {
+    const el = document.createElement("div");
+    el.className = "process-row";
+    const ports = p.ports.map(n => `:${n}`).join(" ");
+    el.innerHTML = `<span class="dot dot-warn"></span>
+                    <span class="proc-name">${p.name}</span>
+                    <span class="proc-ports">${ports}</span>
+                    <span class="proc-pid">pid ${p.pid}</span>
+                    <button class="btn-readopt" data-pid="${p.pid}">Re-adopt</button>`;
+    return el;
+}
+
+function _unregisteredRow(p) {
+    const el = document.createElement("div");
+    el.className = "process-row";
+    const ports = p.ports.map(n => `:${n}`).join(" ");
+    el.innerHTML = `<span class="dot dot-warn"></span>
+                    <span class="proc-name">${p.cmd}</span>
+                    <span class="proc-ports">${ports}</span>
+                    <span class="proc-pid">pid ${p.pid}</span>
+                    <button class="btn-adopt-flow" data-pid="${p.pid}">Adopt…</button>`;
+    return el;
+}
+
+function _squatterRow(p) {
+    const el = document.createElement("div");
+    el.className = "process-row";
+    const ports = p.ports.map(n => `:${n}`).join(" ");
+    el.innerHTML = `<span class="dot dot-err"></span>
+                    <span class="proc-name">${p.cmd}</span>
+                    <span class="proc-ports">${ports}</span>
+                    <span class="proc-pid">pid ${p.pid}</span>
+                    <span class="proc-note">not owm-managed</span>`;
+    return el;
 }
 
 // ── Right pane: logs ───────────────────────────────────────────────────────
