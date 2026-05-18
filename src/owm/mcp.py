@@ -4,9 +4,10 @@ Each owm_* function calls the appropriate underlying module, converts
 OwmError to ErrorResponse dicts, and returns JSON-serialisable results.
 No business logic lives here.
 """
+import json
 import os
 
-from owm.errors import OwmError, format_error, START_TIMEOUT, STOP_TIMEOUT
+from owm.errors import OwmError, format_error, START_TIMEOUT, STOP_TIMEOUT, NO_COMPARE_TARGET
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
     kill_instance, restart_instance, health_check, list_running_instances,
@@ -21,6 +22,7 @@ from owm.sync import (
 )
 from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
+from owm.scripts import execute_script, run_script, compare_instances
 from owm.session_context import build_agent_context
 
 
@@ -301,43 +303,98 @@ def owm_reset(instance, repo, force=False, workspace_root=".", **kwargs):
 # Script tools
 # ---------------------------------------------------------------------------
 
-def owm_run_script(instance, script, *,
-                   simulate_summary=None, simulate_failures=None,
-                   simulate_abort=None, **kwargs):
-    ndjson_path = f"_dumps/{instance}/{script}-latest.ndjson"
-    if simulate_abort:
+def owm_run_script(instance, script, workspace_root=".", **kwargs):
+    ndjson_dir = os.path.join(workspace_root, "_dumps", instance)
+    ndjson_path = os.path.join(ndjson_dir, f"{script}-latest.ndjson")
+
+    stdout = execute_script(instance, script, workspace_root)
+    os.makedirs(ndjson_dir, exist_ok=True)
+    with open(ndjson_path, "w") as f:
+        f.write(stdout)
+
+    result = run_script(instance, script, ndjson_output=stdout)
+
+    if result.status == "abort":
         return {
             "status": "abort",
-            "reason": simulate_abort["reason"],
-            "rows_run": simulate_abort["rows_run"],
+            "reason": result.abort_reason,
+            "rows_run": result.rows_run,
             "ndjson_path": ndjson_path,
         }
-    summary = simulate_summary or {"ok": 0, "fail": 0, "warn": 0, "none": 0, "total": 0}
-    failures = simulate_failures or []
-    status = "fail" if failures or summary.get("fail", 0) > 0 else "ok"
+
+    failures = [r for r in result.rows if r.get("status") == "FAIL" and not r.get("_non_conforming")]
     return {
-        "status": status,
-        "summary": summary,
+        "status": result.status,
+        "summary": {
+            "ok": result.summary.ok,
+            "fail": result.summary.fail,
+            "warn": result.summary.warn,
+            "none": result.summary.none,
+            "total": result.summary.total,
+        },
         "failures": failures,
         "ndjson_path": ndjson_path,
     }
 
 
 def owm_get_script_failures(ndjson_path):
-    return []
+    if not os.path.exists(ndjson_path):
+        return []
+    with open(ndjson_path) as f:
+        rows = [json.loads(l) for l in f if l.strip()]
+    return [r for r in rows if r.get("status") == "FAIL"
+            and not r.get("abort") and not r.get("_non_conforming")]
 
 
-def owm_compare(instance, base=None, *,
-                simulate_result=None, simulate_summary=None,
-                simulate_unexpected=None, simulate_no_pair=False, **kwargs):
-    if simulate_no_pair:
-        return format_error("no compare target configured", "NO_COMPARE_TARGET",
+def owm_compare(instance, base=None, workspace_root=".", **kwargs):
+    with open(os.path.join(workspace_root, "workspace.toml")) as f:
+        ws = parse_workspace_config(f.read())
+
+    base_instance = base
+    if not base_instance:
+        for pair in ws.compare_pairs:
+            if instance in pair:
+                base_instance = next(p for p in pair if p != instance)
+                break
+
+    if not base_instance:
+        return format_error("no compare target configured", NO_COMPARE_TARGET,
                             hint="add compare_pairs to workspace.toml or pass --base")
-    if simulate_unexpected:
-        return {"status": "unexpected_changes", "unexpected": simulate_unexpected}
-    status = simulate_result or ("ok" if base else "ok")
-    return {"status": status, "unexpected": [],
-            "summary": simulate_summary or {}}
+
+    def _read_ndjson(inst):
+        path = os.path.join(workspace_root, "_dumps", inst, "latest.ndjson")
+        if not os.path.exists(path):
+            return None
+        with open(path) as fh:
+            return [json.loads(l) for l in fh if l.strip()]
+
+    result = compare_instances(
+        instance=instance,
+        base=base_instance,
+        workspace_root=workspace_root,
+        workspace_compare_pairs=ws.compare_pairs,
+        base_rows=_read_ndjson(base_instance),
+        feat_rows=_read_ndjson(instance),
+    )
+
+    if result.status == "error":
+        from owm.errors import NOT_FOUND
+        return format_error(result.error or "compare failed", NOT_FOUND,
+                            instance=result.missing_instance)
+
+    out = {
+        "status": result.status,
+        "base": result.base_instance,
+        "feat": result.feat_instance,
+        "unexpected": result.unexpected,
+        "summary": {},
+    }
+    if result.summary:
+        out["summary"] = {
+            "total": result.summary.total,
+            "unexpected_changes": result.summary.unexpected_changes,
+        }
+    return out
 
 
 def owm_upgrade(instance, modules, in_place=False, workers=2, simulate_failure=False, **kwargs):

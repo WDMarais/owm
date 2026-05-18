@@ -203,8 +203,11 @@ def test_diverged_on_push_diverged_branch(standard_instance_toml, tmp_workspace)
 
 
 @pytest.mark.error_taxonomy
-def test_no_compare_target_when_no_pair_and_no_base():
-    result = owm_compare(instance="feat-789", simulate_no_pair=True)  # TODO: wire up
+def test_no_compare_target_when_no_pair_and_no_base(tmp_workspace):
+    (tmp_workspace / "workspace.toml").write_text(
+        '[repos]\nproduct_core = "url"\n\n[clusters]\n"19" = {pg_version = "16", port = 5432}\n'
+    )
+    result = owm_compare(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["code"] == NO_COMPARE_TARGET
     assert "hint" in result
 

@@ -518,13 +518,19 @@ def test_owm_reset_force_discards(standard_instance_toml, tmp_workspace):
 # Script tools — owm_run_script
 # ---------------------------------------------------------------------------
 
+from owm.scripts import ScriptResult, ScriptSummary
+
+
 @pytest.mark.mcp_surface
-def test_owm_run_script_ok_result():
-    result = owm_run_script(
-        instance="feat-789",
-        script="run",
-        simulate_summary={"ok": 8, "fail": 0, "warn": 0, "none": 2, "total": 10},
-    )  # TODO: wire up
+def test_owm_run_script_ok_result(tmp_path):
+    with patch("owm.mcp.execute_script", return_value=""), \
+         patch("owm.mcp.run_script", return_value=ScriptResult(
+             status="ok",
+             summary=ScriptSummary(ok=8, fail=0, warn=0, none=2, total=10),
+             rows=[],
+         )):
+        result = owm_run_script(instance="feat-789", script="run",
+                                workspace_root=str(tmp_path))
     assert result["status"] == "ok"
     assert result["summary"] == {"ok": 8, "fail": 0, "warn": 0, "none": 2, "total": 10}
     assert result["failures"] == []
@@ -532,25 +538,33 @@ def test_owm_run_script_ok_result():
 
 
 @pytest.mark.mcp_surface
-def test_owm_run_script_fail_result_includes_failures():
-    result = owm_run_script(
-        instance="feat-789",
-        script="run",
-        simulate_summary={"ok": 7, "fail": 1, "warn": 0, "none": 2, "total": 10},
-        simulate_failures=[{"case": "test_x", "status": "FAIL", "result": "error", "expected": "ok"}],
-    )  # TODO: wire up
+def test_owm_run_script_fail_result_includes_failures(tmp_path):
+    failure_row = {"case": "test_x", "status": "FAIL", "result": "error", "expected": "ok"}
+    with patch("owm.mcp.execute_script", return_value=""), \
+         patch("owm.mcp.run_script", return_value=ScriptResult(
+             status="fail",
+             summary=ScriptSummary(ok=7, fail=1, warn=0, none=2, total=10),
+             rows=[failure_row],
+         )):
+        result = owm_run_script(instance="feat-789", script="run",
+                                workspace_root=str(tmp_path))
     assert result["status"] == "fail"
     assert len(result["failures"]) == 1
     assert result["failures"][0]["case"] == "test_x"
 
 
 @pytest.mark.mcp_surface
-def test_owm_run_script_abort_includes_rows_run_and_reason():
-    result = owm_run_script(
-        instance="feat-789",
-        script="run",
-        simulate_abort={"reason": "DB connection failed", "rows_run": 3},
-    )  # TODO: wire up
+def test_owm_run_script_abort_includes_rows_run_and_reason(tmp_path):
+    with patch("owm.mcp.execute_script", return_value=""), \
+         patch("owm.mcp.run_script", return_value=ScriptResult(
+             status="abort",
+             summary=ScriptSummary(ok=3, fail=0, warn=0, none=0, total=3),
+             rows=[],
+             rows_run=3,
+             abort_reason="DB connection failed",
+         )):
+        result = owm_run_script(instance="feat-789", script="run",
+                                workspace_root=str(tmp_path))
     assert result["status"] == "abort"
     assert result["reason"] == "DB connection failed"
     assert result["rows_run"] == 3
@@ -558,20 +572,23 @@ def test_owm_run_script_abort_includes_rows_run_and_reason():
 
 
 @pytest.mark.mcp_surface
-def test_owm_run_script_full_stdout_not_returned():
+def test_owm_run_script_full_stdout_not_returned(tmp_path):
     """Only failures surfaced; full stdout goes to ndjson file only."""
-    result = owm_run_script(
-        instance="feat-789",
-        script="run",
-        simulate_summary={"ok": 10, "fail": 0, "warn": 0, "none": 0, "total": 10},
-    )  # TODO: wire up
+    with patch("owm.mcp.execute_script", return_value=""), \
+         patch("owm.mcp.run_script", return_value=ScriptResult(
+             status="ok",
+             summary=ScriptSummary(ok=10, fail=0, warn=0, none=0, total=10),
+             rows=[],
+         )):
+        result = owm_run_script(instance="feat-789", script="run",
+                                workspace_root=str(tmp_path))
     assert "stdout" not in result
     assert "full_output" not in result
 
 
 @pytest.mark.mcp_surface
 def test_owm_get_script_failures():
-    result = owm_get_script_failures(ndjson_path="_dumps/feat-789/run-2026-05-16.ndjson")  # TODO: wire up
+    result = owm_get_script_failures(ndjson_path="/nonexistent/path.ndjson")
     assert isinstance(result, list)
     if result:
         assert "case" in result[0]
@@ -582,37 +599,65 @@ def test_owm_get_script_failures():
 # Script tools — owm_compare
 # ---------------------------------------------------------------------------
 
+from owm.scripts import CompareResult
+
+
+def _write_workspace_toml(ws_path, compare_pairs=None):
+    pairs_section = ""
+    if compare_pairs:
+        rendered = "[" + ", ".join(f'["{a}", "{b}"]' for a, b in compare_pairs) + "]"
+        pairs_section = f'\n[compare_pairs]\npairs = {rendered}\n'
+    (ws_path / "workspace.toml").write_text(
+        '[repos]\nproduct_core = "url"\n\n'
+        '[clusters]\n"19" = {pg_version = "16", port = 5432}\n'
+        + pairs_section
+    )
+
+
 @pytest.mark.mcp_surface
-def test_owm_compare_ok_result():
-    result = owm_compare(
-        instance="feat-789",
-        simulate_result="ok",
-        simulate_summary={"identical": 9, "expected_changes": 0, "unexpected_changes": 0, "total": 9},
-    )  # TODO: wire up
+def test_owm_compare_ok_result(tmp_workspace):
+    _write_workspace_toml(tmp_workspace, compare_pairs=[("feat-789", "main")])
+    with patch("owm.mcp.compare_instances", return_value=CompareResult(
+        status="ok", base_instance="main", feat_instance="feat-789",
+        summary=ScriptSummary(ok=9, fail=0, warn=0, none=0, total=9),
+        unexpected=[],
+    )):
+        result = owm_compare(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["status"] == "ok"
     assert result["unexpected"] == []
 
 
 @pytest.mark.mcp_surface
-def test_owm_compare_has_unexpected_changes():
-    result = owm_compare(
-        instance="feat-789",
-        simulate_unexpected=[{"case": "test_x", "base": "OK", "feat": "FAIL", "result_diff": "..."}],
-    )  # TODO: wire up
+def test_owm_compare_has_unexpected_changes(tmp_workspace):
+    _write_workspace_toml(tmp_workspace, compare_pairs=[("feat-789", "main")])
+    with patch("owm.mcp.compare_instances", return_value=CompareResult(
+        status="unexpected_changes", base_instance="main", feat_instance="feat-789",
+        summary=ScriptSummary(ok=0, fail=0, warn=0, none=0, total=9, unexpected_changes=1),
+        unexpected=[{"case": "test_x", "base": "OK", "feat": "FAIL", "result_diff": "..."}],
+    )):
+        result = owm_compare(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["status"] == "unexpected_changes"
     assert len(result["unexpected"]) == 1
 
 
 @pytest.mark.mcp_surface
-def test_owm_compare_no_compare_pair_configured():
-    result = owm_compare(instance="feat-789", simulate_no_pair=True)  # TODO: wire up
+def test_owm_compare_no_compare_pair_configured(tmp_workspace):
+    _write_workspace_toml(tmp_workspace)  # no compare_pairs
+    result = owm_compare(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["code"] == "NO_COMPARE_TARGET"
     assert "hint" in result
 
 
 @pytest.mark.mcp_surface
-def test_owm_compare_ad_hoc_base():
-    result = owm_compare(instance="feat-789", base="main")  # TODO: wire up
+def test_owm_compare_ad_hoc_base(tmp_workspace):
+    _write_workspace_toml(tmp_workspace)
+    with patch("owm.mcp.compare_instances", return_value=CompareResult(
+        status="ok", base_instance="main", feat_instance="feat-789",
+        summary=ScriptSummary(ok=0, fail=0, warn=0, none=0, total=0),
+        unexpected=[],
+    )):
+        result = owm_compare(instance="feat-789", base="main",
+                             workspace_root=str(tmp_workspace))
     assert result["status"] in ("ok", "has_changes", "unexpected_changes", "abort")
 
 

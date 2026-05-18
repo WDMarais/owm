@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -193,6 +194,14 @@ def compare_instances(
         summary=summary,
         unexpected=unexpected,
     )
+
+
+def execute_script(instance: str, script_name: str, workspace_root: str) -> str:
+    """Run the script subprocess with the instance venv; return raw stdout (NDJSON lines)."""
+    venv_python = os.path.join(workspace_root, "instances", instance, ".venv", "bin", "python")
+    script_path = os.path.join(workspace_root, "scripts", instance, f"{script_name}.py")
+    r = subprocess.run([venv_python, script_path], capture_output=True, text=True, check=False)
+    return r.stdout
 
 
 def scaffold_script(instance: str, script_name: str) -> ScaffoldResult:
