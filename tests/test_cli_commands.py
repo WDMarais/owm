@@ -4,6 +4,7 @@ Also covers: CWD inference, Log rotation sections.
 """
 import json
 import pytest
+from unittest.mock import patch
 
 from owm.operations import delete_instance, rename_instance, show_logs
 from owm.operations import db_dump, db_restore, validate_instance
@@ -158,43 +159,54 @@ def test_logs_level_filter_returns_only_matching_levels(tmp_path):
 
 @pytest.mark.cli_commands
 def test_db_dump_default_path():
-    result = db_dump(instance="feat-789", out=None, workspace_root="/ws")
+    with patch("owm.operations._pg_dump"), patch("owm.operations.os.makedirs"):
+        result = db_dump(instance="feat-789", out=None, workspace_root="/ws",
+                         db_name="odoo19_feat789", pg_port=5432)
     assert result.path.startswith("/ws/_dumps/feat-789/")
     assert result.path.endswith(".dump")
 
 
 @pytest.mark.cli_commands
 def test_db_dump_explicit_path():
-    result = db_dump(instance="feat-789", out="/tmp/snapshot.dump", workspace_root="/ws")
+    with patch("owm.operations._pg_dump"), patch("owm.operations.os.makedirs"):
+        result = db_dump(instance="feat-789", out="/tmp/snapshot.dump", workspace_root="/ws",
+                         db_name="odoo19_feat789", pg_port=5432)
     assert result.path == "/tmp/snapshot.dump"
 
 
 @pytest.mark.cli_commands
 def test_db_restore_relative_path_resolves_to_dumps_dir():
-    result = db_restore(
-        instance="feat-789",
-        path="2026-05-16T09:32.dump",
-        workspace_root="/ws",
-        running=False,
-    )
+    with patch("owm.operations._pg_restore"):
+        result = db_restore(
+            instance="feat-789",
+            path="2026-05-16T09:32.dump",
+            workspace_root="/ws",
+            db_name="odoo19_feat789",
+            pg_port=5432,
+            running=False,
+        )
     assert result.resolved_path == "/ws/_dumps/feat-789/2026-05-16T09:32.dump"
 
 
 @pytest.mark.cli_commands
 def test_db_restore_absolute_path_used_as_is():
-    result = db_restore(
-        instance="feat-789",
-        path="/explicit/path/snapshot.dump",
-        workspace_root="/ws",
-        running=False,
-    )
+    with patch("owm.operations._pg_restore"):
+        result = db_restore(
+            instance="feat-789",
+            path="/explicit/path/snapshot.dump",
+            workspace_root="/ws",
+            db_name="odoo19_feat789",
+            pg_port=5432,
+            running=False,
+        )
     assert result.resolved_path == "/explicit/path/snapshot.dump"
 
 
 @pytest.mark.cli_commands
 def test_db_restore_running_instance_hard_error():
     with pytest.raises(Exception) as exc_info:
-        db_restore(instance="feat-789", path="snap.dump", workspace_root="/ws", running=True)
+        db_restore(instance="feat-789", path="snap.dump", workspace_root="/ws",
+                   db_name="odoo19_feat789", pg_port=5432, running=True)
     assert "INSTANCE_RUNNING" in str(exc_info.value) or "stop" in str(exc_info.value).lower()
 
 

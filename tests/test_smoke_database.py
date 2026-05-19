@@ -1,6 +1,6 @@
 """
 Integration tests for database operations — real Postgres, no mocks.
-Covers: create_db, reset_db, check_pg_reachability.
+Covers: create_db, reset_db, check_pg_reachability, db_dump, db_restore.
 
 Skip entirely if Postgres is not reachable:
     uv run pytest -m 'not integration'
@@ -10,6 +10,7 @@ import subprocess
 import pytest
 
 from owm.database import create_db, reset_db, check_pg_reachability, _pg_isready
+from owm.operations import db_dump, db_restore
 from owm.errors import OwmError, DB_UNAVAILABLE
 
 _PG_HOST = "/var/run/postgresql"
@@ -120,3 +121,39 @@ def test_smoke_reset_db_drops_and_recreates(tmp_template_db):
         assert _db_exists(db)
     finally:
         _drop_if_exists(db)
+
+
+# ---------------------------------------------------------------------------
+# db_dump / db_restore
+# ---------------------------------------------------------------------------
+
+@pytest.mark.integration
+def test_smoke_db_dump_creates_file(tmp_db_name, tmp_path):
+    subprocess.run(["createdb", *_PG_ARGS, tmp_db_name], check=True, capture_output=True)
+    out = str(tmp_path / "snapshot.dump")
+    result = db_dump(
+        instance="smoke-test", out=out, workspace_root=str(tmp_path),
+        db_name=tmp_db_name, pg_port=_PG_PORT,
+    )
+    import os
+    assert result.path == out
+    assert os.path.isfile(out)
+    assert os.path.getsize(out) > 0
+
+
+@pytest.mark.integration
+def test_smoke_db_restore_into_blank_db(tmp_db_name, tmp_path):
+    subprocess.run(["createdb", *_PG_ARGS, tmp_db_name], check=True, capture_output=True)
+    dump_path = str(tmp_path / "snapshot.dump")
+    db_dump(
+        instance="smoke-test", out=dump_path, workspace_root=str(tmp_path),
+        db_name=tmp_db_name, pg_port=_PG_PORT,
+    )
+    # drop and recreate blank target
+    _drop_if_exists(tmp_db_name)
+    subprocess.run(["createdb", *_PG_ARGS, tmp_db_name], check=True, capture_output=True)
+    result = db_restore(
+        instance="smoke-test", path=dump_path, workspace_root=str(tmp_path),
+        db_name=tmp_db_name, pg_port=_PG_PORT,
+    )
+    assert result.resolved_path == dump_path

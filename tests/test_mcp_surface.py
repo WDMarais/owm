@@ -702,21 +702,26 @@ def test_owm_db_reset():
 
 
 @pytest.mark.mcp_surface
-def test_owm_db_dump_default_path():
-    result = owm_db_dump(instance="feat-789")
+def test_owm_db_dump_default_path(standard_instance_toml, tmp_workspace):
+    with patch("owm.operations._pg_dump"):
+        result = owm_db_dump(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["status"] == "ok"
     assert "_dumps/feat-789/" in result["path"]
 
 
 @pytest.mark.mcp_surface
-def test_owm_db_dump_explicit_path():
-    result = owm_db_dump(instance="feat-789", out="/explicit/path/snapshot.dump")
-    assert result["path"] == "/explicit/path/snapshot.dump"
+def test_owm_db_dump_explicit_path(standard_instance_toml, tmp_workspace):
+    out = str(tmp_workspace / "snapshot.dump")
+    with patch("owm.operations._pg_dump"), patch("owm.operations.os.makedirs"):
+        result = owm_db_dump(instance="feat-789", out=out, workspace_root=str(tmp_workspace))
+    assert result["path"] == out
 
 
 @pytest.mark.mcp_surface
-def test_owm_db_restore_relative_path():
-    result = owm_db_restore(instance="feat-789", path="2026-05-16T09:32.dump")
+def test_owm_db_restore_relative_path(standard_instance_toml, tmp_workspace):
+    with patch("owm.operations._pg_restore"):
+        result = owm_db_restore(instance="feat-789", path="2026-05-16T09:32.dump",
+                                workspace_root=str(tmp_workspace))
     assert result["status"] == "ok"
 
 

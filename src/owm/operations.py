@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -160,11 +161,26 @@ def show_logs(
     return LogsResult(lines=lines[-n:], log_path=log_path, warning=warning)
 
 
-def db_dump(instance: str, out: str | None, workspace_root: str) -> DumpResult:
-    if out:
-        return DumpResult(path=out)
+def _pg_dump(db_name: str, path: str, pg_port: int) -> None:
+    subprocess.run(
+        ["pg_dump", "-Fc", "-h", "/var/run/postgresql", "-p", str(pg_port), "-f", path, db_name],
+        check=True, capture_output=True,
+    )
+
+
+def _pg_restore(db_name: str, path: str, pg_port: int) -> None:
+    subprocess.run(
+        ["pg_restore", "-h", "/var/run/postgresql", "-p", str(pg_port), "-d", db_name, path],
+        check=True, capture_output=True,
+    )
+
+
+def db_dump(instance: str, out: str | None, workspace_root: str, *, db_name: str, pg_port: int) -> DumpResult:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M")
-    return DumpResult(path=f"{workspace_root}/_dumps/{instance}/{ts}.dump")
+    path = out or os.path.join(workspace_root, "_dumps", instance, f"{ts}.dump")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    _pg_dump(db_name=db_name, path=path, pg_port=pg_port)
+    return DumpResult(path=path)
 
 
 def db_restore(
@@ -172,6 +188,8 @@ def db_restore(
     path: str,
     workspace_root: str,
     *,
+    db_name: str,
+    pg_port: int,
     running: bool = False,
 ) -> RestoreResult:
     if running:
@@ -179,10 +197,8 @@ def db_restore(
             f"instance {instance!r} is running; stop it before restoring",
             code=INSTANCE_RUNNING,
         )
-    if path.startswith("/"):
-        resolved = path
-    else:
-        resolved = f"{workspace_root}/_dumps/{instance}/{path}"
+    resolved = path if path.startswith("/") else os.path.join(workspace_root, "_dumps", instance, path)
+    _pg_restore(db_name=db_name, path=resolved, pg_port=pg_port)
     return RestoreResult(resolved_path=resolved)
 
 

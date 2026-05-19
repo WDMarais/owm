@@ -437,14 +437,29 @@ def owm_db_reset(instance, **kwargs):
     return {"status": "ok", "restored_from": f"{instance}_base"}
 
 
-def owm_db_dump(instance, out=None, **kwargs):
-    result = db_dump(instance=instance, out=out, workspace_root=".")
+def owm_db_dump(instance, out=None, workspace_root=".", **kwargs):
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+    result = db_dump(
+        instance=instance, out=out, workspace_root=workspace_root,
+        db_name=conf.database.name, pg_port=conf.database.pg_port,
+    )
     return {"status": "ok", "path": result.path}
 
 
-def owm_db_restore(instance, path, running=False, **kwargs):
+def owm_db_restore(instance, path, running=False, workspace_root=".", **kwargs):
+    if running:
+        return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
     try:
-        db_restore(instance=instance, path=path, workspace_root=".", running=running)
+        db_restore(
+            instance=instance, path=path, workspace_root=workspace_root,
+            db_name=conf.database.name, pg_port=conf.database.pg_port,
+            running=running,
+        )
         return {"status": "ok"}
     except OwmError:
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
