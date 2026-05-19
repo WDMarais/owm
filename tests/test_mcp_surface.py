@@ -159,10 +159,11 @@ def test_owm_audit_log_since_timestamp():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.mcp_surface
-def test_owm_new_returns_toml_path_and_content():
+def test_owm_new_returns_toml_path_and_content(tmp_path):
     result = owm_new(
         instance="feat-789",
         repos={"odoo": "19.0:shared", "product-core": "feat-789-dev:dev"},
+        workspace_root=str(tmp_path),
     )
     assert result["path"].endswith("instance.toml")
     assert result["content"] is not None
