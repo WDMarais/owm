@@ -1,4 +1,7 @@
 import hashlib
+import os
+import shutil
+import subprocess
 from dataclasses import dataclass, field
 
 
@@ -30,6 +33,39 @@ class RebuildVenvResult:
     stamp_written: bool
 
 
+def _uv_venv(python_version: str, venv_dir: str) -> None:
+    subprocess.run(
+        ["uv", "venv", "--python", python_version, venv_dir],
+        check=True, capture_output=True,
+    )
+
+
+def _uv_pip_install(venv_dir: str, requirements_files: list[str]) -> None:
+    python = os.path.join(venv_dir, "bin", "python")
+    for req in requirements_files:
+        subprocess.run(
+            ["uv", "pip", "install", "--python", python, "-r", req],
+            check=True, capture_output=True,
+        )
+
+
+def _write_stamp(venv_dir: str, stamp: str) -> None:
+    with open(os.path.join(venv_dir, ".owm_stamp"), "w") as f:
+        f.write(stamp)
+
+
+def _read_stamp(venv_dir: str) -> str | None:
+    try:
+        with open(os.path.join(venv_dir, ".owm_stamp")) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return None
+
+
+def _delete_venv(venv_dir: str) -> None:
+    shutil.rmtree(venv_dir, ignore_errors=True)
+
+
 def compute_stamp(requirements_files: list[str], patches: list[str]) -> str:
     parts = sorted(requirements_files) + ["--patches--"] + sorted(patches)
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
@@ -50,7 +86,10 @@ def create_venv(
     patches: list[str],
     venv_dir: str,
 ) -> CreateVenvResult:
+    _uv_venv(python_version, venv_dir)
+    _uv_pip_install(venv_dir, requirements_files + patches)
     stamp = compute_stamp(requirements_files, patches)
+    _write_stamp(venv_dir, stamp)
     return CreateVenvResult(
         python_version=python_version,
         created=True,
@@ -70,6 +109,8 @@ def sync_venv_if_needed(
 ) -> SyncVenvResult:
     if current_stamp == recorded_stamp:
         return SyncVenvResult(synced=False, reason="stamp_unchanged")
+    _uv_pip_install(venv_dir, requirements_files + patches)
+    _write_stamp(venv_dir, current_stamp)
     return SyncVenvResult(synced=True, stamp_updated=True, patches_applied=patches)
 
 
@@ -80,7 +121,11 @@ def rebuild_venv(
     patches: list[str],
     venv_dir: str,
 ) -> RebuildVenvResult:
+    _delete_venv(venv_dir)
+    _uv_venv(python_version, venv_dir)
+    _uv_pip_install(venv_dir, requirements_files + patches)
     stamp = compute_stamp(requirements_files, patches)
+    _write_stamp(venv_dir, stamp)
     return RebuildVenvResult(
         deleted=True,
         created=True,

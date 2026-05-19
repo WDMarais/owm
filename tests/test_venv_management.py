@@ -3,6 +3,7 @@ Tests for venv creation, stamp-based sync, rebuild, and patch application.
 Covers: Venv management section.
 """
 import pytest
+from unittest.mock import patch
 
 from owm.venv import create_venv, sync_venv_if_needed, rebuild_venv
 from owm.venv import compute_stamp, stamp_changed
@@ -14,13 +15,14 @@ from owm.venv import compute_stamp, stamp_changed
 
 @pytest.mark.venv_management
 def test_create_venv_pins_python_version():
-    result = create_venv(
-        instance="feat-789",
-        python_version="3.12",
-        requirements_files=["odoo/requirements.txt"],
-        patches=[],
-        venv_dir="/ws/instances/feat-789/.venv",
-    )
+    with patch("owm.venv._uv_venv"), patch("owm.venv._uv_pip_install"), patch("owm.venv._write_stamp"):
+        result = create_venv(
+            instance="feat-789",
+            python_version="3.12",
+            requirements_files=["odoo/requirements.txt"],
+            patches=[],
+            venv_dir="/ws/instances/feat-789/.venv",
+        )
     assert result.python_version == "3.12"
     assert result.created is True
 
@@ -28,38 +30,41 @@ def test_create_venv_pins_python_version():
 @pytest.mark.venv_management
 def test_create_venv_uses_uv():
     """uv is required, not optional — no pip fallback."""
-    result = create_venv(
-        instance="feat-789",
-        python_version="3.12",
-        requirements_files=["odoo/requirements.txt"],
-        patches=[],
-        venv_dir="/ws/instances/feat-789/.venv",
-    )
+    with patch("owm.venv._uv_venv"), patch("owm.venv._uv_pip_install"), patch("owm.venv._write_stamp"):
+        result = create_venv(
+            instance="feat-789",
+            python_version="3.12",
+            requirements_files=["odoo/requirements.txt"],
+            patches=[],
+            venv_dir="/ws/instances/feat-789/.venv",
+        )
     assert result.tool == "uv"
 
 
 @pytest.mark.venv_management
 def test_create_venv_applies_workspace_patches():
-    result = create_venv(
-        instance="feat-789",
-        python_version="3.12",
-        requirements_files=["odoo/requirements.txt"],
-        patches=["requirements_patches/odoo19_fix.txt"],
-        venv_dir="/ws/instances/feat-789/.venv",
-    )
+    with patch("owm.venv._uv_venv"), patch("owm.venv._uv_pip_install"), patch("owm.venv._write_stamp"):
+        result = create_venv(
+            instance="feat-789",
+            python_version="3.12",
+            requirements_files=["odoo/requirements.txt"],
+            patches=["requirements_patches/odoo19_fix.txt"],
+            venv_dir="/ws/instances/feat-789/.venv",
+        )
     assert result.patches_applied == ["requirements_patches/odoo19_fix.txt"]
 
 
 @pytest.mark.venv_management
 def test_create_venv_writes_stamp():
     """Stamp = hash of requirements + patch files; written after successful install."""
-    result = create_venv(
-        instance="feat-789",
-        python_version="3.12",
-        requirements_files=["odoo/requirements.txt"],
-        patches=["requirements_patches/odoo19_fix.txt"],
-        venv_dir="/ws/instances/feat-789/.venv",
-    )
+    with patch("owm.venv._uv_venv"), patch("owm.venv._uv_pip_install"), patch("owm.venv._write_stamp"):
+        result = create_venv(
+            instance="feat-789",
+            python_version="3.12",
+            requirements_files=["odoo/requirements.txt"],
+            patches=["requirements_patches/odoo19_fix.txt"],
+            venv_dir="/ws/instances/feat-789/.venv",
+        )
     assert result.stamp is not None
     assert result.stamp_written is True
 
@@ -114,26 +119,28 @@ def test_start_skips_venv_sync_when_stamp_unchanged():
 
 @pytest.mark.venv_management
 def test_start_syncs_venv_when_stamp_changed():
-    result = sync_venv_if_needed(
-        venv_dir="/ws/instances/feat-789/.venv",
-        current_stamp="def456",
-        recorded_stamp="abc123",
-        requirements_files=["odoo/requirements.txt"],
-        patches=[],
-    )
+    with patch("owm.venv._uv_pip_install"), patch("owm.venv._write_stamp"):
+        result = sync_venv_if_needed(
+            venv_dir="/ws/instances/feat-789/.venv",
+            current_stamp="def456",
+            recorded_stamp="abc123",
+            requirements_files=["odoo/requirements.txt"],
+            patches=[],
+        )
     assert result.synced is True
     assert result.stamp_updated is True
 
 
 @pytest.mark.venv_management
 def test_start_reapplies_patches_on_sync():
-    result = sync_venv_if_needed(
-        venv_dir="/ws/instances/feat-789/.venv",
-        current_stamp="def456",
-        recorded_stamp="abc123",
-        requirements_files=["odoo/requirements.txt"],
-        patches=["requirements_patches/odoo19_fix.txt"],
-    )
+    with patch("owm.venv._uv_pip_install"), patch("owm.venv._write_stamp"):
+        result = sync_venv_if_needed(
+            venv_dir="/ws/instances/feat-789/.venv",
+            current_stamp="def456",
+            recorded_stamp="abc123",
+            requirements_files=["odoo/requirements.txt"],
+            patches=["requirements_patches/odoo19_fix.txt"],
+        )
     assert result.patches_applied == ["requirements_patches/odoo19_fix.txt"]
 
 
@@ -143,13 +150,15 @@ def test_start_reapplies_patches_on_sync():
 
 @pytest.mark.venv_management
 def test_rebuild_deletes_and_recreates_venv():
-    result = rebuild_venv(
-        instance="feat-789",
-        python_version="3.12",
-        requirements_files=["odoo/requirements.txt"],
-        patches=["requirements_patches/odoo19_fix.txt"],
-        venv_dir="/ws/instances/feat-789/.venv",
-    )
+    with patch("owm.venv._delete_venv"), patch("owm.venv._uv_venv"), \
+         patch("owm.venv._uv_pip_install"), patch("owm.venv._write_stamp"):
+        result = rebuild_venv(
+            instance="feat-789",
+            python_version="3.12",
+            requirements_files=["odoo/requirements.txt"],
+            patches=["requirements_patches/odoo19_fix.txt"],
+            venv_dir="/ws/instances/feat-789/.venv",
+        )
     assert result.deleted is True
     assert result.created is True
     assert result.patches_applied == ["requirements_patches/odoo19_fix.txt"]
@@ -158,13 +167,15 @@ def test_rebuild_deletes_and_recreates_venv():
 
 @pytest.mark.venv_management
 def test_rebuild_uses_uv():
-    result = rebuild_venv(
-        instance="feat-789",
-        python_version="3.12",
-        requirements_files=["odoo/requirements.txt"],
-        patches=[],
-        venv_dir="/ws/instances/feat-789/.venv",
-    )
+    with patch("owm.venv._delete_venv"), patch("owm.venv._uv_venv"), \
+         patch("owm.venv._uv_pip_install"), patch("owm.venv._write_stamp"):
+        result = rebuild_venv(
+            instance="feat-789",
+            python_version="3.12",
+            requirements_files=["odoo/requirements.txt"],
+            patches=[],
+            venv_dir="/ws/instances/feat-789/.venv",
+        )
     assert result.tool == "uv"
 
 
