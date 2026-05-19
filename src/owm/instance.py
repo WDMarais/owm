@@ -165,10 +165,9 @@ def _wait_for_http(port: int, timeout_seconds: int) -> None:
 
 
 def new_instance(name: str, repos: dict, workspace_root: str) -> NewResult:
-    toml_path_check = os.path.join(workspace_root, "instances", name, "instance.toml")
-    if os.path.exists(toml_path_check):
+    toml_path = os.path.join(workspace_root, "instances", name, "instance.toml")
+    if os.path.exists(toml_path):
         raise OwmError(f"instance {name!r} already exists", code=ALREADY_EXISTS)
-    toml_path = f"{workspace_root}/instances/{name}/instance.toml"
     repo_lines = "\n".join(f'{repo} = "{spec}"' for repo, spec in repos.items())
     toml_content = f"""[repos]
 {repo_lines}
@@ -182,6 +181,9 @@ http_port = 8100
 gevent_port = 8101
 workers = 2
 """
+    os.makedirs(os.path.dirname(toml_path), exist_ok=True)
+    with open(toml_path, "w") as f:
+        f.write(toml_content)
     return NewResult(toml_path=toml_path, toml_content=toml_content, materialised=False)
 
 
@@ -391,15 +393,20 @@ def generate_instance_conf(
     db_name: str | None = None,
     db_port: int | None = None,
     proxy_active: bool = True,
-) -> dict:
-    # TODO: real implementation must return ini-format string written to instance.conf
+) -> str:
     # dbfilter is only safe when subdomain routing is active (feat-789.localhost);
     # without it, all instances share localhost and dbfilter causes session cookie collisions.
-    conf = {
-        "http_port": http_port,
-        "longpolling_port": gevent_port,
-        "workers": workers,
-    }
+    lines = [
+        "[options]",
+        f"http_port = {http_port}",
+        f"longpolling_port = {gevent_port}",
+        f"workers = {workers}",
+        "db_host = /var/run/postgresql",
+    ]
+    if db_name:
+        lines.append(f"db_name = {db_name}")
+    if db_port:
+        lines.append(f"db_port = {db_port}")
     if proxy_active:
-        conf["dbfilter"] = f"^{instance_name}$"
-    return conf
+        lines.append(f"dbfilter = ^{instance_name}$")
+    return "\n".join(lines) + "\n"

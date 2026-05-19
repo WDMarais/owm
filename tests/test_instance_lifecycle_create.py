@@ -14,35 +14,36 @@ from owm.workspace import init_workspace
 # ---------------------------------------------------------------------------
 
 @pytest.mark.instance_lifecycle_create
-def test_new_instance_generates_toml_only():
+def test_new_instance_generates_toml_only(tmp_path):
     """owm new: writes instance.toml, no worktrees, no DB, no ports reserved."""
     result = new_instance(
         name="feat-789",
         repos={"odoo": "19.0:shared", "product-core": "feat-789-dev:dev", "customer-config": "feat-789-dev:dev"},
-        workspace_root="/ws",
+        workspace_root=str(tmp_path),
     )
-    assert result.toml_path == "/ws/instances/feat-789/instance.toml"
+    assert result.toml_path == str(tmp_path / "instances" / "feat-789" / "instance.toml")
     assert result.toml_content is not None
     assert result.materialised is False
+    assert (tmp_path / "instances" / "feat-789" / "instance.toml").exists()
 
 
 @pytest.mark.instance_lifecycle_create
-def test_new_instance_toml_contains_autofilled_port():
+def test_new_instance_toml_contains_autofilled_port(tmp_path):
     result = new_instance(
         name="feat-789",
         repos={"odoo": "19.0:shared", "product-core": "feat-789-dev:dev"},
-        workspace_root="/ws",
+        workspace_root=str(tmp_path),
     )
     assert "[server]" in result.toml_content
     assert "http_port" in result.toml_content
 
 
 @pytest.mark.instance_lifecycle_create
-def test_new_instance_toml_contains_autofilled_db_name():
+def test_new_instance_toml_contains_autofilled_db_name(tmp_path):
     result = new_instance(
         name="feat-789",
         repos={"odoo": "19.0:shared"},
-        workspace_root="/ws",
+        workspace_root=str(tmp_path),
     )
     assert "[database]" in result.toml_content
     assert "feat-789" in result.toml_content

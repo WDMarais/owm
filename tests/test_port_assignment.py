@@ -238,7 +238,7 @@ def test_odoo_conf_workers_default_two():
         gevent_port=8143,
         workers=2,
     )
-    assert conf.get("workers") == 2 or "workers = 2" in conf
+    assert "workers = 2" in conf
 
 
 
@@ -252,7 +252,7 @@ def test_odoo_conf_includes_dbfilter_for_subdomain():
         gevent_port=8143,
         workers=2,
     )
-    assert conf.get("dbfilter") == "^feat-789$" or "dbfilter = ^feat-789$" in conf
+    assert "dbfilter = ^feat-789$" in conf
 
 
 @pytest.mark.port_assignment
