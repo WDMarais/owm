@@ -19,12 +19,13 @@ from owm.workspace import init_workspace
 
 @pytest.mark.database_lifecycle
 def test_create_db_clones_from_template_when_available():
-    result = create_db(
-        name="odoo19_feat789",
-        odoo_version="19",
-        template="odoo19_base",
-        pg_port=5432,
-    )
+    with patch("owm.database._createdb"):
+        result = create_db(
+            name="odoo19_feat789",
+            odoo_version="19",
+            template="odoo19_base",
+            pg_port=5432,
+        )
     assert result.source == "template"
     assert result.template == "odoo19_base"
     assert result.full_install_required is False
@@ -33,12 +34,13 @@ def test_create_db_clones_from_template_when_available():
 @pytest.mark.database_lifecycle
 def test_create_db_blank_slate_when_no_template():
     """No base template for this Odoo version → blank slate + slow-install warning."""
-    result = create_db(
-        name="odoo19_feat789",
-        odoo_version="19",
-        template=None,
-        pg_port=5432,
-    )
+    with patch("owm.database._createdb"):
+        result = create_db(
+            name="odoo19_feat789",
+            odoo_version="19",
+            template=None,
+            pg_port=5432,
+        )
     assert result.source == "blank"
     assert result.full_install_required is True
     assert result.warning is not None
@@ -47,12 +49,13 @@ def test_create_db_blank_slate_when_no_template():
 
 @pytest.mark.database_lifecycle
 def test_create_db_uses_unix_socket_connection():
-    result = create_db(
-        name="odoo19_feat789",
-        odoo_version="19",
-        template=None,
-        pg_port=5432,
-    )
+    with patch("owm.database._createdb"):
+        result = create_db(
+            name="odoo19_feat789",
+            odoo_version="19",
+            template=None,
+            pg_port=5432,
+        )
     assert result.connection.host.startswith("/var/run/postgresql") or result.connection.host is None
     assert result.connection.password is None
 
@@ -60,12 +63,13 @@ def test_create_db_uses_unix_socket_connection():
 @pytest.mark.database_lifecycle
 def test_create_db_owned_by_operator_user():
     """No per-instance Postgres roles; DB owned by operator user directly."""
-    result = create_db(
-        name="odoo19_feat789",
-        odoo_version="19",
-        template=None,
-        pg_port=5432,
-    )
+    with patch("owm.database._createdb"):
+        result = create_db(
+            name="odoo19_feat789",
+            odoo_version="19",
+            template=None,
+            pg_port=5432,
+        )
     assert result.owner == result.operator_user
     assert result.per_instance_role is False
 
@@ -76,23 +80,25 @@ def test_create_db_owned_by_operator_user():
 
 @pytest.mark.database_lifecycle
 def test_db_reset_restores_from_base_template():
-    result = reset_db(
-        name="odoo19_feat789",
-        template="odoo19_base",
-        pg_port=5432,
-        seed_script=None,
-    )
+    with patch("owm.database._dropdb"), patch("owm.database._createdb"):
+        result = reset_db(
+            name="odoo19_feat789",
+            template="odoo19_base",
+            pg_port=5432,
+            seed_script=None,
+        )
     assert result.restored_from == "odoo19_base"
 
 
 @pytest.mark.database_lifecycle
 def test_db_reset_with_seed_script_reruns_it():
-    result = reset_db(
-        name="odoo19_feat789",
-        template="odoo19_base",
-        pg_port=5432,
-        seed_script="scripts/seed.py",
-    )
+    with patch("owm.database._dropdb"), patch("owm.database._createdb"):
+        result = reset_db(
+            name="odoo19_feat789",
+            template="odoo19_base",
+            pg_port=5432,
+            seed_script="scripts/seed.py",
+        )
     assert result.restored_from == "odoo19_base"
     assert result.seed_script_run is True
     assert result.seed_script == "scripts/seed.py"
@@ -100,12 +106,13 @@ def test_db_reset_with_seed_script_reruns_it():
 
 @pytest.mark.database_lifecycle
 def test_db_reset_no_seed_script_warns_instance_state_not_restored():
-    result = reset_db(
-        name="odoo19_feat789",
-        template="odoo19_base",
-        pg_port=5432,
-        seed_script=None,
-    )
+    with patch("owm.database._dropdb"), patch("owm.database._createdb"):
+        result = reset_db(
+            name="odoo19_feat789",
+            template="odoo19_base",
+            pg_port=5432,
+            seed_script=None,
+        )
     assert result.warning is not None
     assert "instance-specific state" in result.warning.lower() or "not restored" in result.warning.lower()
 

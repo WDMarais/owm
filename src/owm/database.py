@@ -2,6 +2,8 @@ import getpass
 import subprocess
 from dataclasses import dataclass, field
 
+from owm.errors import OwmError, DB_UNAVAILABLE
+
 
 @dataclass
 class ConnectionConfig:
@@ -68,9 +70,38 @@ class TemplateStatus:
     stale: bool
 
 
+def _createdb(name: str, pg_host: str, pg_port: int, template: str | None = None) -> None:
+    args = ["createdb", "-h", pg_host, "-p", str(pg_port)]
+    if template:
+        args.append(f"--template={template}")
+    args.append(name)
+    subprocess.run(args, check=True, capture_output=True)
+
+
+def _dropdb(name: str, pg_host: str, pg_port: int) -> None:
+    subprocess.run(
+        ["dropdb", "-h", pg_host, "-p", str(pg_port), name],
+        check=True, capture_output=True,
+    )
+
+
+def _pg_isready(pg_host: str, pg_port: int) -> None:
+    result = subprocess.run(
+        ["pg_isready", "-h", pg_host, "-p", str(pg_port)],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise OwmError(
+            f"Postgres not reachable at {pg_host}:{pg_port}",
+            code=DB_UNAVAILABLE,
+        )
+
+
 def create_db(name: str, odoo_version: str, template: str | None, pg_port: int) -> CreateDbResult:
     operator = getpass.getuser()
-    connection = ConnectionConfig(host="/var/run/postgresql", port=pg_port)
+    pg_host = "/var/run/postgresql"
+    connection = ConnectionConfig(host=pg_host, port=pg_port)
+    _createdb(name, pg_host, pg_port, template=template)
     if template:
         return CreateDbResult(
             source="template",
@@ -92,6 +123,9 @@ def create_db(name: str, odoo_version: str, template: str | None, pg_port: int) 
 
 
 def reset_db(name: str, template: str, pg_port: int, seed_script: str | None) -> ResetDbResult:
+    pg_host = "/var/run/postgresql"
+    _dropdb(name, pg_host, pg_port)
+    _createdb(name, pg_host, pg_port, template=template)
     warning = (
         None if seed_script
         else "instance-specific state not restored; re-run seed script manually"
