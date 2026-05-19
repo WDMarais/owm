@@ -3,6 +3,7 @@ Tests for worktree creation and branch ownership rules.
 Covers: Worktrees and branch ownership section.
 """
 import pytest
+from unittest.mock import patch
 
 from owm.worktrees import resolve_worktree_path, push_branch, check_shared_commit_warning
 from owm.worktrees import create_worktree, WorktreeConfig
@@ -41,28 +42,30 @@ def test_per_instance_repo_resolves_to_instance_directory():
 
 
 @pytest.mark.worktrees
-def test_create_instance_links_shared_worktree():
+def test_create_instance_links_shared_worktree(tmp_path):
     """Creating an instance with a shared repo uses the existing shared worktree."""
-    result = create_worktree(
-        repo="odoo",
-        branch="19.0",
-        shared=True,
-        workspace_root="/ws",
-        instance_name="feat-789",
-    )
+    with patch("owm.worktrees._git_worktree_add"):
+        result = create_worktree(
+            repo="odoo",
+            branch="19.0",
+            shared=True,
+            workspace_root=str(tmp_path),
+            instance_name="feat-789",
+        )
     assert result.action == "linked"
-    assert result.path == "/ws/_shared/odoo/19.0"
+    assert result.path == str(tmp_path / "_shared" / "odoo" / "19.0")
 
 
 @pytest.mark.worktrees
-def test_create_instance_creates_per_instance_worktree():
-    result = create_worktree(
-        repo="product-core",
-        branch="feat-789-dev",
-        shared=False,
-        workspace_root="/ws",
-        instance_name="feat-789",
-    )
+def test_create_instance_creates_per_instance_worktree(tmp_path):
+    with patch("owm.worktrees._git_worktree_add"):
+        result = create_worktree(
+            repo="product-core",
+            branch="feat-789-dev",
+            shared=False,
+            workspace_root=str(tmp_path),
+            instance_name="feat-789",
+        )
     assert result.action == "created"
     assert "feat-789" in result.path
 

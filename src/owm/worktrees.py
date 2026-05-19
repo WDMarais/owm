@@ -1,4 +1,5 @@
 import os
+import subprocess
 from dataclasses import dataclass
 
 from owm.errors import OwmError, NOT_OWNED, SHARED_REPO
@@ -47,6 +48,14 @@ def resolve_worktree_path(
     return WorktreeConfig(path=path, per_instance=True, shared=False)
 
 
+def _git_worktree_add(bare_repo: str, path: str, branch: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    subprocess.run(
+        ["git", "worktree", "add", path, branch],
+        cwd=bare_repo, check=True, capture_output=True,
+    )
+
+
 def create_worktree(
     repo: str,
     branch: str,
@@ -55,8 +64,13 @@ def create_worktree(
     instance_name: str,
 ) -> WorktreeResult:
     cfg = resolve_worktree_path(repo, branch, shared, workspace_root, instance_name)
-    action = "linked" if shared else "created"
-    return WorktreeResult(action=action, path=cfg.path)
+    bare_repo = os.path.join(workspace_root, "_repos", f"{repo}.git")
+
+    if shared and os.path.exists(cfg.path):
+        return WorktreeResult(action="linked", path=cfg.path)
+
+    _git_worktree_add(bare_repo, cfg.path, branch)
+    return WorktreeResult(action="linked" if shared else "created", path=cfg.path)
 
 
 def push_branch(
