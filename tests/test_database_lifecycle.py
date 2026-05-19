@@ -213,22 +213,29 @@ def test_odoo_conf_includes_dbfilter():
     assert dbfilter == "^feat-789$" or "dbfilter = ^feat-789$" in str(conf)
 
 
+_DB_WS_TOML = '[repos]\nodoo = "git@github.com:odoo/odoo.git"\n[clusters]\n"19" = {pg_version = "16", port = 5432}\n'
+
+
 @pytest.mark.database_lifecycle
 @pytest.mark.database_auth
-def test_init_creates_operator_superuser_role_if_absent():
+def test_init_creates_operator_superuser_role_if_absent(tmp_path):
     """owm init: createuser --superuser $(whoami) if role absent; idempotent."""
+    (tmp_path / "workspace.toml").write_text(_DB_WS_TOML)
     with patch("owm.workspace._superuser_exists", return_value=False), \
+         patch("owm.workspace._git_clone_bare"), \
          patch("owm.workspace.subprocess.run"):
-        result = init_workspace(pg_port=5432, operator_user="devuser")
+        result = init_workspace(str(tmp_path), operator_user="devuser")
     assert result.postgres.superuser_created is True
     assert result.postgres.superuser_role == "devuser"
 
 
 @pytest.mark.database_lifecycle
 @pytest.mark.database_auth
-def test_init_superuser_already_exists_is_idempotent():
-    with patch("owm.workspace._superuser_exists", return_value=True):
-        result = init_workspace(pg_port=5432, operator_user="devuser")
+def test_init_superuser_already_exists_is_idempotent(tmp_path):
+    (tmp_path / "workspace.toml").write_text(_DB_WS_TOML)
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._git_clone_bare"):
+        result = init_workspace(str(tmp_path), operator_user="devuser")
     assert result.postgres.superuser_created is False
     assert result.postgres.skipped is True
 

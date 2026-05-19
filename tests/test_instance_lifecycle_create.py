@@ -152,15 +152,22 @@ def test_create_instance_removed_repo_removes_worktree_keeps_branch():
 # Workspace init
 # ---------------------------------------------------------------------------
 
+_SIMPLE_WS_TOML = (
+    '[repos]\nodoo = "git@github.com:odoo/odoo.git"\n'
+    '[clusters]\n"19" = {pg_version = "16", port = 5432}\n'
+)
+_TWO_REPO_WS_TOML = (
+    '[repos]\nodoo = "git@github.com:odoo/odoo.git"\nproduct-core = "git@bitbucket.org:org/pc.git"\n'
+    '[clusters]\n"19" = {pg_version = "16", port = 5432}\n'
+)
+
+
 @pytest.mark.workspace_init
-def test_init_fresh_workspace_runs_all_steps():
-    with patch("owm.workspace._superuser_exists", return_value=True):
-        result = init_workspace(
-            workspace_root="/ws",
-            workspace_toml_content="[repos]\nodoo = 'git@github.com:odoo/odoo.git'\n[clusters]\n\"19\" = {pg_version = \"16\", port = 5432}\n",
-            docker_context=False,
-            existing_repos=[],
-        )
+def test_init_fresh_workspace_runs_all_steps(tmp_path):
+    (tmp_path / "workspace.toml").write_text(_SIMPLE_WS_TOML)
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._git_clone_bare"):
+        result = init_workspace(str(tmp_path), docker_context=False)
     assert result.bare_clones_created != []
     assert result.db_clusters_provisioned != []
     assert result.proxy_block_written is True
@@ -168,55 +175,45 @@ def test_init_fresh_workspace_runs_all_steps():
 
 
 @pytest.mark.workspace_init
-def test_init_skips_existing_repos():
+def test_init_skips_existing_repos(tmp_path):
     """init is idempotent: already-cloned repos skipped."""
-    with patch("owm.workspace._superuser_exists", return_value=True):
-        result = init_workspace(
-            workspace_root="/ws",
-            workspace_toml_content="[repos]\nodoo = 'git@github.com:odoo/odoo.git'\n[clusters]\n\"19\" = {pg_version = \"16\", port = 5432}\n",
-            docker_context=False,
-            existing_repos=["odoo"],
-        )
+    (tmp_path / "workspace.toml").write_text(_SIMPLE_WS_TOML)
+    (tmp_path / "_repos" / "odoo.git").mkdir(parents=True)
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._git_clone_bare"):
+        result = init_workspace(str(tmp_path))
     assert "odoo" in result.skipped
     assert "odoo" not in result.bare_clones_created
 
 
 @pytest.mark.workspace_init
-def test_init_new_repo_added_clones_only_new():
-    with patch("owm.workspace._superuser_exists", return_value=True):
-        result = init_workspace(
-            workspace_root="/ws",
-            workspace_toml_content="[repos]\nodoo = 'git@github.com:odoo/odoo.git'\nproduct-core = 'git@bitbucket.org:org/pc.git'\n[clusters]\n\"19\" = {pg_version = \"16\", port = 5432}\n",
-            docker_context=False,
-            existing_repos=["odoo"],
-        )
+def test_init_new_repo_added_clones_only_new(tmp_path):
+    (tmp_path / "workspace.toml").write_text(_TWO_REPO_WS_TOML)
+    (tmp_path / "_repos" / "odoo.git").mkdir(parents=True)
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._git_clone_bare"):
+        result = init_workspace(str(tmp_path))
     assert "product-core" in result.bare_clones_created
     assert "odoo" not in result.bare_clones_created
 
 
 @pytest.mark.workspace_init
-def test_init_docker_context_skips_system_level_steps():
+def test_init_docker_context_skips_system_level_steps(tmp_path):
     """In Docker: container owns system setup; owm skips CA cert, system proxy config."""
-    with patch("owm.workspace._superuser_exists", return_value=True):
-        result = init_workspace(
-            workspace_root="/ws",
-            workspace_toml_content="[repos]\nodoo = 'git@github.com:odoo/odoo.git'\n[clusters]\n\"19\" = {pg_version = \"16\", port = 5432}\n",
-            docker_context=True,
-            existing_repos=[],
-        )
+    (tmp_path / "workspace.toml").write_text(_SIMPLE_WS_TOML)
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._git_clone_bare"):
+        result = init_workspace(str(tmp_path), docker_context=True)
     assert result.local_ca_installed is False
     assert result.bare_clones_created != []
 
 
 @pytest.mark.workspace_init
-def test_init_writes_reverse_proxy_block_for_dashboard():
-    with patch("owm.workspace._superuser_exists", return_value=True):
-        result = init_workspace(
-            workspace_root="/ws",
-            workspace_toml_content="[repos]\nodoo = 'git@github.com:odoo/odoo.git'\n[clusters]\n\"19\" = {pg_version = \"16\", port = 5432}\n",
-            docker_context=False,
-            existing_repos=[],
-        )
+def test_init_writes_reverse_proxy_block_for_dashboard(tmp_path):
+    (tmp_path / "workspace.toml").write_text(_SIMPLE_WS_TOML)
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._git_clone_bare"):
+        result = init_workspace(str(tmp_path), docker_context=False)
     assert result.proxy_block_written is True
     assert result.proxy_block_target == "owm_dashboard"
 
