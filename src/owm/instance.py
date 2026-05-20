@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import signal
 import subprocess
 import time
@@ -11,8 +12,8 @@ import psutil
 
 from owm.config import parse_instance_config, InstanceConfig
 from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO
-from owm.ports import find_conflicting_process
-from owm.worktrees import resolve_worktree_path
+from owm.ports import assign_port, find_conflicting_process
+from owm.worktrees import create_worktree, resolve_worktree_path
 
 
 @dataclass
@@ -195,6 +196,75 @@ def _wait_for_http(port: int, timeout_seconds: int) -> None:
     )
 
 
+def _create_instance_db(db_name: str, pg_port: int) -> None:
+    subprocess.run(
+        ["createdb", "-h", "/var/run/postgresql", "-p", str(pg_port), db_name],
+        check=True, capture_output=True,
+    )
+
+
+def _write_proxy_block(
+    instance: str,
+    http_port: int,
+    gevent_port: int,
+    domain_suffix: str,
+    workspace_root: str,
+) -> None:
+    upstream = instance.replace("-", "_")
+    block = (
+        f"upstream {upstream} {{ server 127.0.0.1:{http_port}; }}\n"
+        f"upstream {upstream}_lp {{ server 127.0.0.1:{gevent_port}; }}\n"
+        f"server {{\n"
+        f"    listen 443 ssl;\n"
+        f"    server_name {instance}.{domain_suffix};\n"
+        f"\n"
+        f"    proxy_read_timeout 720s;\n"
+        f"    proxy_set_header X-Forwarded-Host $host;\n"
+        f"    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+        f"    proxy_set_header X-Forwarded-Proto $scheme;\n"
+        f"    proxy_set_header X-Real-IP $remote_addr;\n"
+        f"\n"
+        f"    location / {{ proxy_pass http://{upstream}; }}\n"
+        f"    location /longpolling {{ proxy_pass http://{upstream}_lp; }}\n"
+        f"}}\n"
+    )
+    proxy_dir = os.path.join(workspace_root, "_proxy")
+    os.makedirs(proxy_dir, exist_ok=True)
+    with open(os.path.join(proxy_dir, f"{instance}.conf"), "w") as f:
+        f.write(block)
+
+
+def _collect_occupied_ports(workspace_root: str, exclude_instance: str) -> set[int]:
+    occupied: set[int] = set()
+    instances_dir = os.path.join(workspace_root, "instances")
+    try:
+        for entry in os.scandir(instances_dir):
+            if not entry.is_dir() or entry.name == exclude_instance:
+                continue
+            toml_path = os.path.join(entry.path, "instance.toml")
+            if not os.path.exists(toml_path):
+                continue
+            try:
+                with open(toml_path) as f:
+                    c = parse_instance_config(f.read())
+                occupied.add(c.server.http_port)
+                occupied.add(c.server.gevent_port)
+            except Exception:
+                pass
+    except OSError:
+        pass
+    return occupied
+
+
+def _rewrite_ports_in_toml(toml_path: str, http_port: int, gevent_port: int) -> None:
+    with open(toml_path) as f:
+        content = f.read()
+    content = re.sub(r'(http_port\s*=\s*)\d+', rf'\g<1>{http_port}', content)
+    content = re.sub(r'(gevent_port\s*=\s*)\d+', rf'\g<1>{gevent_port}', content)
+    with open(toml_path, "w") as f:
+        f.write(content)
+
+
 def new_instance(name: str, repos: dict, workspace_root: str) -> NewResult:
     toml_path = os.path.join(workspace_root, "instances", name, "instance.toml")
     if os.path.exists(toml_path):
@@ -227,6 +297,7 @@ def create_instance(
     repo_changes: list | None = None,
     new_repos: list | None = None,
     removed_repos: list | None = None,
+    domain_suffix: str = "localhost",
 ) -> CreateResult:
     if instance_exists and not toml_changed and not repo_changes and not new_repos and not removed_repos:
         return CreateResult(status="up_to_date", created=[], skipped=["all"])
@@ -252,6 +323,44 @@ def create_instance(
             removed_worktrees=list(removed_repos),
             branches_deleted=[],
         )
+
+    # Fresh materialisation: read toml, create all resources
+    toml_path = os.path.join(workspace_root, "instances", name, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+
+    # Assign port: use pinned port if free, otherwise pick from the default range
+    occupied = _collect_occupied_ports(workspace_root, exclude_instance=name)
+    if conf.server.http_port in occupied:
+        pair = assign_port({"range": [8100, 8299], "occupied": occupied})
+        http_port, gevent_port = pair.http_port, pair.gevent_port
+        _rewrite_ports_in_toml(toml_path, http_port, gevent_port)
+    else:
+        http_port, gevent_port = conf.server.http_port, conf.server.gevent_port
+
+    # Worktrees (shared repos get a linked path; per-instance get their own)
+    for repo_name, spec in conf.repos.items():
+        create_worktree(repo_name, spec.branch, spec.shared, workspace_root, name)
+
+    # Database
+    _create_instance_db(conf.database.name, conf.database.pg_port)
+
+    # Reverse-proxy block
+    _write_proxy_block(name, http_port, gevent_port, domain_suffix, workspace_root)
+
+    # odoo.conf
+    conf_content = generate_instance_conf(
+        name,
+        http_port,
+        gevent_port,
+        conf.server.workers,
+        db_name=conf.database.name,
+        db_port=conf.database.pg_port,
+        proxy_active=True,
+    )
+    conf_path = os.path.join(workspace_root, "instances", name, "instance.conf")
+    with open(conf_path, "w") as f:
+        f.write(conf_content)
 
     return CreateResult(
         status="created",

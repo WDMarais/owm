@@ -3,7 +3,7 @@ Tests for instance creation and workspace initialisation.
 Covers: Instance lifecycle — create, Workspace init sections.
 """
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from owm.instance import new_instance, create_instance
 from owm.workspace import init_workspace
@@ -68,18 +68,64 @@ def test_new_instance_already_exists_returns_error(tmp_path):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.instance_lifecycle_create
-def test_create_instance_materialises_all_resources():
+def test_create_instance_materialises_all_resources(standard_instance_toml, tmp_workspace):
     """Fresh create: worktrees created, DB cloned, port reserved, nginx block written, odoo.conf generated."""
-    result = create_instance(
-        name="feat-789",
-        workspace_root="/ws",
-        instance_exists=False,
-    )
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance._create_instance_db"):
+        result = create_instance(
+            name="feat-789",
+            workspace_root=str(tmp_workspace),
+            instance_exists=False,
+        )
     assert result.worktrees_created is True
     assert result.db_created is True
     assert result.port_reserved is True
     assert result.nginx_block_written is True
     assert result.odoo_conf_generated is True
+
+
+@pytest.mark.instance_lifecycle_create
+def test_create_instance_writes_proxy_block_and_conf(standard_instance_toml, tmp_workspace):
+    """create_instance writes _proxy/{name}.conf and instance.conf to disk."""
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance._create_instance_db"):
+        create_instance(
+            name="feat-789",
+            workspace_root=str(tmp_workspace),
+            instance_exists=False,
+        )
+    assert (tmp_workspace / "_proxy" / "feat-789.conf").exists()
+    proxy_content = (tmp_workspace / "_proxy" / "feat-789.conf").read_text()
+    assert "feat_789" in proxy_content
+    assert "8142" in proxy_content
+    assert "feat-789.localhost" in proxy_content
+
+    assert (tmp_workspace / "instances" / "feat-789" / "instance.conf").exists()
+    conf_content = (tmp_workspace / "instances" / "feat-789" / "instance.conf").read_text()
+    assert "http_port = 8142" in conf_content
+    assert "db_name = owm_test_feat789" in conf_content
+
+
+@pytest.mark.instance_lifecycle_create
+def test_create_instance_port_conflict_reassigns(standard_instance_toml, tmp_workspace):
+    """If another instance holds port 8142, create_instance picks a fresh one."""
+    # Plant a second instance that already occupies port 8142
+    other_dir = tmp_workspace / "instances" / "other-999"
+    other_dir.mkdir()
+    (other_dir / "instance.toml").write_text(
+        "[repos]\n\n[database]\nname = \"owm_other\"\npg_port = 5432\n"
+        "[server]\nhttp_port = 8142\ngevent_port = 8143\nworkers = 2\n"
+    )
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance._create_instance_db"):
+        create_instance(
+            name="feat-789",
+            workspace_root=str(tmp_workspace),
+            instance_exists=False,
+        )
+    conf_content = (tmp_workspace / "instances" / "feat-789" / "instance.conf").read_text()
+    # port must not be 8142 since that's taken
+    assert "http_port = 8142" not in conf_content
 
 
 @pytest.mark.instance_lifecycle_create
