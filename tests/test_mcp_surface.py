@@ -855,3 +855,18 @@ def test_reset_operates_on_local_state_only(standard_instance_toml, tmp_workspac
 #   performance invariant; no way to assert timing in a unit test without mocking.
 # test_owm_compare_parallel_vs_sequential: owm_compare flags --parallel and --sequential
 #   are specced at CLI level; MCP equivalent not shown in spec.
+
+
+# ---------------------------------------------------------------------------
+# Known gap: OWM_WORKSPACE env var as MCP default workspace
+# ---------------------------------------------------------------------------
+
+@pytest.mark.mcp_surface
+@pytest.mark.xfail(strict=True, reason="not implemented: OWM_WORKSPACE env var for MCP workspace default")
+def test_owm_workspace_env_var_overrides_dot_default(monkeypatch, tmp_workspace, standard_instance_toml):
+    """When implemented: add _default_workspace() that reads OWM_WORKSPACE, use it as
+    the evaluated default for workspace_root in every MCP function."""
+    monkeypatch.setenv("OWM_WORKSPACE", str(tmp_workspace))
+    result = owm_env(instance="feat-789")
+    assert "error" not in result
+    assert str(tmp_workspace) in result["WORKSPACE_DIR"]
