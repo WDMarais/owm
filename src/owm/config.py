@@ -69,6 +69,7 @@ class ServerSection:
     http_port: int
     gevent_port: int
     workers: int = 2
+    odoo_repo: str | None = None  # explicit Odoo source repo; falls back to the shared repo
 
 
 @dataclass
@@ -251,6 +252,7 @@ def parse_instance_config(toml: str) -> InstanceConfig:
         http_port=http_port,
         gevent_port=gevent_port,
         workers=srv.get("workers", 2),
+        odoo_repo=srv.get("odoo_repo"),
     )
 
     install = None

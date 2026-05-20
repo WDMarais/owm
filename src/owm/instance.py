@@ -10,8 +10,9 @@ from dataclasses import dataclass, field
 import psutil
 
 from owm.config import parse_instance_config, InstanceConfig
-from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT
+from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO
 from owm.ports import find_conflicting_process
+from owm.worktrees import resolve_worktree_path
 
 
 @dataclass
@@ -135,10 +136,40 @@ def _probe_http(port: int, timeout: float = 2.0) -> bool:
         return False
 
 
+def _find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
+    """Return (repo_name, spec) for the repo that contains odoo-bin.
+
+    Resolution order:
+      1. server.odoo_repo — explicit; works for any topology including per-instance checkouts
+      2. the single shared repo — covers the common shared-Odoo setup with no extra config
+      3. error with a hint to set odoo_repo explicitly
+    """
+    if conf.server.odoo_repo:
+        name = conf.server.odoo_repo
+        if name not in conf.repos:
+            raise OwmError(
+                f"odoo_repo = {name!r} not found in [repos]; check instance.toml",
+                code=NO_ODOO_REPO,
+            )
+        return name, conf.repos[name]
+
+    shared = [(name, spec) for name, spec in conf.repos.items() if spec.shared]
+    if len(shared) == 1:
+        return shared[0]
+
+    raise OwmError(
+        "cannot locate odoo-bin: "
+        + ("multiple shared repos; " if len(shared) > 1 else "no shared repo; ")
+        + "set `odoo_repo = \"<name>\"` in [server] of instance.toml",
+        code=NO_ODOO_REPO,
+    )
+
+
 def _build_start_command(instance: str, workspace_root: str, conf: InstanceConfig) -> list[str]:
+    odoo_repo, odoo_spec = _find_odoo_repo(conf)
+    wt = resolve_worktree_path(odoo_repo, odoo_spec.branch, True, workspace_root, instance)
     python = os.path.join(workspace_root, "instances", instance, ".venv", "bin", "python")
-    # TODO: derive odoo-bin path from workspace config (which repo is the odoo source)
-    odoo_bin = os.path.join(workspace_root, "instances", instance, "odoo_like", "odoo-bin")
+    odoo_bin = os.path.join(wt.path, "odoo-bin")
     conf_file = os.path.join(workspace_root, "instances", instance, "instance.conf")
     return [python, odoo_bin, "--config", conf_file]
 
