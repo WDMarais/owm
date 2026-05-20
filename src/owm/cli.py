@@ -54,12 +54,7 @@ def cli(ctx, workspace):
     ctx.obj["workspace"] = workspace
 
 
-@cli.command("new")
-@click.argument("name")
-@click.argument("repos", nargs=-1, metavar="name=branch:base ...")
-@click.pass_context
-def cmd_new(ctx, name, repos):
-    """Write instance.toml without materialising worktrees, DB, or ports."""
+def _parse_repo_specs(repos: tuple) -> dict[str, str]:
     repo_dict: dict[str, str] = {}
     for r in repos:
         if "=" not in r:
@@ -68,23 +63,49 @@ def cmd_new(ctx, name, repos):
             )
         k, v = r.split("=", 1)
         repo_dict[k] = v
-
-    workspace_root = _resolve_workspace(ctx)
-    try:
-        result = new_instance(name=name, repos=repo_dict, workspace_root=workspace_root)
-        click.echo(result.toml_path)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    return repo_dict
 
 
 @cli.command("create")
 @click.argument("name", required=False)
+@click.argument("repos", nargs=-1, metavar="name=branch:base ...")
+@click.option("--force", "-f", is_flag=True, help="Overwrite existing instance.toml if REPOS given.")
+@click.option("--toml-only", is_flag=True, help="Write instance.toml and stop — do not materialise.")
 @click.pass_context
-def cmd_create(ctx, name):
-    """Materialise an instance from its instance.toml (creates worktrees, DB, proxy block)."""
+def cmd_create(ctx, name, repos, force, toml_only):
+    """Create and materialise an instance.
+
+    With REPOS: writes instance.toml then materialises (one-shot).
+    Without REPOS: materialises from an existing instance.toml.
+    With --toml-only: writes instance.toml and stops, so you can review
+    before running again to materialise.
+
+    Examples:
+
+      owm create feat-789 odoo=main:shared product-core=feat-789-dev:main
+
+      owm create feat-789 odoo=main:shared --toml-only   # review, then run again
+
+      owm create feat-789          # materialise from existing toml
+    """
+    if repos and not name:
+        raise click.UsageError("NAME is required when REPOS are specified.")
+    if toml_only and not repos:
+        raise click.UsageError("--toml-only requires REPOS to be specified.")
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
+
+    if repos:
+        repo_dict = _parse_repo_specs(repos)
+        try:
+            new_result = new_instance(name=instance, repos=repo_dict, workspace_root=workspace_root, force=force)
+        except OwmError as e:
+            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+            sys.exit(1)
+        if toml_only:
+            click.echo(new_result.toml_path)
+            return
+
     try:
         result = create_instance(instance, workspace_root)
     except OwmError as e:

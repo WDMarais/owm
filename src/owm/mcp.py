@@ -111,9 +111,9 @@ def owm_audit_log(n=50, level=None, since=None):
 # Lifecycle tools
 # ---------------------------------------------------------------------------
 
-def owm_new(instance, repos, workspace_root=".", **kwargs):
+def owm_new(instance, repos, workspace_root=".", force=False, **kwargs):
     try:
-        result = new_instance(name=instance, repos=repos, workspace_root=workspace_root)
+        result = new_instance(name=instance, repos=repos, workspace_root=workspace_root, force=force)
         return {"path": result.toml_path, "content": result.toml_content}
     except OwmError as e:
         return {"error": "instance already exists", "code": "ALREADY_EXISTS"}

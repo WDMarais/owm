@@ -16,47 +16,36 @@ def runner():
 
 
 # ---------------------------------------------------------------------------
-# owm new
+# owm create --toml-only
 # ---------------------------------------------------------------------------
 
 @pytest.mark.cli_integration
-def test_new_creates_instance_toml(runner, tmp_workspace):
+def test_create_toml_only_creates_instance_toml(runner, tmp_workspace):
     result = runner.invoke(cli, [
         "--workspace", str(tmp_workspace),
-        "new", "feat-789", "odoo=main:shared",
+        "create", "feat-789", "odoo=main:shared", "--toml-only",
     ])
     assert result.exit_code == 0
-    toml = tmp_workspace / "instances" / "feat-789" / "instance.toml"
-    assert toml.exists()
+    assert (tmp_workspace / "instances" / "feat-789" / "instance.toml").exists()
 
 
 @pytest.mark.cli_integration
-def test_new_prints_toml_path(runner, tmp_workspace):
+def test_create_toml_only_prints_toml_path(runner, tmp_workspace):
     result = runner.invoke(cli, [
         "--workspace", str(tmp_workspace),
-        "new", "feat-789", "odoo=main:shared",
+        "create", "feat-789", "odoo=main:shared", "--toml-only",
     ])
     assert result.exit_code == 0
     assert "instance.toml" in result.output
 
 
 @pytest.mark.cli_integration
-def test_new_toml_contains_instance_name(runner, tmp_workspace):
-    runner.invoke(cli, [
-        "--workspace", str(tmp_workspace),
-        "new", "feat-789", "odoo=main:shared",
-    ])
-    content = (tmp_workspace / "instances" / "feat-789" / "instance.toml").read_text()
-    assert "feat-789" in content
-
-
-@pytest.mark.cli_integration
-def test_new_multiple_repos_written(runner, tmp_workspace):
+def test_create_toml_only_multiple_repos_written(runner, tmp_workspace):
     result = runner.invoke(cli, [
         "--workspace", str(tmp_workspace),
-        "new", "feat-789",
-        "odoo=main:shared",
-        "product-core=feat-789-dev:main",
+        "create", "feat-789",
+        "odoo=main:shared", "product-core=feat-789-dev:main",
+        "--toml-only",
     ])
     assert result.exit_code == 0
     content = (tmp_workspace / "instances" / "feat-789" / "instance.toml").read_text()
@@ -65,56 +54,55 @@ def test_new_multiple_repos_written(runner, tmp_workspace):
 
 
 @pytest.mark.cli_integration
-def test_new_already_exists_exits_nonzero(runner, tmp_workspace):
-    runner.invoke(cli, ["--workspace", str(tmp_workspace), "new", "feat-789", "odoo=main:shared"])
-    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "new", "feat-789", "odoo=main:shared"])
+def test_create_toml_only_already_exists_exits_nonzero(runner, tmp_workspace):
+    runner.invoke(cli, ["--workspace", str(tmp_workspace),
+                        "create", "feat-789", "odoo=main:shared", "--toml-only"])
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace),
+                                 "create", "feat-789", "odoo=main:shared", "--toml-only"])
     assert result.exit_code != 0
-
-
-@pytest.mark.cli_integration
-def test_new_already_exists_mentions_error_code(runner, tmp_workspace):
-    runner.invoke(cli, ["--workspace", str(tmp_workspace), "new", "feat-789", "odoo=main:shared"])
-    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "new", "feat-789", "odoo=main:shared"])
     assert "ALREADY_EXISTS" in result.output
 
 
 @pytest.mark.cli_integration
-def test_new_invalid_repo_spec_exits_nonzero(runner, tmp_workspace):
+def test_create_toml_only_force_overwrites(runner, tmp_workspace):
+    runner.invoke(cli, ["--workspace", str(tmp_workspace),
+                        "create", "feat-789", "odoo=main:shared", "--toml-only"])
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace),
+                                 "create", "feat-789", "odoo=main:shared", "--toml-only", "--force"])
+    assert result.exit_code == 0
+
+
+@pytest.mark.cli_integration
+def test_create_toml_only_without_repos_exits_nonzero(runner, tmp_workspace):
     result = runner.invoke(cli, [
         "--workspace", str(tmp_workspace),
-        "new", "feat-789", "odoo",  # missing =
+        "create", "feat-789", "--toml-only",  # no repos
     ])
     assert result.exit_code != 0
 
 
-# ---------------------------------------------------------------------------
-# owm new — workspace root inference from CWD
-# ---------------------------------------------------------------------------
+@pytest.mark.cli_integration
+def test_create_toml_only_invalid_repo_spec_exits_nonzero(runner, tmp_workspace):
+    result = runner.invoke(cli, [
+        "--workspace", str(tmp_workspace),
+        "create", "feat-789", "odoo", "--toml-only",  # missing =
+    ])
+    assert result.exit_code != 0
+
 
 @pytest.mark.cli_integration
-def test_new_cwd_inference_finds_workspace_toml(runner, tmp_workspace, monkeypatch):
+def test_create_toml_only_workspace_root_inferred_from_cwd(runner, tmp_workspace, monkeypatch):
     (tmp_workspace / "workspace.toml").write_text("[repos]\n[clusters]\n")
     monkeypatch.chdir(tmp_workspace)
-    result = runner.invoke(cli, ["new", "feat-789", "odoo=main:shared"])
+    result = runner.invoke(cli, ["create", "feat-789", "odoo=main:shared", "--toml-only"])
     assert result.exit_code == 0
     assert (tmp_workspace / "instances" / "feat-789" / "instance.toml").exists()
 
 
 @pytest.mark.cli_integration
-def test_new_cwd_inference_walks_up_to_parent(runner, tmp_workspace, monkeypatch):
-    """workspace.toml in parent; CWD is a subdirectory."""
-    (tmp_workspace / "workspace.toml").write_text("[repos]\n[clusters]\n")
-    subdir = tmp_workspace / "some" / "subdir"
-    subdir.mkdir(parents=True)
-    monkeypatch.chdir(subdir)
-    result = runner.invoke(cli, ["new", "feat-789", "odoo=main:shared"])
-    assert result.exit_code == 0
-
-
-@pytest.mark.cli_integration
-def test_new_no_workspace_toml_exits_nonzero(runner, tmp_path, monkeypatch):
+def test_create_toml_only_no_workspace_toml_exits_nonzero(runner, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(cli, ["new", "feat-789", "odoo=main:shared"])
+    result = runner.invoke(cli, ["create", "feat-789", "odoo=main:shared", "--toml-only"])
     assert result.exit_code != 0
 
 

@@ -265,9 +265,9 @@ def _rewrite_ports_in_toml(toml_path: str, http_port: int, gevent_port: int) -> 
         f.write(content)
 
 
-def new_instance(name: str, repos: dict, workspace_root: str) -> NewResult:
+def new_instance(name: str, repos: dict, workspace_root: str, *, force: bool = False) -> NewResult:
     toml_path = os.path.join(workspace_root, "instances", name, "instance.toml")
-    if os.path.exists(toml_path):
+    if os.path.exists(toml_path) and not force:
         raise OwmError(f"instance {name!r} already exists", code=ALREADY_EXISTS)
     repo_lines = "\n".join(f'{repo} = "{spec}"' for repo, spec in repos.items())
     toml_content = f"""[repos]
