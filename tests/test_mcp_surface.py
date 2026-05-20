@@ -359,7 +359,14 @@ def test_owm_health_unmanaged():
 
 @pytest.mark.mcp_surface
 def test_owm_archive_stopped_instance():
-    result = owm_archive(instance="feat-789")
+    from owm.archive import ArchiveResult
+    fake = ArchiveResult(
+        preserved=["instance.toml", "db.dump"], archive_path="_archive/feat-789/",
+        db_dumped=True, db_dump_path="_archive/feat-789/db.dump",
+        worktrees_removed=True, live_db_dropped=True, port_freed=True,
+    )
+    with patch("owm.mcp.archive_instance", return_value=fake):
+        result = owm_archive(instance="feat-789")
     assert result == {"status": "archived", "path": "_archive/feat-789/"}
 
 
@@ -371,13 +378,26 @@ def test_owm_archive_running_instance_error():
 
 @pytest.mark.mcp_surface
 def test_owm_archive_discard_db():
-    result = owm_archive(instance="feat-789", discard_db=True)
+    from owm.archive import ArchiveResult
+    fake = ArchiveResult(
+        preserved=["instance.toml"], archive_path="_archive/feat-789/",
+        db_dumped=False, db_dump_path=None,
+        worktrees_removed=True, live_db_dropped=True, port_freed=True,
+    )
+    with patch("owm.mcp.archive_instance", return_value=fake):
+        result = owm_archive(instance="feat-789", discard_db=True)
     assert result["status"] == "archived"
 
 
 @pytest.mark.mcp_surface
 def test_owm_delete_force_required_for_agents():
-    result = owm_delete(instance="feat-789", force=True)
+    from owm.operations import DeleteResult
+    fake = DeleteResult(
+        status="deleted", worktrees_removed=True, db_dropped=True,
+        proxy_block_removed=True, instance_folder_removed=True,
+    )
+    with patch("owm.mcp.delete_instance", return_value=fake):
+        result = owm_delete(instance="feat-789", force=True)
     assert result == {"status": "deleted"}
 
 
@@ -825,7 +845,11 @@ def test_push_always_refuses_unowned_branch(tmp_workspace):
 @pytest.mark.safety_invariants
 def test_delete_operates_on_local_state_only():
     """delete removes local artefacts; no force-push or remote branch delete."""
-    result = owm_delete(instance="feat-789", force=True)
+    from owm.operations import DeleteResult
+    fake = DeleteResult(status="deleted", worktrees_removed=True, db_dropped=True,
+                        proxy_block_removed=True, instance_folder_removed=True)
+    with patch("owm.mcp.delete_instance", return_value=fake):
+        result = owm_delete(instance="feat-789", force=True)
     assert result.get("remote_branches_deleted", []) == []
     assert result.get("force_pushed", False) is False
 
@@ -833,7 +857,14 @@ def test_delete_operates_on_local_state_only():
 @pytest.mark.mcp_surface
 @pytest.mark.safety_invariants
 def test_archive_operates_on_local_state_only():
-    result = owm_archive(instance="feat-789")
+    from owm.archive import ArchiveResult
+    fake = ArchiveResult(
+        preserved=["instance.toml", "db.dump"], archive_path="_archive/feat-789/",
+        db_dumped=True, db_dump_path="_archive/feat-789/db.dump",
+        worktrees_removed=True, live_db_dropped=True, port_freed=True,
+    )
+    with patch("owm.mcp.archive_instance", return_value=fake):
+        result = owm_archive(instance="feat-789")
     assert result.get("remote_branches_deleted", []) == []
 
 

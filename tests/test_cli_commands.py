@@ -38,12 +38,17 @@ def test_delete_stopped_no_force_shows_checklist():
 
 
 @pytest.mark.cli_commands
-def test_delete_force_skips_checklist_and_removes_all():
-    result = delete_instance(
-        instance="feat-789",
-        running=False,
-        force=True,
-    )
+def test_delete_force_skips_checklist_and_removes_all(standard_instance_toml, tmp_workspace):
+    with patch("owm.operations._remove_worktrees"), \
+         patch("owm.operations._dropdb_archive"), \
+         patch("owm.operations._remove_proxy_block"), \
+         patch("owm.operations.shutil.rmtree"):
+        result = delete_instance(
+            instance="feat-789",
+            running=False,
+            force=True,
+            workspace_root=str(tmp_workspace),
+        )
     assert result.status == "deleted"
     assert result.worktrees_removed is True
     assert result.db_dropped is True
@@ -52,14 +57,19 @@ def test_delete_force_skips_checklist_and_removes_all():
 
 
 @pytest.mark.cli_commands
-def test_delete_force_cleans_workspace_toml_references():
+def test_delete_force_cleans_workspace_toml_references(standard_instance_toml, tmp_workspace):
     """delete --force removes compare_pairs and any other workspace.toml refs to instance."""
-    result = delete_instance(
-        instance="feat-789",
-        running=False,
-        force=True,
-        workspace_compare_pairs=[["feat-789", "main"]],
-    )
+    with patch("owm.operations._remove_worktrees"), \
+         patch("owm.operations._dropdb_archive"), \
+         patch("owm.operations._remove_proxy_block"), \
+         patch("owm.operations.shutil.rmtree"):
+        result = delete_instance(
+            instance="feat-789",
+            running=False,
+            force=True,
+            workspace_root=str(tmp_workspace),
+            workspace_compare_pairs=[["feat-789", "main"]],
+        )
     assert result.workspace_toml_updated is True
     assert ["feat-789", "main"] not in result.remaining_compare_pairs
 

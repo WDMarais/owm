@@ -73,6 +73,15 @@ def create_worktree(
     return WorktreeResult(action="linked" if shared else "created", path=cfg.path)
 
 
+def remove_worktree(bare_repo: str, worktree_path: str) -> None:
+    """Deregister and delete a worktree. Silently skips if path doesn't exist."""
+    if os.path.exists(worktree_path):
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", worktree_path],
+            cwd=bare_repo, check=True, capture_output=True,
+        )
+
+
 def push_branch(
     instance: str,
     repo: str,

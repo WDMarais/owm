@@ -1,10 +1,13 @@
 import json
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from owm.config import parse_instance_config
 from owm.errors import OwmError, INSTANCE_RUNNING, NOT_FOUND
+from owm.archive import _remove_proxy_block, _remove_worktrees, _dropdb_archive
 
 
 @dataclass
@@ -85,6 +88,16 @@ def delete_instance(
         if not checklist:
             checklist.append("all instance data will be permanently deleted")
         return DeleteResult(status="pending_confirmation", checklist=checklist)
+
+    instance_dir = os.path.join(workspace_root, "instances", instance)
+    toml_path = os.path.join(instance_dir, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+
+    _remove_worktrees(conf, instance, workspace_root)
+    _dropdb_archive(conf.database.name, conf.database.pg_port)
+    _remove_proxy_block(instance, workspace_root)
+    shutil.rmtree(instance_dir)
 
     remaining = [
         pair for pair in (workspace_compare_pairs or [])
