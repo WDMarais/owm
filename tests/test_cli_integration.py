@@ -4,6 +4,7 @@ Exercises the full command → library → disk path with no mocks.
 All tests use tmp_workspace for isolation; no Postgres or git required.
 """
 import pytest
+from unittest.mock import patch
 from click.testing import CliRunner
 
 from owm.cli import cli
@@ -115,6 +116,50 @@ def test_new_no_workspace_toml_exits_nonzero(runner, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(cli, ["new", "feat-789", "odoo=main:shared"])
     assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# owm create
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_create_exits_zero_on_success(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.instance.create_worktree"), patch("owm.instance._create_instance_db"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "create", "feat-789",
+        ])
+    assert result.exit_code == 0
+
+
+@pytest.mark.cli_integration
+def test_create_output_mentions_instance_url(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.instance.create_worktree"), patch("owm.instance._create_instance_db"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "create", "feat-789",
+        ])
+    assert "feat-789.localhost" in result.output
+
+
+@pytest.mark.cli_integration
+def test_create_writes_proxy_block_to_disk(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.instance.create_worktree"), patch("owm.instance._create_instance_db"):
+        runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "create", "feat-789",
+        ])
+    assert (tmp_workspace / "_proxy" / "feat-789.conf").exists()
+
+
+@pytest.mark.cli_integration
+def test_create_writes_instance_conf_to_disk(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.instance.create_worktree"), patch("owm.instance._create_instance_db"):
+        runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "create", "feat-789",
+        ])
+    assert (tmp_workspace / "instances" / "feat-789" / "instance.conf").exists()
 
 
 # ---------------------------------------------------------------------------

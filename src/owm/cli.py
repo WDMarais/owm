@@ -4,7 +4,7 @@ from pathlib import Path
 import click
 
 from owm.errors import OwmError
-from owm.instance import new_instance, list_running_instances, start_instance, stop_instance, health_check
+from owm.instance import new_instance, create_instance, list_running_instances, start_instance, stop_instance, health_check
 from owm.operations import infer_instance_from_cwd
 
 
@@ -76,6 +76,26 @@ def cmd_new(ctx, name, repos):
     except OwmError as e:
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
+
+
+@cli.command("create")
+@click.argument("name", required=False)
+@click.pass_context
+def cmd_create(ctx, name):
+    """Materialise an instance from its instance.toml (creates worktrees, DB, proxy block)."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    try:
+        result = create_instance(instance, workspace_root)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    if result.status == "up_to_date":
+        click.echo(f"{instance}  up to date")
+    elif result.status == "created":
+        click.echo(f"{instance}  created  https://{instance}.localhost")
+    else:
+        click.echo(f"{instance}  {result.status}")
 
 
 @cli.command("list")

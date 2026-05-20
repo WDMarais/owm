@@ -143,7 +143,12 @@ def owm_create(instance, toml=None, repos=None, workspace_root=".", **kwargs):
         if read_repo_state(wt.path)["status"] == "dirty":
             return format_error("dirty worktree", DIRTY_WORKTREE, repo=name)
 
-    return {"status": "ok", "created": [], "updated": [], "skipped": []}
+    # Inline toml/repos: validation only — caller is checking feasibility, not materialising
+    if toml or repos:
+        return {"status": "ok", "created": [], "updated": [], "skipped": []}
+
+    result = create_instance(name=instance, workspace_root=workspace_root)
+    return {"status": "ok", "created": result.created, "updated": result.updated, "skipped": result.skipped}
 
 
 def owm_start(instance, workspace_root=".", wait=False, **kwargs):
