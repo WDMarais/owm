@@ -118,8 +118,8 @@ def test_owm_validate_live_richer_errors():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.mcp_surface
-def test_owm_env_returns_all_required_keys():
-    result = owm_env(instance="feat-789")
+def test_owm_env_returns_all_required_keys(standard_instance_toml, tmp_workspace):
+    result = owm_env(instance="feat-789", workspace_root=str(tmp_workspace))
     expected_keys = {
         "ODOO_BIN", "VENV_PYTHON", "PSQL", "DB_NAME", "DB_PORT",
         "INSTANCE_DIR", "LOG_FILE", "HTTP_PORT", "GEVENT_PORT",

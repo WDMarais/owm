@@ -136,7 +136,7 @@ def _probe_http(port: int, timeout: float = 2.0) -> bool:
         return False
 
 
-def _find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
+def find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
     """Return (repo_name, spec) for the repo that contains odoo-bin.
 
     Resolution order:
@@ -166,7 +166,7 @@ def _find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
 
 
 def _build_start_command(instance: str, workspace_root: str, conf: InstanceConfig) -> list[str]:
-    odoo_repo, odoo_spec = _find_odoo_repo(conf)
+    odoo_repo, odoo_spec = find_odoo_repo(conf)
     wt = resolve_worktree_path(odoo_repo, odoo_spec.branch, True, workspace_root, instance)
     python = os.path.join(workspace_root, "instances", instance, ".venv", "bin", "python")
     odoo_bin = os.path.join(wt.path, "odoo-bin")

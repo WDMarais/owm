@@ -66,6 +66,7 @@ def delete_instance(
     *,
     running: bool,
     force: bool,
+    workspace_root: str = ".",
     has_session_notes: bool = False,
     open_compare_pairs: list | None = None,
     workspace_compare_pairs: list | None = None,

@@ -14,6 +14,7 @@ from owm.errors import (
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
     kill_instance, restart_instance, health_check, list_running_instances,
+    find_odoo_repo,
 )
 from owm.archive import archive_instance
 from owm.config import parse_workspace_config, parse_instance_config, parse_repo_spec
@@ -64,21 +65,36 @@ def owm_validate(instance, live=False, **kwargs):
     return {"valid": True, "errors": [], "warnings": [], "live_checks_run": live}
 
 
-def owm_env(instance):
+def owm_env(instance, workspace_root=".", **kwargs):
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    try:
+        with open(toml_path) as f:
+            conf = parse_instance_config(f.read())
+    except (OSError, ValueError) as e:
+        return format_error(str(e), "NOT_FOUND")
+
+    try:
+        odoo_repo, odoo_spec = find_odoo_repo(conf)
+    except OwmError as e:
+        return _e(e)
+
+    wt = resolve_worktree_path(odoo_repo, odoo_spec.branch, odoo_spec.shared, workspace_root, instance)
+    inst_dir = os.path.join(workspace_root, "instances", instance)
+
     return {
-        "ODOO_BIN":            f"instances/{instance}/odoo/odoo-bin",
-        "VENV_PYTHON":         f"instances/{instance}/.venv/bin/python",
-        "PSQL":                "psql",
-        "DB_NAME":             instance.replace("-", "_"),
-        "DB_PORT":             "5432",
-        "INSTANCE_DIR":        f"instances/{instance}",
-        "LOG_FILE":            f"instances/{instance}/instance.log",
-        "HTTP_PORT":           "8100",
-        "GEVENT_PORT":         "8101",
-        "ODOO_CONF":           f"instances/{instance}/instance.conf",
-        "WORKSPACE_DIR":       ".",
-        "SCRIPTS_DIR":         f"instances/{instance}/scripts",
-        "WORKSPACE_SCRIPTS_DIR": "scripts/workspace",
+        "ODOO_BIN":              os.path.join(wt.path, "odoo-bin"),
+        "VENV_PYTHON":           os.path.join(inst_dir, ".venv", "bin", "python"),
+        "PSQL":                  "psql",
+        "DB_NAME":               conf.database.name,
+        "DB_PORT":               str(conf.database.pg_port),
+        "INSTANCE_DIR":          inst_dir,
+        "LOG_FILE":              os.path.join(inst_dir, "instance.log"),
+        "HTTP_PORT":             str(conf.server.http_port),
+        "GEVENT_PORT":           str(conf.server.gevent_port),
+        "ODOO_CONF":             os.path.join(inst_dir, "instance.conf"),
+        "WORKSPACE_DIR":         workspace_root,
+        "SCRIPTS_DIR":           os.path.join(inst_dir, "scripts"),
+        "WORKSPACE_SCRIPTS_DIR": os.path.join(workspace_root, "scripts", "workspace"),
     }
 
 
@@ -173,18 +189,19 @@ def owm_health(instance, workspace_root=".", **kwargs):
     return health_check(instance, workspace_root, **kwargs)
 
 
-def owm_archive(instance, running=False, discard_db=False, **kwargs):
+def owm_archive(instance, running=False, discard_db=False, workspace_root=".", **kwargs):
     try:
-        archive_instance(instance=instance, workspace_root=".", running=running,
+        archive_instance(instance=instance, workspace_root=workspace_root, running=running,
                          discard_db=discard_db)
         return {"status": "archived", "path": f"_archive/{instance}/"}
     except OwmError:
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
 
 
-def owm_delete(instance, force=True, running=False, **kwargs):
+def owm_delete(instance, force=True, running=False, workspace_root=".", **kwargs):
     try:
-        result = delete_instance(instance=instance, running=running, force=force)
+        result = delete_instance(instance=instance, running=running, force=force,
+                                 workspace_root=workspace_root)
         return {"status": "deleted"}
     except OwmError:
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
