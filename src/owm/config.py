@@ -9,6 +9,7 @@ class RepoSpec:
     shared: bool
     readonly: bool
     exists: bool
+    create: bool = False
 
 
 @dataclass
@@ -130,6 +131,7 @@ def parse_repo_spec(spec: str | dict) -> RepoSpec:
             shared=spec.get("shared", False),
             readonly=spec.get("readonly", False),
             exists=spec.get("exists", False),
+            create=spec.get("create", False),
         )
     colon = spec.index(":")
     branch = spec[:colon]
@@ -148,6 +150,7 @@ def parse_repo_spec(spec: str | dict) -> RepoSpec:
         shared=shared,
         readonly="readonly" in flags,
         exists="exists" in flags,
+        create="create" in flags,
     )
 
 

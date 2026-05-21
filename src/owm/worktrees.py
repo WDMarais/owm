@@ -2,7 +2,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 
-from owm.errors import OwmError, NOT_OWNED, SHARED_REPO
+from owm.errors import OwmError, NOT_OWNED, SHARED_REPO, BRANCH_NOT_FOUND
 
 
 @dataclass
@@ -48,10 +48,26 @@ def resolve_worktree_path(
     return WorktreeConfig(path=path, per_instance=True, shared=False)
 
 
+def _branch_exists(bare_repo: str, branch: str) -> bool:
+    r = subprocess.run(
+        ["git", "rev-parse", "--verify", f"refs/heads/{branch}"],
+        cwd=bare_repo, capture_output=True,
+    )
+    return r.returncode == 0
+
+
 def _git_worktree_add(bare_repo: str, path: str, branch: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     subprocess.run(
         ["git", "worktree", "add", path, branch],
+        cwd=bare_repo, check=True, capture_output=True,
+    )
+
+
+def _git_worktree_add_new(bare_repo: str, path: str, branch: str, base: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", branch, path, base],
         cwd=bare_repo, check=True, capture_output=True,
     )
 
@@ -62,15 +78,49 @@ def create_worktree(
     shared: bool,
     workspace_root: str,
     instance_name: str,
+    *,
+    base: str | None = None,
+    exists: bool = False,
+    create: bool = False,
 ) -> WorktreeResult:
     cfg = resolve_worktree_path(repo, branch, shared, workspace_root, instance_name)
     bare_repo = os.path.join(workspace_root, "_repos", f"{repo}.git")
 
-    if shared and os.path.exists(cfg.path):
+    # Shared repos always check out an existing branch — skip branch-intent checks
+    if shared:
+        if os.path.exists(cfg.path):
+            return WorktreeResult(action="linked", path=cfg.path)
+        _git_worktree_add(bare_repo, cfg.path, branch)
         return WorktreeResult(action="linked", path=cfg.path)
 
-    _git_worktree_add(bare_repo, cfg.path, branch)
-    return WorktreeResult(action="linked" if shared else "created", path=cfg.path)
+    if exists and create:
+        raise OwmError(
+            f"repo {repo!r}: +exists and +create are mutually exclusive",
+            code="INVALID_REPO_SPEC",
+        )
+
+    branch_present = _branch_exists(bare_repo, branch)
+
+    if create:
+        if branch_present:
+            _git_worktree_add(bare_repo, cfg.path, branch)
+        else:
+            if not base:
+                raise OwmError(
+                    f"repo {repo!r}: +create requires a base branch",
+                    code=BRANCH_NOT_FOUND,
+                )
+            _git_worktree_add_new(bare_repo, cfg.path, branch, base)
+    elif branch_present:
+        _git_worktree_add(bare_repo, cfg.path, branch)
+    else:
+        raise OwmError(
+            f"repo {repo!r}: branch {branch!r} not found — "
+            f"add +exists if the branch must pre-exist, or +create to create it from base",
+            code=BRANCH_NOT_FOUND,
+        )
+
+    return WorktreeResult(action="created", path=cfg.path)
 
 
 def remove_worktree(bare_repo: str, worktree_path: str) -> None:

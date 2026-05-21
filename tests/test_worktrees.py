@@ -58,7 +58,8 @@ def test_create_instance_links_shared_worktree(tmp_path):
 
 @pytest.mark.worktrees
 def test_create_instance_creates_per_instance_worktree(tmp_path):
-    with patch("owm.worktrees._git_worktree_add"):
+    with patch("owm.worktrees._git_worktree_add"), \
+         patch("owm.worktrees._branch_exists", return_value=True):
         result = create_worktree(
             repo="product-core",
             branch="feat-789-dev",

@@ -243,6 +243,8 @@ def _spec_to_inline_table(spec: str) -> str:
         kvs.append("readonly = true")
     if "exists" in flags:
         kvs.append("exists = true")
+    if "create" in flags:
+        kvs.append("create = true")
     return "{" + ", ".join(kvs) + "}"
 
 

@@ -340,7 +340,10 @@ def create_instance(
 
     # Worktrees (shared repos get a linked path; per-instance get their own)
     for repo_name, spec in conf.repos.items():
-        create_worktree(repo_name, spec.branch, spec.shared, workspace_root, name)
+        create_worktree(
+            repo_name, spec.branch, spec.shared, workspace_root, name,
+            base=spec.base, exists=spec.exists, create=spec.create,
+        )
 
     # Database
     _create_instance_db(conf.database.name, conf.database.pg_port)
