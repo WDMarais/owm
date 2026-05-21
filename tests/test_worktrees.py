@@ -72,6 +72,105 @@ def test_create_instance_creates_per_instance_worktree(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Branch intent: +exists / +create
+# ---------------------------------------------------------------------------
+
+@pytest.mark.worktrees
+def test_no_flag_branch_present_checks_out(tmp_path):
+    with patch("owm.worktrees._branch_exists", return_value=True), \
+         patch("owm.worktrees._git_worktree_add") as mock_add:
+        result = create_worktree(
+            repo="product-core", branch="feat-789", shared=False,
+            workspace_root=str(tmp_path), instance_name="feat-789",
+        )
+    mock_add.assert_called_once()
+    assert result.action == "created"
+
+
+@pytest.mark.worktrees
+def test_no_flag_branch_missing_raises_branch_not_found(tmp_path):
+    with patch("owm.worktrees._branch_exists", return_value=False), \
+         pytest.raises(Exception) as exc_info:
+        create_worktree(
+            repo="product-core", branch="feat-789", shared=False,
+            workspace_root=str(tmp_path), instance_name="feat-789",
+        )
+    assert "BRANCH_NOT_FOUND" in str(exc_info.value)
+
+
+@pytest.mark.worktrees
+def test_no_flag_branch_missing_error_includes_hint(tmp_path):
+    with patch("owm.worktrees._branch_exists", return_value=False), \
+         pytest.raises(Exception) as exc_info:
+        create_worktree(
+            repo="product-core", branch="feat-789", shared=False,
+            workspace_root=str(tmp_path), instance_name="feat-789",
+        )
+    msg = str(exc_info.value)
+    assert "+exists" in msg and "+create" in msg
+
+
+@pytest.mark.worktrees
+def test_exists_flag_branch_present_checks_out(tmp_path):
+    with patch("owm.worktrees._branch_exists", return_value=True), \
+         patch("owm.worktrees._git_worktree_add") as mock_add:
+        result = create_worktree(
+            repo="product-core", branch="feat-789", shared=False,
+            workspace_root=str(tmp_path), instance_name="feat-789",
+            exists=True,
+        )
+    mock_add.assert_called_once()
+    assert result.action == "created"
+
+
+@pytest.mark.worktrees
+def test_exists_flag_branch_missing_raises_branch_not_found(tmp_path):
+    with patch("owm.worktrees._branch_exists", return_value=False), \
+         pytest.raises(Exception) as exc_info:
+        create_worktree(
+            repo="product-core", branch="feat-789", shared=False,
+            workspace_root=str(tmp_path), instance_name="feat-789",
+            exists=True,
+        )
+    assert "BRANCH_NOT_FOUND" in str(exc_info.value)
+
+
+@pytest.mark.worktrees
+def test_create_flag_branch_missing_calls_worktree_add_new(tmp_path):
+    with patch("owm.worktrees._branch_exists", return_value=False), \
+         patch("owm.worktrees._git_worktree_add_new") as mock_new:
+        create_worktree(
+            repo="product-core", branch="feat-789", shared=False,
+            workspace_root=str(tmp_path), instance_name="feat-789",
+            base="main", create=True,
+        )
+    mock_new.assert_called_once()
+
+
+@pytest.mark.worktrees
+def test_create_flag_branch_present_checks_out_existing(tmp_path):
+    with patch("owm.worktrees._branch_exists", return_value=True), \
+         patch("owm.worktrees._git_worktree_add") as mock_add:
+        create_worktree(
+            repo="product-core", branch="feat-789", shared=False,
+            workspace_root=str(tmp_path), instance_name="feat-789",
+            base="main", create=True,
+        )
+    mock_add.assert_called_once()
+
+
+@pytest.mark.worktrees
+def test_exists_and_create_together_raises_config_error(tmp_path):
+    with pytest.raises(Exception) as exc_info:
+        create_worktree(
+            repo="product-core", branch="feat-789", shared=False,
+            workspace_root=str(tmp_path), instance_name="feat-789",
+            exists=True, create=True,
+        )
+    assert "mutually exclusive" in str(exc_info.value).lower()
+
+
+# ---------------------------------------------------------------------------
 # Push permission enforcement
 # ---------------------------------------------------------------------------
 

@@ -151,6 +151,27 @@ def test_create_writes_instance_conf_to_disk(runner, standard_instance_toml, tmp
 
 
 @pytest.mark.cli_integration
+def test_create_exists_flag_branch_not_found_exits_nonzero(runner, tmp_workspace):
+    inst_dir = tmp_workspace / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    (inst_dir / "instance.toml").write_text(
+        '[repos]\n'
+        'product-core = {branch = "feat-789-dev", base = "main", exists = true}\n'
+        '\n'
+        '[database]\nname = "feat-789"\npg_port = 5432\n'
+        '\n'
+        '[server]\nhttp_port = 8100\ngevent_port = 8101\nworkers = 2\n'
+    )
+    with patch("owm.worktrees._branch_exists", return_value=False):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "create", "feat-789",
+        ])
+    assert result.exit_code != 0
+    assert "BRANCH_NOT_FOUND" in result.output
+
+
+@pytest.mark.cli_integration
 def test_create_infers_instance_from_cwd(runner, standard_instance_toml, tmp_workspace, monkeypatch):
     (tmp_workspace / "workspace.toml").write_text("[repos]\n[clusters]\n")
     monkeypatch.chdir(tmp_workspace / "instances" / "feat-789")
