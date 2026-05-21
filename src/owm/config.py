@@ -8,7 +8,7 @@ class RepoSpec:
     base: str | None
     shared: bool
     readonly: bool
-    exists: bool
+    assert_exists: bool
     create: bool = False
 
 
@@ -130,7 +130,7 @@ def parse_repo_spec(spec: str | dict) -> RepoSpec:
             base=spec.get("base"),
             shared=spec.get("shared", False),
             readonly=spec.get("readonly", False),
-            exists=spec.get("exists", False),
+            assert_exists=spec.get("exists", False),
             create=spec.get("create", False),
         )
     colon = spec.index(":")
@@ -149,7 +149,7 @@ def parse_repo_spec(spec: str | dict) -> RepoSpec:
         base=base,
         shared=shared,
         readonly="readonly" in flags,
-        exists="exists" in flags,
+        assert_exists="exists" in flags,
         create="create" in flags,
     )
 

@@ -134,7 +134,7 @@ def owm_create(instance, toml=None, repos=None, workspace_root=".", **kwargs):
     for name, spec in specs.items():
         if spec.shared:
             continue
-        if spec.exists:
+        if spec.assert_exists:
             bare = os.path.join(workspace_root, "_repos", f"{name}.git")
             if not branch_exists_on_origin(bare, spec.branch):
                 return format_error(f"branch {spec.branch} not found on origin",

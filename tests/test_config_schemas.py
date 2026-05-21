@@ -175,7 +175,7 @@ def test_repo_spec_owned_branch():
     assert spec.base == "dev"
     assert spec.shared is False
     assert spec.readonly is False
-    assert spec.exists is False
+    assert spec.assert_exists is False
 
 
 @pytest.mark.config_schemas
@@ -193,14 +193,14 @@ def test_repo_spec_readonly():
     assert spec.base == "dev"
     assert spec.readonly is True
     assert spec.shared is False
-    assert spec.exists is False
+    assert spec.assert_exists is False
 
 
 @pytest.mark.config_schemas
 def test_repo_spec_exists_flag():
     spec = parse_repo_spec("feat-789-dev:dev+exists")
     assert spec.branch == "feat-789-dev"
-    assert spec.exists is True
+    assert spec.assert_exists is True
     assert spec.readonly is False
 
 
@@ -215,7 +215,7 @@ def test_repo_spec_multiple_flags():
 @pytest.mark.config_schemas
 def test_repo_spec_exists_and_readonly():
     spec = parse_repo_spec("feat-789-dev:dev+exists+readonly")
-    assert spec.exists is True
+    assert spec.assert_exists is True
     assert spec.readonly is True
 
 
@@ -230,7 +230,7 @@ def test_repo_spec_inline_table_owned():
     assert spec.base == "dev"
     assert spec.shared is False
     assert spec.readonly is False
-    assert spec.exists is False
+    assert spec.assert_exists is False
 
 
 @pytest.mark.config_schemas
@@ -246,14 +246,14 @@ def test_repo_spec_inline_table_readonly():
     spec = parse_repo_spec({"branch": "feat-789-dev", "base": "main", "readonly": True})
     assert spec.readonly is True
     assert spec.shared is False
-    assert spec.exists is False
+    assert spec.assert_exists is False
 
 
 @pytest.mark.config_schemas
 def test_repo_spec_inline_table_all_flags():
     spec = parse_repo_spec({"branch": "feat-789-dev", "base": "dev", "readonly": True, "exists": True})
     assert spec.readonly is True
-    assert spec.exists is True
+    assert spec.assert_exists is True
 
 
 @pytest.mark.config_schemas
@@ -326,7 +326,7 @@ sync_opt_in = false
     config = parse_instance_config(toml)
     assert config.repos["odoo"].shared is True
     assert config.repos["product-core"].branch == "feat-789-dev"
-    assert config.repos["customer-config"].exists is True
+    assert config.repos["customer-config"].assert_exists is True
     assert config.repos["scripts"].readonly is True
     assert config.database.name == "odoo19_feat789"
     assert config.database.pg_port == 5432

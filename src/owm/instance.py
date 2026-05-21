@@ -342,7 +342,7 @@ def create_instance(
     for repo_name, spec in conf.repos.items():
         create_worktree(
             repo_name, spec.branch, spec.shared, workspace_root, name,
-            base=spec.base, exists=spec.exists, create=spec.create,
+            base=spec.base, assert_exists=spec.assert_exists, create=spec.create,
         )
 
     # Database

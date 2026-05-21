@@ -117,7 +117,7 @@ def test_exists_flag_branch_present_checks_out(tmp_path):
         result = create_worktree(
             repo="product-core", branch="feat-789", shared=False,
             workspace_root=str(tmp_path), instance_name="feat-789",
-            exists=True,
+            assert_exists=True,
         )
     mock_add.assert_called_once()
     assert result.action == "created"
@@ -130,7 +130,7 @@ def test_exists_flag_branch_missing_raises_branch_not_found(tmp_path):
         create_worktree(
             repo="product-core", branch="feat-789", shared=False,
             workspace_root=str(tmp_path), instance_name="feat-789",
-            exists=True,
+            assert_exists=True,
         )
     assert "BRANCH_NOT_FOUND" in str(exc_info.value)
 
@@ -165,7 +165,7 @@ def test_exists_and_create_together_raises_config_error(tmp_path):
         create_worktree(
             repo="product-core", branch="feat-789", shared=False,
             workspace_root=str(tmp_path), instance_name="feat-789",
-            exists=True, create=True,
+            assert_exists=True, create=True,
         )
     assert "mutually exclusive" in str(exc_info.value).lower()
 

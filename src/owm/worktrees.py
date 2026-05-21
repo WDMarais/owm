@@ -80,7 +80,7 @@ def create_worktree(
     instance_name: str,
     *,
     base: str | None = None,
-    exists: bool = False,
+    assert_exists: bool = False,
     create: bool = False,
 ) -> WorktreeResult:
     cfg = resolve_worktree_path(repo, branch, shared, workspace_root, instance_name)
@@ -93,7 +93,7 @@ def create_worktree(
         _git_worktree_add(bare_repo, cfg.path, branch)
         return WorktreeResult(action="linked", path=cfg.path)
 
-    if exists and create:
+    if assert_exists and create:
         raise OwmError(
             f"repo {repo!r}: +exists and +create are mutually exclusive",
             code="INVALID_REPO_SPEC",
@@ -113,6 +113,12 @@ def create_worktree(
             _git_worktree_add_new(bare_repo, cfg.path, branch, base)
     elif branch_present:
         _git_worktree_add(bare_repo, cfg.path, branch)
+    elif assert_exists:
+        raise OwmError(
+            f"repo {repo!r}: +exists asserted but branch {branch!r} not found in bare repo "
+            f"— check for a typo or push the branch first",
+            code=BRANCH_NOT_FOUND,
+        )
     else:
         raise OwmError(
             f"repo {repo!r}: branch {branch!r} not found — "
