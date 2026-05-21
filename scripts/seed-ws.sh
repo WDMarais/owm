@@ -52,6 +52,9 @@ product-core = "$WS/_repos/product-core.git"
 
 [clusters]
 "19" = {pg_version = "16", port = 5432}
+
+[defaults]
+instances_dir = "instances"
 TOML
 echo "  + workspace.toml"
 
