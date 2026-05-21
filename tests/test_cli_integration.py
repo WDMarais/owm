@@ -150,6 +150,16 @@ def test_create_writes_instance_conf_to_disk(runner, standard_instance_toml, tmp
     assert (tmp_workspace / "instances" / "feat-789" / "instance.conf").exists()
 
 
+@pytest.mark.cli_integration
+def test_create_infers_instance_from_cwd(runner, standard_instance_toml, tmp_workspace, monkeypatch):
+    (tmp_workspace / "workspace.toml").write_text("[repos]\n[clusters]\n")
+    monkeypatch.chdir(tmp_workspace / "instances" / "feat-789")
+    with patch("owm.instance.create_worktree"), patch("owm.instance._create_instance_db"):
+        result = runner.invoke(cli, ["create"])
+    assert result.exit_code == 0
+    assert "feat-789" in result.output
+
+
 # ---------------------------------------------------------------------------
 # owm list
 # ---------------------------------------------------------------------------
