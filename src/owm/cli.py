@@ -6,6 +6,8 @@ import click
 from owm.errors import OwmError
 from owm.instance import new_instance, create_instance, list_running_instances, start_instance, stop_instance, health_check
 from owm.operations import infer_instance_from_cwd
+from owm.ports import find_conflicting_process
+from owm.config import parse_instance_config
 
 
 def _find_workspace_root(start: Path | None = None) -> str:
@@ -185,18 +187,74 @@ def cmd_stop(ctx, name, wait):
 @click.argument("name", required=False)
 @click.pass_context
 def cmd_status(ctx, name):
-    """Show health status of an instance."""
-    instance = _resolve_instance(ctx, name)
+    """Show status. With NAME or from inside an instance dir: instance detail.
+    From the workspace root: workspace summary."""
     workspace_root = _resolve_workspace(ctx)
-    h = health_check(instance, workspace_root)
-    status = h["status"]
-    if status == "stopped":
-        click.echo(f"{instance}  stopped")
-    elif status == "healthy":
-        click.echo(f"{instance}  healthy  pid={h['pid']}  {h.get('url', '')}")
-    elif status == "starting":
-        click.echo(f"{instance}  starting  pid={h['pid']}")
-    elif status == "unhealthy":
-        click.echo(f"{instance}  unhealthy  pid={h['pid']}")
-    elif status == "unmanaged":
-        click.echo(f"{instance}  unmanaged process on port {h['port']}  pid={h['pid']}")
+
+    # Try to resolve instance — fall back to workspace summary if none found
+    instance = name
+    if not instance:
+        result = infer_instance_from_cwd(
+            cwd=str(Path.cwd()),
+            workspace_root=workspace_root,
+            instances_dir="instances",
+        )
+        instance = result.instance
+
+    if instance:
+        toml_path = Path(workspace_root) / "instances" / instance / "instance.toml"
+        if not toml_path.exists():
+            raise click.ClickException(f"instance {instance!r} not found")
+        with open(toml_path) as f:
+            conf = parse_instance_config(f.read())
+        h = health_check(instance, workspace_root)
+        state = h["status"]
+        line = f"{instance}  {state}"
+        if h.get("pid"):
+            line += f"  pid={h['pid']}"
+        if h.get("url"):
+            line += f"  {h['url']}"
+        else:
+            line += f"  http://localhost:{conf.server.http_port}"
+        if state in ("stopped", "unmanaged"):
+            proc = find_conflicting_process(conf.server.http_port)
+            if proc:
+                cls = "probable_orphan" if "odoo-bin" in proc.get("cmdline", "") or instance in proc.get("cmdline", "") else "probable_squatter"
+                line += f"\n  ! {cls}  pid={proc['pid']}  {proc.get('name', '')}"
+        click.echo(line)
+    else:
+        instances_dir = Path(workspace_root) / "instances"
+        rows = []
+        warnings = []
+        port_alerts = []
+        try:
+            entries = sorted(e for e in instances_dir.iterdir() if e.is_dir() and not e.name.startswith(("_", ".")))
+        except OSError:
+            entries = []
+        for entry in entries:
+            toml_path = entry / "instance.toml"
+            if not toml_path.exists():
+                warnings.append(f"warning: orphan_dir  instances/{entry.name}")
+                continue
+            with open(toml_path) as f:
+                conf = parse_instance_config(f.read())
+            h = health_check(entry.name, workspace_root)
+            line = f"{entry.name}  {h['status']}"
+            if h.get("pid"):
+                line += f"  pid={h['pid']}"
+            if h.get("url"):
+                line += f"  {h['url']}"
+            rows.append(line)
+            if h["status"] == "unmanaged":
+                proc = find_conflicting_process(conf.server.http_port)
+                cls = "probable_orphan" if proc and "odoo-bin" in proc.get("cmdline", "") else "probable_squatter"
+                port_alerts.append(f"  alert: port conflict on {entry.name}:{conf.server.http_port}  ({cls})")
+        if not rows:
+            click.echo("no instances configured")
+            return
+        for line in rows:
+            click.echo(line)
+        for w in warnings:
+            click.echo(w, err=True)
+        for a in port_alerts:
+            click.echo(a, err=True)
