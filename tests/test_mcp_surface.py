@@ -26,35 +26,124 @@ from owm.operations import LogsResult
 
 
 # ---------------------------------------------------------------------------
-# Workspace tools — owm_status
+# Workspace tools — owm_status (single-instance)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.mcp_surface
-def test_owm_status_full_workspace():
-    result = owm_status()
-    assert "instances" in result
-    assert "repos" in result or "worktrees" in result
-    assert "ports" in result
-    assert "alerts" in result
+def test_owm_status_instance_stopped_no_conflict(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.health_check", return_value={"status": "stopped"}), \
+         patch("owm.mcp.find_conflicting_process", return_value=None):
+        result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
+    assert result["instance"] == "feat-789"
+    assert result["state"] == "stopped"
+    assert result["http_port"] == 8142
+    assert result["db"] == "owm_test_feat789"
+    assert result["local_url"] == "http://localhost:8142"
+    assert result["url"] is None
+    assert result["suspected_linked"] is None
 
 
 @pytest.mark.mcp_surface
-def test_owm_status_single_instance():
-    result = owm_status(instance="feat-789")
-    assert result["instance"] == "feat-789" or "feat-789" in str(result)
+def test_owm_status_instance_not_found(tmp_workspace):
+    result = owm_status(instance="nonexistent", workspace_root=str(tmp_workspace))
+    assert result["error"] is not None
+    assert result["code"] == "NOT_FOUND"
 
 
 @pytest.mark.mcp_surface
-def test_owm_status_selective_include_repos_only():
-    result = owm_status(include_repos=True, include_ports=False, include_unmanaged=False)
-    assert "repos" in result or "worktrees" in result
-    assert "ports" not in result or result.get("ports") is None
+def test_owm_status_instance_suspected_orphan(standard_instance_toml, tmp_workspace):
+    proc = {"pid": 5678, "name": "python3", "cmdline": "python3 /ws/odoo-bin --config feat-789.conf"}
+    with patch("owm.mcp.health_check", return_value={"status": "stopped"}), \
+         patch("owm.mcp.find_conflicting_process", return_value=proc):
+        result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
+    assert result["suspected_linked"]["classification"] == "probable_orphan"
+    assert result["suspected_linked"]["pid"] == 5678
 
 
 @pytest.mark.mcp_surface
-def test_owm_status_instance_not_found():
-    result = owm_status(instance="nonexistent")
-    assert result == {"error": "instance not found", "code": "NOT_FOUND"}
+def test_owm_status_instance_suspected_squatter(standard_instance_toml, tmp_workspace):
+    proc = {"pid": 9999, "name": "node", "cmdline": "node server.js"}
+    with patch("owm.mcp.health_check", return_value={"status": "stopped"}), \
+         patch("owm.mcp.find_conflicting_process", return_value=proc):
+        result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
+    assert result["suspected_linked"]["classification"] == "probable_squatter"
+    assert result["suspected_linked"]["pid"] == 9999
+
+
+@pytest.mark.mcp_surface
+def test_owm_status_instance_running(standard_instance_toml, tmp_workspace):
+    h = {"status": "healthy", "pid": 1234, "url": "https://feat-789.localhost"}
+    with patch("owm.mcp.health_check", return_value=h), \
+         patch("owm.mcp.find_conflicting_process", return_value=None):
+        result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
+    assert result["state"] == "healthy"
+    assert result["pid"] == 1234
+    assert result["url"] == "https://feat-789.localhost"
+    assert result["local_url"] == "http://localhost:8142"
+    assert result["suspected_linked"] is None
+
+
+# ---------------------------------------------------------------------------
+# Workspace tools — owm_status (workspace-level)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.mcp_surface
+def test_owm_status_workspace_empty(tmp_workspace):
+    result = owm_status(workspace_root=str(tmp_workspace))
+    assert result["instances"] == {}
+    assert result["repo_alerts"] == []
+    assert result["port_alerts"] == []
+    assert result["unmanaged_odoo"] == []
+
+
+@pytest.mark.mcp_surface
+def test_owm_status_workspace_stopped_instance(standard_instance_toml, tmp_workspace):
+    with patch("owm.mcp.health_check", return_value={"status": "stopped"}), \
+         patch("owm.mcp.find_conflicting_process", return_value=None):
+        result = owm_status(workspace_root=str(tmp_workspace))
+    assert "feat-789" in result["instances"]
+    assert result["instances"]["feat-789"]["state"] == "stopped"
+    assert result["instances"]["feat-789"]["local_url"] == "http://localhost:8142"
+
+
+@pytest.mark.mcp_surface
+def test_owm_status_workspace_running_instance(standard_instance_toml, tmp_workspace):
+    h = {"status": "healthy", "pid": 1234, "url": "https://feat-789.localhost"}
+    with patch("owm.mcp.health_check", return_value=h), \
+         patch("owm.mcp.find_conflicting_process", return_value=None):
+        result = owm_status(workspace_root=str(tmp_workspace))
+    inst = result["instances"]["feat-789"]
+    assert inst["state"] == "healthy"
+    assert inst["pid"] == 1234
+    assert inst["url"] == "https://feat-789.localhost"
+
+
+@pytest.mark.mcp_surface
+def test_owm_status_workspace_unmanaged_port_surfaces_in_port_alerts(standard_instance_toml, tmp_workspace):
+    proc = {"pid": 5678, "name": "python3", "cmdline": "python3 /ws/odoo-bin --config feat-789.conf"}
+    with patch("owm.mcp.health_check", return_value={"status": "unmanaged", "pid": 5678}), \
+         patch("owm.mcp.find_conflicting_process", return_value=proc):
+        result = owm_status(workspace_root=str(tmp_workspace))
+    assert len(result["port_alerts"]) == 1
+    alert = result["port_alerts"][0]
+    assert alert["instance"] == "feat-789"
+    assert alert["http_port"] == 8142
+    assert alert["classification"] == "probable_orphan"
+
+
+@pytest.mark.mcp_surface
+def test_owm_status_workspace_orphan_dir_surfaces_as_warning(tmp_workspace):
+    (tmp_workspace / "instances" / "mystery-dir").mkdir()
+    result = owm_status(workspace_root=str(tmp_workspace))
+    assert any(w["type"] == "orphan_dir" for w in result["workspace_warnings"])
+
+
+@pytest.mark.mcp_surface
+def test_owm_status_workspace_files_and_underscore_dirs_silently_ignored(tmp_workspace):
+    (tmp_workspace / "instances" / ".gitkeep").touch()
+    (tmp_workspace / "instances" / "_scratch").mkdir()
+    result = owm_status(workspace_root=str(tmp_workspace))
+    assert result["workspace_warnings"] == []
 
 
 # ---------------------------------------------------------------------------
