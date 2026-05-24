@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -21,7 +22,12 @@ def _find_workspace_root(start: Path | None = None) -> str:
 
 def _resolve_workspace(ctx) -> str:
     w = ctx.obj.get("workspace")
-    return w if w else _find_workspace_root()
+    if w:
+        return w
+    env = os.environ.get("OWM_WORKSPACE")
+    if env:
+        return env
+    return _find_workspace_root()
 
 
 def _resolve_instance(ctx, name: str | None) -> str:
