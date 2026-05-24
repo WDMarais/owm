@@ -31,8 +31,8 @@ from owm.operations import LogsResult
 
 @pytest.mark.mcp_surface
 def test_owm_status_instance_stopped_no_conflict(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.health_check", return_value={"status": "stopped"}), \
-         patch("owm.mcp.find_conflicting_process", return_value=None):
+    with patch("owm.api.health_check", return_value={"status": "stopped"}), \
+         patch("owm.api.find_conflicting_process", return_value=None):
         result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["instance"] == "feat-789"
     assert result["state"] == "stopped"
@@ -53,8 +53,8 @@ def test_owm_status_instance_not_found(tmp_workspace):
 @pytest.mark.mcp_surface
 def test_owm_status_instance_suspected_orphan(standard_instance_toml, tmp_workspace):
     proc = {"pid": 5678, "name": "python3", "cmdline": "python3 /ws/odoo-bin --config feat-789.conf"}
-    with patch("owm.mcp.health_check", return_value={"status": "stopped"}), \
-         patch("owm.mcp.find_conflicting_process", return_value=proc):
+    with patch("owm.api.health_check", return_value={"status": "stopped"}), \
+         patch("owm.api.find_conflicting_process", return_value=proc):
         result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["suspected_linked"]["classification"] == "probable_orphan"
     assert result["suspected_linked"]["pid"] == 5678
@@ -63,8 +63,8 @@ def test_owm_status_instance_suspected_orphan(standard_instance_toml, tmp_worksp
 @pytest.mark.mcp_surface
 def test_owm_status_instance_suspected_squatter(standard_instance_toml, tmp_workspace):
     proc = {"pid": 9999, "name": "node", "cmdline": "node server.js"}
-    with patch("owm.mcp.health_check", return_value={"status": "stopped"}), \
-         patch("owm.mcp.find_conflicting_process", return_value=proc):
+    with patch("owm.api.health_check", return_value={"status": "stopped"}), \
+         patch("owm.api.find_conflicting_process", return_value=proc):
         result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["suspected_linked"]["classification"] == "probable_squatter"
     assert result["suspected_linked"]["pid"] == 9999
@@ -73,8 +73,8 @@ def test_owm_status_instance_suspected_squatter(standard_instance_toml, tmp_work
 @pytest.mark.mcp_surface
 def test_owm_status_instance_running(standard_instance_toml, tmp_workspace):
     h = {"status": "healthy", "pid": 1234, "url": "https://feat-789.localhost"}
-    with patch("owm.mcp.health_check", return_value=h), \
-         patch("owm.mcp.find_conflicting_process", return_value=None):
+    with patch("owm.api.health_check", return_value=h), \
+         patch("owm.api.find_conflicting_process", return_value=None):
         result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["state"] == "healthy"
     assert result["pid"] == 1234
@@ -98,8 +98,8 @@ def test_owm_status_workspace_empty(tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_status_workspace_stopped_instance(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.health_check", return_value={"status": "stopped"}), \
-         patch("owm.mcp.find_conflicting_process", return_value=None):
+    with patch("owm.api.health_check", return_value={"status": "stopped"}), \
+         patch("owm.api.find_conflicting_process", return_value=None):
         result = owm_status(workspace_root=str(tmp_workspace))
     assert "feat-789" in result["instances"]
     assert result["instances"]["feat-789"]["state"] == "stopped"
@@ -109,8 +109,8 @@ def test_owm_status_workspace_stopped_instance(standard_instance_toml, tmp_works
 @pytest.mark.mcp_surface
 def test_owm_status_workspace_running_instance(standard_instance_toml, tmp_workspace):
     h = {"status": "healthy", "pid": 1234, "url": "https://feat-789.localhost"}
-    with patch("owm.mcp.health_check", return_value=h), \
-         patch("owm.mcp.find_conflicting_process", return_value=None):
+    with patch("owm.api.health_check", return_value=h), \
+         patch("owm.api.find_conflicting_process", return_value=None):
         result = owm_status(workspace_root=str(tmp_workspace))
     inst = result["instances"]["feat-789"]
     assert inst["state"] == "healthy"
@@ -121,8 +121,8 @@ def test_owm_status_workspace_running_instance(standard_instance_toml, tmp_works
 @pytest.mark.mcp_surface
 def test_owm_status_workspace_unmanaged_port_surfaces_in_port_alerts(standard_instance_toml, tmp_workspace):
     proc = {"pid": 5678, "name": "python3", "cmdline": "python3 /ws/odoo-bin --config feat-789.conf"}
-    with patch("owm.mcp.health_check", return_value={"status": "unmanaged", "pid": 5678}), \
-         patch("owm.mcp.find_conflicting_process", return_value=proc):
+    with patch("owm.api.health_check", return_value={"status": "unmanaged", "pid": 5678}), \
+         patch("owm.api.find_conflicting_process", return_value=proc):
         result = owm_status(workspace_root=str(tmp_workspace))
     assert len(result["port_alerts"]) == 1
     alert = result["port_alerts"][0]
@@ -982,14 +982,11 @@ def test_reset_operates_on_local_state_only(standard_instance_toml, tmp_workspac
 
 
 # ---------------------------------------------------------------------------
-# Known gap: OWM_WORKSPACE env var as MCP default workspace
+# OWM_WORKSPACE env var as MCP default workspace
 # ---------------------------------------------------------------------------
 
 @pytest.mark.mcp_surface
-@pytest.mark.xfail(strict=True, reason="not implemented: OWM_WORKSPACE env var for MCP workspace default")
 def test_owm_workspace_env_var_overrides_dot_default(monkeypatch, tmp_workspace, standard_instance_toml):
-    """When implemented: add _default_workspace() that reads OWM_WORKSPACE, use it as
-    the evaluated default for workspace_root in every MCP function."""
     monkeypatch.setenv("OWM_WORKSPACE", str(tmp_workspace))
     result = owm_env(instance="feat-789")
     assert "error" not in result

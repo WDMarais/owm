@@ -3,11 +3,10 @@ from pathlib import Path
 
 import click
 
+from owm.api import instance_status, workspace_status
 from owm.errors import OwmError
-from owm.instance import new_instance, create_instance, list_running_instances, start_instance, stop_instance, health_check
+from owm.instance import new_instance, create_instance, list_running_instances, start_instance, stop_instance
 from owm.operations import infer_instance_from_cwd
-from owm.ports import find_conflicting_process
-from owm.config import parse_instance_config
 
 
 def _find_workspace_root(start: Path | None = None) -> str:
@@ -202,59 +201,30 @@ def cmd_status(ctx, name):
         instance = result.instance
 
     if instance:
-        toml_path = Path(workspace_root) / "instances" / instance / "instance.toml"
-        if not toml_path.exists():
-            raise click.ClickException(f"instance {instance!r} not found")
-        with open(toml_path) as f:
-            conf = parse_instance_config(f.read())
-        h = health_check(instance, workspace_root)
-        state = h["status"]
-        line = f"{instance}  {state}"
-        if h.get("pid"):
-            line += f"  pid={h['pid']}"
-        if h.get("url"):
-            line += f"  {h['url']}"
-        else:
-            line += f"  http://localhost:{conf.server.http_port}"
-        if state in ("stopped", "unmanaged"):
-            proc = find_conflicting_process(conf.server.http_port)
-            if proc:
-                cls = "probable_orphan" if "odoo-bin" in proc.get("cmdline", "") or instance in proc.get("cmdline", "") else "probable_squatter"
-                line += f"\n  ! {cls}  pid={proc['pid']}  {proc.get('name', '')}"
+        r = instance_status(instance, workspace_root)
+        if "error" in r:
+            raise click.ClickException(r["error"])
+        line = f"{instance}  {r['state']}"
+        if r.get("pid"):
+            line += f"  pid={r['pid']}"
+        line += f"  {r['url'] or r['local_url']}"
+        if r.get("suspected_linked"):
+            sl = r["suspected_linked"]
+            line += f"\n  ! {sl['classification']}  pid={sl['pid']}  {sl.get('name', '')}"
         click.echo(line)
     else:
-        instances_dir = Path(workspace_root) / "instances"
-        rows = []
-        warnings = []
-        port_alerts = []
-        try:
-            entries = sorted(e for e in instances_dir.iterdir() if e.is_dir() and not e.name.startswith(("_", ".")))
-        except OSError:
-            entries = []
-        for entry in entries:
-            toml_path = entry / "instance.toml"
-            if not toml_path.exists():
-                warnings.append(f"warning: orphan_dir  instances/{entry.name}")
-                continue
-            with open(toml_path) as f:
-                conf = parse_instance_config(f.read())
-            h = health_check(entry.name, workspace_root)
-            line = f"{entry.name}  {h['status']}"
-            if h.get("pid"):
-                line += f"  pid={h['pid']}"
-            if h.get("url"):
-                line += f"  {h['url']}"
-            rows.append(line)
-            if h["status"] == "unmanaged":
-                proc = find_conflicting_process(conf.server.http_port)
-                cls = "probable_orphan" if proc and "odoo-bin" in proc.get("cmdline", "") else "probable_squatter"
-                port_alerts.append(f"  alert: port conflict on {entry.name}:{conf.server.http_port}  ({cls})")
-        if not rows:
+        r = workspace_status(workspace_root)
+        if not r["instances"]:
             click.echo("no instances configured")
             return
-        for line in rows:
+        for inst, info in sorted(r["instances"].items()):
+            line = f"{inst}  {info['state']}"
+            if info.get("pid"):
+                line += f"  pid={info['pid']}"
+            if info.get("url"):
+                line += f"  {info['url']}"
             click.echo(line)
-        for w in warnings:
-            click.echo(w, err=True)
-        for a in port_alerts:
-            click.echo(a, err=True)
+        for w in r.get("workspace_warnings", []):
+            click.echo(f"  warning: {w['type']}  {w.get('path', '')}", err=True)
+        for a in r.get("port_alerts", []):
+            click.echo(f"  alert: port conflict on {a['instance']}:{a['http_port']}  ({a['classification']})", err=True)

@@ -13,7 +13,7 @@ from owm.errors import (
 )
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
-    kill_instance, restart_instance, health_check, list_running_instances,
+    kill_instance, restart_instance, list_running_instances,
     find_odoo_repo,
 )
 from owm.archive import archive_instance
@@ -24,7 +24,7 @@ from owm.sync import (
     read_repo_state, has_local_commits, branch_exists_on_origin,
     git_fetch_bare, git_fast_forward, git_rebase, git_push, git_reset_hard,
 )
-from owm.ports import find_conflicting_process
+from owm.api import default_workspace, health_check, instance_status, workspace_status
 from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
 from owm.scripts import execute_script, run_script, compare_instances
@@ -39,99 +39,15 @@ def _e(e: OwmError) -> dict:
 # Workspace tools
 # ---------------------------------------------------------------------------
 
-def owm_status(instance=None, workspace_root="."):
+def owm_status(instance=None, workspace_root=None):
+    workspace_root = workspace_root or default_workspace()
     if instance is not None:
-        return _instance_status(instance, workspace_root)
-    return _workspace_status(workspace_root)
+        return instance_status(instance, workspace_root)
+    return workspace_status(workspace_root)
 
 
-def _instance_status(instance, workspace_root):
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    try:
-        with open(toml_path) as f:
-            conf = parse_instance_config(f.read())
-    except OSError:
-        return format_error(f"instance {instance!r} not found", "NOT_FOUND")
-
-    h = health_check(instance, workspace_root)
-    http_port = conf.server.http_port
-
-    suspected_linked = None
-    if h["status"] in ("stopped", "unmanaged"):
-        proc = find_conflicting_process(http_port)
-        if proc:
-            if "odoo-bin" in proc.get("cmdline", "") or instance in proc.get("cmdline", ""):
-                classification = "probable_orphan"
-            else:
-                classification = "probable_squatter"
-            suspected_linked = {"classification": classification, **proc}
-
-    return {
-        "instance": instance,
-        "state": h["status"],
-        "http_port": http_port,
-        "local_url": f"http://localhost:{http_port}",
-        "url": h.get("url"),
-        "db": conf.database.name,
-        "pid": h.get("pid"),
-        "suspected_linked": suspected_linked,
-    }
-
-
-def _workspace_status(workspace_root):
-    instances_dir = os.path.join(workspace_root, "instances")
-    instances = {}
-    port_alerts = []
-
-    try:
-        entries = list(os.scandir(instances_dir))
-    except OSError:
-        return {"instances": {}, "repo_alerts": [], "port_alerts": [], "unmanaged_odoo": [], "workspace_warnings": []}
-
-    workspace_warnings = []
-
-    for entry in entries:
-        if not entry.is_dir():
-            continue
-        if entry.name.startswith("_") or entry.name.startswith("."):
-            continue
-        toml_path = os.path.join(entry.path, "instance.toml")
-        if not os.path.exists(toml_path):
-            workspace_warnings.append({"type": "orphan_dir", "path": f"instances/{entry.name}"})
-            continue
-        try:
-            with open(toml_path) as f:
-                conf = parse_instance_config(f.read())
-        except Exception:
-            continue
-        h = health_check(entry.name, workspace_root)
-        inst: dict = {"state": h["status"]}
-        if h.get("pid"):
-            inst["pid"] = h["pid"]
-        if h.get("url"):
-            inst["url"] = h["url"]
-        inst["local_url"] = f"http://localhost:{conf.server.http_port}"
-        instances[entry.name] = inst
-
-        if h["status"] == "unmanaged":
-            proc = find_conflicting_process(conf.server.http_port)
-            port_alerts.append({
-                "instance": entry.name,
-                "http_port": conf.server.http_port,
-                "pid": h.get("pid"),
-                "classification": "probable_orphan" if proc and "odoo-bin" in proc.get("cmdline", "") else "probable_squatter",
-            })
-
-    return {
-        "instances": instances,
-        "repo_alerts": [],
-        "port_alerts": port_alerts,
-        "unmanaged_odoo": [],
-        "workspace_warnings": workspace_warnings,
-    }
-
-
-def owm_ps(workspace_root=".", **kwargs):
+def owm_ps(workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     return {
         "managed": list_running_instances(workspace_root),
         "unmanaged": [],
@@ -142,7 +58,8 @@ def owm_validate(instance, live=False, **kwargs):
     return {"valid": True, "errors": [], "warnings": [], "live_checks_run": live}
 
 
-def owm_env(instance, workspace_root=".", **kwargs):
+def owm_env(instance, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     try:
         with open(toml_path) as f:
@@ -188,7 +105,8 @@ def owm_audit_log(n=50, level=None, since=None):
 # Lifecycle tools
 # ---------------------------------------------------------------------------
 
-def owm_new(instance, repos, workspace_root=".", force=False, **kwargs):
+def owm_new(instance, repos, workspace_root=None, force=False, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     try:
         result = new_instance(name=instance, repos=repos, workspace_root=workspace_root, force=force)
         return {"path": result.toml_path, "content": result.toml_content}
@@ -196,7 +114,8 @@ def owm_new(instance, repos, workspace_root=".", force=False, **kwargs):
         return {"error": "instance already exists", "code": "ALREADY_EXISTS"}
 
 
-def owm_create(instance, toml=None, repos=None, workspace_root=".", **kwargs):
+def owm_create(instance, toml=None, repos=None, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     if toml:
         conf = parse_instance_config(toml)
         specs = conf.repos
@@ -228,7 +147,8 @@ def owm_create(instance, toml=None, repos=None, workspace_root=".", **kwargs):
     return {"status": "ok", "created": result.created, "updated": result.updated, "skipped": result.skipped}
 
 
-def owm_start(instance, workspace_root=".", wait=False, **kwargs):
+def owm_start(instance, workspace_root=None, wait=False, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     try:
         result = start_instance(instance, workspace_root, wait=wait)
     except OwmError as e:
@@ -236,7 +156,8 @@ def owm_start(instance, workspace_root=".", wait=False, **kwargs):
     return {"status": result.status, "pid": result.pid, "url": f"https://{instance}.localhost"}
 
 
-def owm_stop(instance, workspace_root=".", wait=False, **kwargs):
+def owm_stop(instance, workspace_root=None, wait=False, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     result = stop_instance(instance, workspace_root, wait=wait)
     if result.status == "not_running":
         return {"status": "not_running"}
@@ -249,14 +170,16 @@ def owm_stop(instance, workspace_root=".", wait=False, **kwargs):
     return {"status": result.status, "pid": result.pid}
 
 
-def owm_kill(instance, workspace_root=".", **kwargs):
+def owm_kill(instance, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     result = kill_instance(instance, workspace_root)
     if result.status == "not_running":
         return {"status": "not_running"}
     return {"status": "killed", "pid": result.pid}
 
 
-def owm_restart(instance, workspace_root=".", wait=False, **kwargs):
+def owm_restart(instance, workspace_root=None, wait=False, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     try:
         result = restart_instance(instance, workspace_root, wait=wait)
     except OwmError as e:
@@ -267,11 +190,13 @@ def owm_restart(instance, workspace_root=".", wait=False, **kwargs):
     return {"status": "restarted", "pid": result.pid, "url": f"https://{instance}.localhost"}
 
 
-def owm_health(instance, workspace_root=".", **kwargs):
+def owm_health(instance, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     return health_check(instance, workspace_root, **kwargs)
 
 
-def owm_archive(instance, running=False, discard_db=False, workspace_root=".", **kwargs):
+def owm_archive(instance, running=False, discard_db=False, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     try:
         archive_instance(instance=instance, workspace_root=workspace_root, running=running,
                          discard_db=discard_db)
@@ -280,7 +205,8 @@ def owm_archive(instance, running=False, discard_db=False, workspace_root=".", *
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
 
 
-def owm_delete(instance, force=True, running=False, workspace_root=".", **kwargs):
+def owm_delete(instance, force=True, running=False, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     try:
         result = delete_instance(instance=instance, running=running, force=force,
                                  workspace_root=workspace_root)
@@ -302,7 +228,8 @@ def owm_rename(instance, new_name, running=False, **kwargs):
 # Sync tools
 # ---------------------------------------------------------------------------
 
-def owm_fetch(workspace_root=".", **kwargs):
+def owm_fetch(workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     toml_path = os.path.join(workspace_root, "workspace.toml")
     with open(toml_path) as f:
         ws = parse_workspace_config(f.read())
@@ -329,7 +256,8 @@ def owm_fetch(workspace_root=".", **kwargs):
     }
 
 
-def owm_sync(instance, repo=None, rebase=False, workspace_root=".", **kwargs):
+def owm_sync(instance, repo=None, rebase=False, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
@@ -360,7 +288,8 @@ def owm_sync(instance, repo=None, rebase=False, workspace_root=".", **kwargs):
     return {"repos": decisions}
 
 
-def owm_push(instance, repo, workspace_root=".", **kwargs):
+def owm_push(instance, repo, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
@@ -389,7 +318,8 @@ def owm_push(instance, repo, workspace_root=".", **kwargs):
     return result
 
 
-def owm_reset(instance, repo, force=False, workspace_root=".", **kwargs):
+def owm_reset(instance, repo, force=False, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
@@ -423,7 +353,8 @@ def owm_reset(instance, repo, force=False, workspace_root=".", **kwargs):
 # Script tools
 # ---------------------------------------------------------------------------
 
-def owm_run_script(instance, script, workspace_root=".", **kwargs):
+def owm_run_script(instance, script, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     ndjson_dir = os.path.join(workspace_root, "_dumps", instance)
     ndjson_path = os.path.join(ndjson_dir, f"{script}-latest.ndjson")
 
@@ -466,7 +397,8 @@ def owm_get_script_failures(ndjson_path):
             and not r.get("abort") and not r.get("_non_conforming")]
 
 
-def owm_compare(instance, base=None, workspace_root=".", **kwargs):
+def owm_compare(instance, base=None, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     with open(os.path.join(workspace_root, "workspace.toml")) as f:
         ws = parse_workspace_config(f.read())
 
@@ -536,7 +468,8 @@ def owm_db_reset(instance, **kwargs):
     return {"status": "ok", "restored_from": f"{instance}_base"}
 
 
-def owm_db_dump(instance, out=None, workspace_root=".", **kwargs):
+def owm_db_dump(instance, out=None, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
@@ -547,7 +480,8 @@ def owm_db_dump(instance, out=None, workspace_root=".", **kwargs):
     return {"status": "ok", "path": result.path}
 
 
-def owm_db_restore(instance, path, running=False, workspace_root=".", **kwargs):
+def owm_db_restore(instance, path, running=False, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     if running:
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
@@ -568,7 +502,8 @@ def owm_db_restore(instance, path, running=False, workspace_root=".", **kwargs):
 # Context tools
 # ---------------------------------------------------------------------------
 
-def owm_logs(instance, n=50, level=None, workspace_root=".", **kwargs):
+def owm_logs(instance, n=50, level=None, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     result = show_logs(instance=instance, n=n, follow=False, level=level, workspace_root=workspace_root)
     return {"lines": result.lines, "log_path": result.log_path}
 
