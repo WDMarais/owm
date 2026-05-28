@@ -12,6 +12,9 @@ from owm.instance import (
     start_instance, stop_instance, kill_instance, health_check,
     _read_pid, _process_alive,
 )
+from owm.archive import archive_instance
+from owm.env import resolve_env, format_env
+from owm.modules import upgrade_modules
 from owm.operations import (
     infer_instance_from_cwd,
     delete_instance, rename_instance, show_logs,
@@ -429,6 +432,62 @@ def cmd_db_restore(ctx, name, path_arg):
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
     click.echo(f"restored: {result.resolved_path}")
+
+
+@cli.command("env")
+@click.argument("name", required=False)
+@click.option("--format", "fmt", default=None,
+              type=click.Choice(["dotenv", "json", "shell"]),
+              help="Output format (default: human-readable table).")
+@click.pass_context
+def cmd_env(ctx, name, fmt):
+    """Print environment variables for an instance."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    conf = _read_instance_conf(instance, workspace_root)
+    env = resolve_env(
+        instance=instance,
+        workspace_root=workspace_root,
+        instance_http_port=conf.server.http_port,
+        instance_gevent_port=conf.server.gevent_port,
+    )
+    click.echo(format_env(env, fmt))
+
+
+@cli.command("archive")
+@click.argument("name", required=False)
+@click.option("--discard-db", is_flag=True, help="Drop the database instead of dumping it.")
+@click.pass_context
+def cmd_archive(ctx, name, discard_db):
+    """Archive an instance. Requires the instance to be stopped."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    running = _is_running(instance, workspace_root)
+    try:
+        archive_instance(instance=instance, workspace_root=workspace_root,
+                         running=running, discard_db=discard_db)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    click.echo(f"{instance}  archived  _archive/{instance}/")
+
+
+@cli.command("upgrade")
+@click.argument("name")
+@click.argument("modules", nargs=-1)
+@click.option("--reinstall", is_flag=True, help="Re-install modules rather than upgrade.")
+@click.pass_context
+def cmd_upgrade(ctx, name, modules, reinstall):
+    """Upgrade (or reinstall) modules for an instance.
+
+    With no MODULES: upgrades all. With MODULES: upgrades only the listed ones.
+    """
+    workspace_root = _resolve_workspace(ctx)
+    modules_list = list(modules) if modules else None
+    result = upgrade_modules(instance=name, modules=modules_list, reinstall=reinstall)
+    label = "reinstalled" if reinstall else "upgraded"
+    mods = result.modules if isinstance(result.modules, list) else result.modules
+    click.echo(f"{name}  {label}  {mods}")
 
 
 @cli.command("validate")

@@ -423,3 +423,114 @@ def test_list_empty_workspace_exits_zero(runner, tmp_workspace):
 def test_list_empty_workspace_says_no_running(runner, tmp_workspace):
     result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "list"])
     assert "no running instances" in result.output
+
+
+# ---------------------------------------------------------------------------
+# owm env
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_env_exits_zero_and_prints_key(runner, standard_instance_toml, tmp_workspace):
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "env", "feat-789"])
+    assert result.exit_code == 0
+    assert "DB_NAME" in result.output
+
+
+@pytest.mark.cli_integration
+def test_env_dotenv_format(runner, standard_instance_toml, tmp_workspace):
+    result = runner.invoke(cli, [
+        "--workspace", str(tmp_workspace), "env", "feat-789", "--format", "dotenv",
+    ])
+    assert result.exit_code == 0
+    assert "DB_NAME=" in result.output
+
+
+@pytest.mark.cli_integration
+def test_env_json_format(runner, standard_instance_toml, tmp_workspace):
+    import json
+    result = runner.invoke(cli, [
+        "--workspace", str(tmp_workspace), "env", "feat-789", "--format", "json",
+    ])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert "DB_NAME" in parsed
+
+
+@pytest.mark.cli_integration
+def test_env_shell_format(runner, standard_instance_toml, tmp_workspace):
+    result = runner.invoke(cli, [
+        "--workspace", str(tmp_workspace), "env", "feat-789", "--format", "shell",
+    ])
+    assert result.exit_code == 0
+    assert "export DB_NAME=" in result.output
+
+
+# ---------------------------------------------------------------------------
+# owm archive
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_archive_running_exits_nonzero(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=True):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "archive", "feat-789",
+        ])
+    assert result.exit_code != 0
+    assert "INSTANCE_RUNNING" in result.output
+
+
+@pytest.mark.cli_integration
+def test_archive_stopped_exits_zero(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=False), \
+         patch("owm.archive._remove_worktrees"), \
+         patch("owm.archive._dropdb_archive"), \
+         patch("owm.archive._pg_dump_archive"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "archive", "feat-789",
+        ])
+    assert result.exit_code == 0
+    assert "archived" in result.output
+
+
+@pytest.mark.cli_integration
+def test_archive_output_mentions_instance_name(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=False), \
+         patch("owm.archive._remove_worktrees"), \
+         patch("owm.archive._dropdb_archive"), \
+         patch("owm.archive._pg_dump_archive"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "archive", "feat-789",
+        ])
+    assert "feat-789" in result.output
+
+
+# ---------------------------------------------------------------------------
+# owm upgrade
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_upgrade_all_modules_exits_zero(runner, tmp_workspace):
+    result = runner.invoke(cli, [
+        "--workspace", str(tmp_workspace), "upgrade", "feat-789",
+    ])
+    assert result.exit_code == 0
+    assert "upgraded" in result.output
+
+
+@pytest.mark.cli_integration
+def test_upgrade_specific_modules_exits_zero(runner, tmp_workspace):
+    result = runner.invoke(cli, [
+        "--workspace", str(tmp_workspace), "upgrade", "feat-789", "sale", "account",
+    ])
+    assert result.exit_code == 0
+    assert "sale" in result.output
+    assert "account" in result.output
+
+
+@pytest.mark.cli_integration
+def test_upgrade_reinstall_flag(runner, tmp_workspace):
+    result = runner.invoke(cli, [
+        "--workspace", str(tmp_workspace), "upgrade", "feat-789", "--reinstall",
+    ])
+    assert result.exit_code == 0
+    assert "reinstalled" in result.output
