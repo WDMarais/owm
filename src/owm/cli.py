@@ -298,6 +298,13 @@ def cmd_delete(ctx, name, force):
 def cmd_rename(ctx, name, new_name):
     """Rename an instance. Requires the instance to be stopped."""
     workspace_root = _resolve_workspace(ctx)
+    cwd_inst = infer_instance_from_cwd(
+        cwd=str(Path.cwd()), workspace_root=workspace_root, instances_dir="instances",
+    )
+    if cwd_inst.instance == name:
+        raise click.UsageError(
+            f"You are inside {name!r} — cd to the workspace root before renaming."
+        )
     running = _is_running(name, workspace_root)
     compare_pairs = _workspace_compare_pairs(workspace_root)
     try:

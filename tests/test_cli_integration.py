@@ -241,6 +241,20 @@ def test_rename_running_instance_exits_nonzero(runner, tmp_workspace):
 
 
 @pytest.mark.cli_integration
+def test_rename_from_inside_instance_exits_nonzero(runner, tmp_workspace, monkeypatch):
+    monkeypatch.delenv("OWM_WORKSPACE", raising=False)
+    (tmp_workspace / "instances" / "feat-789").mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(tmp_workspace / "instances" / "feat-789")
+    with patch("owm.cli._is_running", return_value=False):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "rename", "feat-789", "pd-789",
+        ])
+    assert result.exit_code != 0
+    assert "inside" in result.output.lower() or "workspace root" in result.output.lower()
+
+
+@pytest.mark.cli_integration
 def test_rename_stopped_exits_zero_with_output(runner, tmp_workspace):
     with patch("owm.cli._is_running", return_value=False):
         result = runner.invoke(cli, [
