@@ -39,6 +39,8 @@ class WorkspaceDefaults:
 @dataclass
 class ProxyConfig:
     domain_suffix: str
+    backend: str = "nginx"
+    caddy_config: str | None = None
 
 
 @dataclass
@@ -207,7 +209,12 @@ def parse_workspace_config(toml: str) -> WorkspaceConfig:
 
     proxy = None
     if "proxy" in raw:
-        proxy = ProxyConfig(domain_suffix=raw["proxy"]["domain_suffix"])
+        p = raw["proxy"]
+        proxy = ProxyConfig(
+            domain_suffix=p["domain_suffix"],
+            backend=p.get("backend", "nginx"),
+            caddy_config=p.get("caddy_config"),
+        )
 
     scripts = None
     if "scripts" in raw:

@@ -10,9 +10,12 @@ from dataclasses import dataclass, field
 
 import psutil
 
-from owm.config import parse_instance_config, InstanceConfig
+from owm.addons import resolve_addons_path
+from owm.config import parse_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO
 from owm.ports import assign_port, find_conflicting_process
+from owm.proxy import get_proxy_backend
+from owm.venv import create_venv
 from owm.worktrees import create_worktree, resolve_worktree_path
 
 
@@ -33,7 +36,7 @@ class CreateResult:
     worktrees_created: bool = False
     db_created: bool = False
     port_reserved: bool = False
-    nginx_block_written: bool = False
+    proxy_block_written: bool = False
     odoo_conf_generated: bool = False
     removed_worktrees: list = field(default_factory=list)
     branches_deleted: list = field(default_factory=list)
@@ -197,41 +200,19 @@ def _wait_for_http(port: int, timeout_seconds: int) -> None:
 
 
 def _create_instance_db(db_name: str, pg_port: int) -> None:
+    r = subprocess.run(
+        ["psql", "-h", "/var/run/postgresql", "-p", str(pg_port), "-d", "postgres",
+         "-tAc", f"SELECT 1 FROM pg_database WHERE datname='{db_name}'"],
+        capture_output=True, text=True,
+    )
+    if r.returncode == 0 and "1" in r.stdout:
+        return
     subprocess.run(
         ["createdb", "-h", "/var/run/postgresql", "-p", str(pg_port), db_name],
         check=True, capture_output=True,
     )
 
 
-def _write_proxy_block(
-    instance: str,
-    http_port: int,
-    gevent_port: int,
-    domain_suffix: str,
-    workspace_root: str,
-) -> None:
-    upstream = instance.replace("-", "_")
-    block = (
-        f"upstream {upstream} {{ server 127.0.0.1:{http_port}; }}\n"
-        f"upstream {upstream}_lp {{ server 127.0.0.1:{gevent_port}; }}\n"
-        f"server {{\n"
-        f"    listen 443 ssl;\n"
-        f"    server_name {instance}.{domain_suffix};\n"
-        f"\n"
-        f"    proxy_read_timeout 720s;\n"
-        f"    proxy_set_header X-Forwarded-Host $host;\n"
-        f"    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
-        f"    proxy_set_header X-Forwarded-Proto $scheme;\n"
-        f"    proxy_set_header X-Real-IP $remote_addr;\n"
-        f"\n"
-        f"    location / {{ proxy_pass http://{upstream}; }}\n"
-        f"    location /longpolling {{ proxy_pass http://{upstream}_lp; }}\n"
-        f"}}\n"
-    )
-    proxy_dir = os.path.join(workspace_root, "_proxy")
-    os.makedirs(proxy_dir, exist_ok=True)
-    with open(os.path.join(proxy_dir, f"{instance}.conf"), "w") as f:
-        f.write(block)
 
 
 def _collect_occupied_ports(workspace_root: str, exclude_instance: str) -> set[int]:
@@ -297,7 +278,6 @@ def create_instance(
     repo_changes: list | None = None,
     new_repos: list | None = None,
     removed_repos: list | None = None,
-    domain_suffix: str = "localhost",
 ) -> CreateResult:
     if instance_exists and not toml_changed and not repo_changes and not new_repos and not removed_repos:
         return CreateResult(status="up_to_date", created=[], skipped=["all"])
@@ -329,6 +309,10 @@ def create_instance(
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
 
+    ws_toml_path = os.path.join(workspace_root, "workspace.toml")
+    with open(ws_toml_path) as f:
+        ws_conf = parse_workspace_config(f.read())
+
     # Assign port: use pinned port if free, otherwise pick from the default range
     occupied = _collect_occupied_ports(workspace_root, exclude_instance=name)
     if conf.server.http_port in occupied:
@@ -345,13 +329,46 @@ def create_instance(
             base=spec.base, assert_exists=spec.assert_exists, create=spec.create,
         )
 
+    # Addons paths from workspace repo metadata
+    workspace_repos_meta = {
+        n: {"has_addons": m.has_addons, "addons_paths": m.addons_paths}
+        for n, m in ws_conf.repos_meta.items()
+    }
+    instance_repos_dict = {
+        n: {"shared": s.shared, "branch": s.branch}
+        for n, s in conf.repos.items()
+    }
+    addons_paths = resolve_addons_path(
+        workspace_repos=workspace_repos_meta,
+        instance_repos=instance_repos_dict,
+        workspace_root=workspace_root,
+        instance_name=name,
+        instances_dir=ws_conf.defaults.instances_dir,
+    )
+
+    # Venv
+    python_version = conf.python.version if conf.python else "3.12"
+    venv_dir = os.path.join(workspace_root, "instances", name, ".venv")
+    if not os.path.exists(venv_dir):
+        odoo_repo_name, odoo_spec = find_odoo_repo(conf)
+        odoo_wt = resolve_worktree_path(odoo_repo_name, odoo_spec.branch, True, workspace_root, name)
+        req_files = []
+        default_req = os.path.join(odoo_wt.path, "requirements.txt")
+        if os.path.exists(default_req):
+            req_files.append(default_req)
+        create_venv(name, python_version, req_files, patches=[], venv_dir=venv_dir)
+
     # Database
     _create_instance_db(conf.database.name, conf.database.pg_port)
 
     # Reverse-proxy block
-    _write_proxy_block(name, http_port, gevent_port, domain_suffix, workspace_root)
+    domain_suffix = ws_conf.proxy.domain_suffix if ws_conf.proxy else "localhost"
+    proxy = get_proxy_backend(ws_conf.proxy)
+    if proxy:
+        proxy.write_instance(name, http_port, gevent_port, domain_suffix, workspace_root)
 
     # odoo.conf
+    log_path = os.path.join(workspace_root, "instances", name, "instance.log")
     conf_content = generate_instance_conf(
         name,
         http_port,
@@ -360,6 +377,8 @@ def create_instance(
         db_name=conf.database.name,
         db_port=conf.database.pg_port,
         proxy_active=True,
+        addons_path=addons_paths or None,
+        logfile=log_path,
     )
     conf_path = os.path.join(workspace_root, "instances", name, "instance.conf")
     with open(conf_path, "w") as f:
@@ -370,7 +389,7 @@ def create_instance(
         worktrees_created=True,
         db_created=True,
         port_reserved=True,
-        nginx_block_written=True,
+        proxy_block_written=proxy is not None,
         odoo_conf_generated=True,
     )
 
@@ -395,7 +414,9 @@ def start_instance(
         conf = parse_instance_config(f.read())
 
     cmd = _build_start_command(instance, workspace_root, conf)
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
+    log_fh = open(log_path, "a")
+    proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
     _write_pid(instance, workspace_root, proc.pid)
 
     events = ["instance_starting"]
@@ -536,13 +557,15 @@ def generate_instance_conf(
     db_name: str | None = None,
     db_port: int | None = None,
     proxy_active: bool = True,
+    addons_path: list[str] | None = None,
+    logfile: str | None = None,
 ) -> str:
     # dbfilter is only safe when subdomain routing is active (feat-789.localhost);
     # without it, all instances share localhost and dbfilter causes session cookie collisions.
     lines = [
         "[options]",
         f"http_port = {http_port}",
-        f"longpolling_port = {gevent_port}",
+        f"gevent_port = {gevent_port}",
         f"workers = {workers}",
         "db_host = /var/run/postgresql",
     ]
@@ -552,4 +575,8 @@ def generate_instance_conf(
         lines.append(f"db_port = {db_port}")
     if proxy_active:
         lines.append(f"dbfilter = ^{instance_name}$")
+    if addons_path:
+        lines.append(f"addons_path = {','.join(addons_path)}")
+    if logfile:
+        lines.append(f"logfile = {logfile}")
     return "\n".join(lines) + "\n"

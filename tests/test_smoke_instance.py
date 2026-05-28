@@ -28,7 +28,7 @@ def test_smoke_generate_instance_conf_parses_as_ini():
     parser.read_string(conf)
     assert parser.has_section("options")
     assert parser.getint("options", "http_port") == 8142
-    assert parser.getint("options", "longpolling_port") == 8143
+    assert parser.getint("options", "gevent_port") == 8143
     assert parser.getint("options", "workers") == 2
 
 

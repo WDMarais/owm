@@ -99,6 +99,9 @@ def create_worktree(
             code="INVALID_REPO_SPEC",
         )
 
+    if os.path.exists(cfg.path):
+        return WorktreeResult(action="linked", path=cfg.path)
+
     branch_present = _branch_exists(bare_repo, branch)
 
     if create:

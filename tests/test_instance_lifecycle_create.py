@@ -80,7 +80,7 @@ def test_create_instance_materialises_all_resources(standard_instance_toml, tmp_
     assert result.worktrees_created is True
     assert result.db_created is True
     assert result.port_reserved is True
-    assert result.nginx_block_written is True
+    assert result.proxy_block_written is True
     assert result.odoo_conf_generated is True
 
 

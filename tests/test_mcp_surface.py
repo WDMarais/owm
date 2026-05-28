@@ -274,7 +274,7 @@ def test_owm_new_already_exists_error():
 def test_owm_create_from_disk_returns_status_dict(standard_instance_toml, tmp_workspace):
     from owm.instance import CreateResult
     fake = CreateResult(status="created", worktrees_created=True, db_created=True,
-                        port_reserved=True, nginx_block_written=True, odoo_conf_generated=True)
+                        port_reserved=True, proxy_block_written=True, odoo_conf_generated=True)
     with patch("owm.mcp.read_repo_state", return_value={"status": "clean"}), \
          patch("owm.mcp.create_instance", return_value=fake):
         result = owm_create(instance="feat-789", workspace_root=str(tmp_workspace))

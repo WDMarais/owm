@@ -219,14 +219,14 @@ from owm.instance import generate_instance_conf
 
 @pytest.mark.port_assignment
 @pytest.mark.ports_gevent
-def test_odoo_conf_includes_longpolling_port():
+def test_odoo_conf_includes_gevent_port():
     conf = generate_instance_conf(
         instance_name="feat-789",
         http_port=8142,
         gevent_port=8143,
         workers=2,
     )
-    assert "longpolling_port = 8143" in conf or conf.get("longpolling_port") == 8143
+    assert "gevent_port = 8143" in conf
 
 
 @pytest.mark.port_assignment

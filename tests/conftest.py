@@ -159,7 +159,9 @@ def tmp_workspace(tmp_path):
     for subdir in ("instances", "_repos", "_shared", "_dumps", "_archive"):
         (ws / subdir).mkdir(parents=True)
     (ws / "owm.log").touch()
-    (ws / "workspace.toml").write_text("[repos]\n\n[clusters]\n")
+    (ws / "workspace.toml").write_text(
+        "[repos]\n\n[clusters]\n\n[proxy]\nbackend = \"nginx\"\ndomain_suffix = \"localhost\"\n"
+    )
     return ws
 
 

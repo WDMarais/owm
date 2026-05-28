@@ -4,8 +4,9 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import parse_instance_config, InstanceConfig
+from owm.config import parse_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import OwmError, INSTANCE_RUNNING, ARCHIVE_CONFLICT, CONFIRMATION_REQUIRED
+from owm.proxy import get_proxy_backend
 from owm.worktrees import resolve_worktree_path, remove_worktree
 
 
@@ -104,12 +105,29 @@ def _dropdb_archive(db_name: str, pg_port: int) -> None:
 
 
 def _remove_proxy_block(instance: str, workspace_root: str) -> bool:
-    """Remove per-instance proxy config file. Returns True if a file was removed."""
-    path = os.path.join(workspace_root, "_proxy", f"{instance}.conf")
-    if os.path.isfile(path):
-        os.remove(path)
-        return True
-    return False
+    """Remove per-instance proxy config file. Returns True if any file was removed."""
+    ws_toml = os.path.join(workspace_root, "workspace.toml")
+    proxy_conf = None
+    if os.path.exists(ws_toml):
+        with open(ws_toml) as f:
+            proxy_conf = parse_workspace_config(f.read()).proxy
+    backend = get_proxy_backend(proxy_conf)
+    if backend is not None:
+        proxy_dir = os.path.join(workspace_root, "_proxy")
+        ext = ".caddy" if proxy_conf and proxy_conf.backend == "caddy" else ".conf"
+        if os.path.isfile(os.path.join(proxy_dir, f"{instance}{ext}")):
+            backend.remove_instance(instance, workspace_root)
+            return True
+        return False
+    # No proxy section — best-effort cleanup of any leftover files
+    proxy_dir = os.path.join(workspace_root, "_proxy")
+    removed = False
+    for ext in (".conf", ".caddy"):
+        path = os.path.join(proxy_dir, f"{instance}{ext}")
+        if os.path.isfile(path):
+            os.remove(path)
+            removed = True
+    return removed
 
 
 def _strip_artifacts_from_dir(instance_path: str) -> None:
