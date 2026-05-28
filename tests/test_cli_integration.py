@@ -92,6 +92,7 @@ def test_create_toml_only_invalid_repo_spec_exits_nonzero(runner, tmp_workspace)
 
 @pytest.mark.cli_integration
 def test_create_toml_only_workspace_root_inferred_from_cwd(runner, tmp_workspace, monkeypatch):
+    monkeypatch.delenv("OWM_WORKSPACE", raising=False)
     (tmp_workspace / "workspace.toml").write_text("[repos]\n[clusters]\n")
     monkeypatch.chdir(tmp_workspace)
     result = runner.invoke(cli, ["create", "feat-789", "odoo=main:shared", "--toml-only"])
@@ -101,6 +102,7 @@ def test_create_toml_only_workspace_root_inferred_from_cwd(runner, tmp_workspace
 
 @pytest.mark.cli_integration
 def test_create_toml_only_no_workspace_toml_exits_nonzero(runner, tmp_path, monkeypatch):
+    monkeypatch.delenv("OWM_WORKSPACE", raising=False)
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(cli, ["create", "feat-789", "odoo=main:shared", "--toml-only"])
     assert result.exit_code != 0
@@ -173,6 +175,7 @@ def test_create_exists_flag_branch_not_found_exits_nonzero(runner, tmp_workspace
 
 @pytest.mark.cli_integration
 def test_create_infers_instance_from_cwd(runner, standard_instance_toml, tmp_workspace, monkeypatch):
+    monkeypatch.delenv("OWM_WORKSPACE", raising=False)
     (tmp_workspace / "workspace.toml").write_text("[repos]\n[clusters]\n")
     monkeypatch.chdir(tmp_workspace / "instances" / "feat-789")
     with patch("owm.instance.create_worktree"), patch("owm.instance._create_instance_db"):
