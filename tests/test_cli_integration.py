@@ -185,6 +185,47 @@ def test_create_infers_instance_from_cwd(runner, standard_instance_toml, tmp_wor
 
 
 # ---------------------------------------------------------------------------
+# owm delete
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_delete_running_instance_exits_nonzero(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=True):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "delete", "feat-789",
+        ])
+    assert result.exit_code != 0
+    assert "INSTANCE_RUNNING" in result.output or "stop" in result.output.lower()
+
+
+@pytest.mark.cli_integration
+def test_delete_no_force_shows_checklist_exits_nonzero(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=False):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "delete", "feat-789",
+        ])
+    assert result.exit_code != 0
+    assert "force" in result.output.lower()
+
+
+@pytest.mark.cli_integration
+def test_delete_force_exits_zero(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=False), \
+         patch("owm.operations._remove_worktrees"), \
+         patch("owm.operations._dropdb_archive"), \
+         patch("owm.operations._remove_proxy_block"), \
+         patch("owm.operations.shutil.rmtree"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "delete", "feat-789", "--force",
+        ])
+    assert result.exit_code == 0
+    assert "deleted" in result.output
+
+
+# ---------------------------------------------------------------------------
 # owm list
 # ---------------------------------------------------------------------------
 
