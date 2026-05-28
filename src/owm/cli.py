@@ -9,7 +9,7 @@ from owm.config import parse_instance_config, parse_workspace_config
 from owm.errors import OwmError
 from owm.instance import (
     new_instance, create_instance, list_running_instances,
-    start_instance, stop_instance,
+    start_instance, stop_instance, kill_instance, health_check,
     _read_pid, _process_alive,
 )
 from owm.operations import (
@@ -212,6 +212,36 @@ def cmd_stop(ctx, name, wait):
         sys.exit(1)
     else:
         click.echo(f"{instance} stopping (pid {result.pid})")
+
+
+@cli.command("kill")
+@click.argument("name", required=False)
+@click.pass_context
+def cmd_kill(ctx, name):
+    """Force-kill an instance process. NAME may be omitted when inside an instance directory."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    result = kill_instance(instance, workspace_root)
+    if result.status == "not_running":
+        click.echo(f"{instance}  not running")
+    else:
+        click.echo(f"{instance}  killed  pid={result.pid}")
+
+
+@cli.command("health")
+@click.argument("name", required=False)
+@click.pass_context
+def cmd_health(ctx, name):
+    """Check instance health (HTTP, DB, process). NAME may be omitted when inside an instance directory."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    h = health_check(instance, workspace_root)
+    line = f"{instance}  {h.get('status', 'unknown')}"
+    if h.get("pid"):
+        line += f"  pid={h['pid']}"
+    if h.get("url"):
+        line += f"  {h['url']}"
+    click.echo(line)
 
 
 @cli.command("status")

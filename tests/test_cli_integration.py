@@ -374,6 +374,42 @@ def test_validate_live_flag_noted_in_output(runner, standard_instance_toml, tmp_
 
 
 # ---------------------------------------------------------------------------
+# owm kill
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_kill_not_running_exits_zero(runner, tmp_workspace):
+    with patch("owm.instance._read_pid", return_value=None):
+        result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "kill", "feat-789"])
+    assert result.exit_code == 0
+    assert "not running" in result.output
+
+
+@pytest.mark.cli_integration
+def test_kill_running_exits_zero_with_pid(runner, tmp_workspace):
+    with patch("owm.instance._read_pid", return_value=1234), \
+         patch("owm.instance._process_alive", return_value=True), \
+         patch("owm.instance.os.kill"), \
+         patch("owm.instance._clear_pid"):
+        result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "kill", "feat-789"])
+    assert result.exit_code == 0
+    assert "killed" in result.output
+    assert "1234" in result.output
+
+
+# ---------------------------------------------------------------------------
+# owm health
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_health_stopped_instance(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.instance._read_pid", return_value=None):
+        result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "health", "feat-789"])
+    assert result.exit_code == 0
+    assert "stopped" in result.output
+
+
+# ---------------------------------------------------------------------------
 # owm list
 # ---------------------------------------------------------------------------
 
