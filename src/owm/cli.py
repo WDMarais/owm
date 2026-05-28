@@ -5,9 +5,18 @@ from pathlib import Path
 import click
 
 from owm.api import instance_status, workspace_status
+from owm.config import parse_instance_config, parse_workspace_config
 from owm.errors import OwmError
-from owm.instance import new_instance, create_instance, list_running_instances, start_instance, stop_instance
-from owm.operations import infer_instance_from_cwd
+from owm.instance import (
+    new_instance, create_instance, list_running_instances,
+    start_instance, stop_instance,
+    _read_pid, _process_alive,
+)
+from owm.operations import (
+    infer_instance_from_cwd,
+    delete_instance, rename_instance, show_logs,
+    db_dump, db_restore, validate_instance,
+)
 
 
 def _find_workspace_root(start: Path | None = None) -> str:
@@ -46,6 +55,23 @@ def _resolve_instance(ctx, name: str | None) -> str:
             "Specify a name (e.g. owm start feat-789) or cd into an instance folder."
         )
     return result.instance
+
+
+def _is_running(instance: str, workspace_root: str) -> bool:
+    pid = _read_pid(instance, workspace_root)
+    return pid is not None and _process_alive(pid)
+
+
+def _read_instance_conf(instance: str, workspace_root: str):
+    path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    with open(path) as f:
+        return parse_instance_config(f.read())
+
+
+def _workspace_compare_pairs(workspace_root: str) -> list:
+    toml_path = os.path.join(workspace_root, "workspace.toml")
+    with open(toml_path) as f:
+        return parse_workspace_config(f.read()).compare_pairs
 
 
 @click.group()
@@ -234,3 +260,32 @@ def cmd_status(ctx, name):
             click.echo(f"  warning: {w['type']}  {w.get('path', '')}", err=True)
         for a in r.get("port_alerts", []):
             click.echo(f"  alert: port conflict on {a['instance']}:{a['http_port']}  ({a['classification']})", err=True)
+
+
+@cli.command("delete")
+@click.argument("name", required=False)
+@click.option("--force", "-f", is_flag=True, help="Skip confirmation checklist and delete immediately.")
+@click.pass_context
+def cmd_delete(ctx, name, force):
+    """Delete an instance and all its resources."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    running = _is_running(instance, workspace_root)
+    compare_pairs = _workspace_compare_pairs(workspace_root)
+    try:
+        result = delete_instance(
+            instance=instance,
+            running=running,
+            force=force,
+            workspace_root=workspace_root,
+            workspace_compare_pairs=compare_pairs,
+        )
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    if result.status == "pending_confirmation":
+        click.echo(f"instance {instance!r} — pass --force to confirm deletion:", err=True)
+        for item in result.checklist or []:
+            click.echo(f"  • {item}", err=True)
+        sys.exit(1)
+    click.echo(f"{instance}  deleted")
