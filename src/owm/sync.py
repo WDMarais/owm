@@ -48,12 +48,19 @@ def git_fetch_bare(bare_path: str, *, timeout: int = 30) -> bool:
 
     FETCH_HEAD always appears in --porcelain output even when nothing changed,
     so we filter it out and only count real ref updates.
+
+    stderr is not captured so git's progress output streams to the terminal.
     Raises OwmError(FETCH_TIMEOUT) if the fetch exceeds `timeout` seconds.
     """
     from owm.errors import OwmError, FETCH_TIMEOUT
     try:
-        r = git_run(["fetch", "--prune", "--porcelain", "origin"],
-                    cwd=bare_path, check=False, timeout=timeout)
+        r = subprocess.run(
+            ["git", "fetch", "--prune", "--porcelain", "origin"],
+            cwd=str(bare_path),
+            stdout=subprocess.PIPE,
+            text=True,
+            timeout=timeout,
+        )
     except subprocess.TimeoutExpired:
         raise OwmError(f"fetch timed out after {timeout}s", code=FETCH_TIMEOUT)
     if r.returncode != 0:
