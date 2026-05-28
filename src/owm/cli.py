@@ -351,3 +351,51 @@ def cmd_logs(ctx, name, lines, level, follow):
             click.echo("  ".join(parts))
         else:
             click.echo(str(line))
+
+
+@cli.command("db-dump")
+@click.argument("name", required=False)
+@click.option("--out", default=None, metavar="PATH", help="Output path (default: _dumps/<instance>/<ts>.dump).")
+@click.pass_context
+def cmd_db_dump(ctx, name, out):
+    """Dump an instance database to a file."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    conf = _read_instance_conf(instance, workspace_root)
+    try:
+        result = db_dump(
+            instance=instance,
+            out=out,
+            workspace_root=workspace_root,
+            db_name=conf.database.name,
+            pg_port=conf.database.pg_port,
+        )
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    click.echo(f"dump: {result.path}")
+
+
+@cli.command("db-restore")
+@click.argument("name", required=False)
+@click.argument("path_arg", metavar="PATH")
+@click.pass_context
+def cmd_db_restore(ctx, name, path_arg):
+    """Restore an instance database from a dump file. Requires the instance to be stopped."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    conf = _read_instance_conf(instance, workspace_root)
+    running = _is_running(instance, workspace_root)
+    try:
+        result = db_restore(
+            instance=instance,
+            path=path_arg,
+            workspace_root=workspace_root,
+            db_name=conf.database.name,
+            pg_port=conf.database.pg_port,
+            running=running,
+        )
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    click.echo(f"restored: {result.resolved_path}")

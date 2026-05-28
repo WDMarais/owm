@@ -305,6 +305,51 @@ def test_logs_follow_not_implemented(runner, tmp_workspace):
 
 
 # ---------------------------------------------------------------------------
+# owm db-dump / db-restore
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_db_dump_exits_zero_and_prints_path(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.operations._pg_dump"), patch("owm.operations.os.makedirs"):
+        result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "db-dump", "feat-789"])
+    assert result.exit_code == 0
+    assert "dump:" in result.output
+    assert "feat-789" in result.output
+
+
+@pytest.mark.cli_integration
+def test_db_dump_explicit_out_path(runner, standard_instance_toml, tmp_workspace, tmp_path):
+    out = str(tmp_path / "snap.dump")
+    with patch("owm.operations._pg_dump"), patch("owm.operations.os.makedirs"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "db-dump", "feat-789", "--out", out,
+        ])
+    assert result.exit_code == 0
+    assert out in result.output
+
+
+@pytest.mark.cli_integration
+def test_db_restore_exits_zero_and_prints_path(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=False), \
+         patch("owm.operations._pg_restore"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "db-restore", "feat-789", "snap.dump",
+        ])
+    assert result.exit_code == 0
+    assert "restored:" in result.output
+
+
+@pytest.mark.cli_integration
+def test_db_restore_running_exits_nonzero(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=True):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "db-restore", "feat-789", "snap.dump",
+        ])
+    assert result.exit_code != 0
+    assert "INSTANCE_RUNNING" in result.output or "stop" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
 # owm list
 # ---------------------------------------------------------------------------
 
