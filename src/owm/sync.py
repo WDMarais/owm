@@ -93,7 +93,11 @@ def branch_exists_on_origin(bare_path: str, branch: str) -> bool:
 
 
 def git_reset_hard(worktree_path: str) -> None:
-    git_run(["reset", "--hard", "@{u}"], cwd=worktree_path)
+    has_upstream = git_run(
+        ["rev-parse", "--abbrev-ref", "@{u}"], cwd=worktree_path, check=False
+    ).returncode == 0
+    target = "@{u}" if has_upstream else "HEAD"
+    git_run(["reset", "--hard", target], cwd=worktree_path)
     git_run(["clean", "-fd"], cwd=worktree_path)
 
 
