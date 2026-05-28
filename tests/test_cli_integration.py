@@ -350,6 +350,30 @@ def test_db_restore_running_exits_nonzero(runner, standard_instance_toml, tmp_wo
 
 
 # ---------------------------------------------------------------------------
+# owm validate
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_validate_valid_toml_exits_zero(runner, standard_instance_toml, tmp_workspace):
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789"])
+    assert result.exit_code == 0
+    assert "ok" in result.output
+
+
+@pytest.mark.cli_integration
+def test_validate_missing_toml_exits_nonzero(runner, tmp_workspace):
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789"])
+    assert result.exit_code != 0
+
+
+@pytest.mark.cli_integration
+def test_validate_live_flag_noted_in_output(runner, standard_instance_toml, tmp_workspace):
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789", "--live"])
+    assert result.exit_code == 0
+    assert "live" in result.output
+
+
+# ---------------------------------------------------------------------------
 # owm list
 # ---------------------------------------------------------------------------
 

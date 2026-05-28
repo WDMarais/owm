@@ -399,3 +399,38 @@ def cmd_db_restore(ctx, name, path_arg):
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
     click.echo(f"restored: {result.resolved_path}")
+
+
+@cli.command("validate")
+@click.argument("name", required=False)
+@click.option("--live", is_flag=True, help="Also check worktrees, DB, venv, and proxy block.")
+@click.pass_context
+def cmd_validate(ctx, name, live):
+    """Validate instance configuration. Static by default; --live checks materialised state."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    toml_valid = True
+    missing_fields = []
+    try:
+        with open(toml_path) as f:
+            parse_instance_config(f.read())
+    except FileNotFoundError:
+        toml_valid = False
+        missing_fields = ["instance.toml not found — run owm create --toml-only first"]
+    except Exception as e:
+        toml_valid = False
+        missing_fields = [str(e)]
+    result = validate_instance(
+        instance=instance,
+        live=live,
+        toml_valid=toml_valid,
+        missing_fields=missing_fields if not toml_valid else None,
+    )
+    if result.valid:
+        suffix = "  (live)" if result.live_checks_run else ""
+        click.echo(f"{instance}  ok{suffix}")
+    else:
+        for err in result.errors:
+            click.echo(f"error: {err}", err=True)
+        sys.exit(1)
