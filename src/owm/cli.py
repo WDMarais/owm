@@ -559,19 +559,27 @@ def cmd_fetch(ctx):
         ws_conf = parse_workspace_config(f.read())
     repos = list(ws_conf.repos.keys())
     repos_with_updates = []
+    unreachable = []
     for name in repos:
         bare_path = os.path.join(workspace_root, "_repos", f"{name}.git")
-        if os.path.isdir(bare_path) and git_fetch_bare(bare_path):
+        if not os.path.isdir(bare_path):
+            continue
+        click.echo(f"  fetching {name}...", nl=False)
+        try:
+            updated = git_fetch_bare(bare_path)
+        except OwmError as e:
+            click.echo(f"  warning: {e.args[0]} [{e.code}]")
+            unreachable.append(name)
+            continue
+        click.echo("  updated" if updated else "  up to date")
+        if updated:
             repos_with_updates.append(name)
-    result = fetch_workspace(repos=repos, repos_with_updates=repos_with_updates)
-    if result.warnings:
-        for msg in result.warnings.values():
-            click.echo(f"  warning: {msg}")
-    if result.fetched:
-        for name in result.fetched:
-            click.echo(f"  {name}  updated")
-    else:
-        click.echo("all repos up to date")
+    result = fetch_workspace(
+        repos=repos, repos_with_updates=repos_with_updates,
+        unreachable_repos=unreachable,
+    )
+    if not repos:
+        click.echo("no repos configured")
 
 
 # ---------------------------------------------------------------------------

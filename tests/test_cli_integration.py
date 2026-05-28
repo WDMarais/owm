@@ -541,11 +541,11 @@ def test_upgrade_reinstall_flag(runner, tmp_workspace):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.cli_integration
-def test_fetch_no_repos_exits_zero_up_to_date(runner, tmp_workspace):
+def test_fetch_no_repos_exits_zero(runner, tmp_workspace):
     # workspace.toml has no repos — nothing to fetch
     result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "fetch"])
     assert result.exit_code == 0
-    assert "up to date" in result.output
+    assert "no repos configured" in result.output
 
 
 @pytest.mark.cli_integration
@@ -557,6 +557,18 @@ def test_fetch_repo_with_update_printed(runner, tmp_workspace):
     assert result.exit_code == 0
     assert "odoo" in result.output
     assert "updated" in result.output
+
+
+@pytest.mark.cli_integration
+def test_fetch_repo_timeout_prints_warning(runner, tmp_workspace):
+    (tmp_workspace / "workspace.toml").write_text('[repos]\nodoo = "git@example.com:odoo.git"\n[clusters]\n')
+    (tmp_workspace / "_repos" / "odoo.git").mkdir(parents=True, exist_ok=True)
+    from owm.errors import OwmError, FETCH_TIMEOUT
+    with patch("owm.cli.git_fetch_bare", side_effect=OwmError("fetch timed out after 30s", code=FETCH_TIMEOUT)):
+        result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "fetch"])
+    assert result.exit_code == 0
+    assert "warning" in result.output
+    assert "FETCH_TIMEOUT" in result.output
 
 
 @pytest.mark.cli_integration

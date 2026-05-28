@@ -10,9 +10,9 @@ from owm.errors import OwmError, DIVERGED, NOT_OWNED, SHARED_REPO, DIRTY_WORKTRE
 # Git I/O helpers
 # ---------------------------------------------------------------------------
 
-def git_run(args: list[str], cwd: str, *, check: bool = True) -> subprocess.CompletedProcess:
+def git_run(args: list[str], cwd: str, *, check: bool = True, timeout: int | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=str(cwd), check=check,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, timeout=timeout)
 
 
 def read_repo_state(worktree_path: str) -> dict:
@@ -43,13 +43,19 @@ def has_local_commits(worktree_path: str) -> bool:
     return r.returncode == 0 and int(r.stdout.strip() or "0") > 0
 
 
-def git_fetch_bare(bare_path: str) -> bool:
+def git_fetch_bare(bare_path: str, *, timeout: int = 30) -> bool:
     """Fetch a bare repo; returns True if any branch/tag refs were updated.
 
     FETCH_HEAD always appears in --porcelain output even when nothing changed,
     so we filter it out and only count real ref updates.
+    Raises OwmError(FETCH_TIMEOUT) if the fetch exceeds `timeout` seconds.
     """
-    r = git_run(["fetch", "--prune", "--porcelain", "origin"], cwd=bare_path, check=False)
+    from owm.errors import OwmError, FETCH_TIMEOUT
+    try:
+        r = git_run(["fetch", "--prune", "--porcelain", "origin"],
+                    cwd=bare_path, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise OwmError(f"fetch timed out after {timeout}s", code=FETCH_TIMEOUT)
     if r.returncode != 0:
         return False
     ref_lines = [l for l in r.stdout.splitlines() if "FETCH_HEAD" not in l]
