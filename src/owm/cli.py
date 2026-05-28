@@ -289,3 +289,27 @@ def cmd_delete(ctx, name, force):
             click.echo(f"  • {item}", err=True)
         sys.exit(1)
     click.echo(f"{instance}  deleted")
+
+
+@cli.command("rename")
+@click.argument("name")
+@click.argument("new_name")
+@click.pass_context
+def cmd_rename(ctx, name, new_name):
+    """Rename an instance. Requires the instance to be stopped."""
+    workspace_root = _resolve_workspace(ctx)
+    running = _is_running(name, workspace_root)
+    compare_pairs = _workspace_compare_pairs(workspace_root)
+    try:
+        result = rename_instance(
+            instance=name,
+            new_name=new_name,
+            running=running,
+            workspace_compare_pairs=compare_pairs,
+        )
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    click.echo(f"{name} → {new_name}")
+    if result.old_url and result.new_url:
+        click.echo(f"  {result.old_url} → {result.new_url}")

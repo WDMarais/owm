@@ -226,6 +226,33 @@ def test_delete_force_exits_zero(runner, standard_instance_toml, tmp_workspace):
 
 
 # ---------------------------------------------------------------------------
+# owm rename
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_rename_running_instance_exits_nonzero(runner, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=True):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "rename", "feat-789", "pd-789",
+        ])
+    assert result.exit_code != 0
+    assert "INSTANCE_RUNNING" in result.output or "stop" in result.output.lower()
+
+
+@pytest.mark.cli_integration
+def test_rename_stopped_exits_zero_with_output(runner, tmp_workspace):
+    with patch("owm.cli._is_running", return_value=False):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "rename", "feat-789", "pd-789",
+        ])
+    assert result.exit_code == 0
+    assert "feat-789" in result.output
+    assert "pd-789" in result.output
+
+
+# ---------------------------------------------------------------------------
 # owm list
 # ---------------------------------------------------------------------------
 
