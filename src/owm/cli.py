@@ -20,6 +20,12 @@ from owm.operations import (
     delete_instance, rename_instance, show_logs,
     db_dump, db_restore, validate_instance,
 )
+from owm.sync import (
+    fetch_workspace, sync_instance, push_instance, reset_instance,
+    git_fetch_bare, read_repo_state, git_fast_forward, git_rebase,
+    git_push, git_reset_hard,
+)
+from owm.worktrees import resolve_worktree_path
 
 
 def _find_workspace_root(start: Path | None = None) -> str:
@@ -523,3 +529,148 @@ def cmd_validate(ctx, name, live):
         for err in result.errors:
             click.echo(f"error: {err}", err=True)
         sys.exit(1)
+
+
+def _gather_repo_states(instance: str, workspace_root: str) -> dict:
+    conf = _read_instance_conf(instance, workspace_root)
+    states = {}
+    for name, rspec in conf.repos.items():
+        wt = resolve_worktree_path(
+            repo=name, branch=rspec.branch, shared=rspec.shared,
+            workspace_root=workspace_root, instance_name=instance,
+        )
+        state = read_repo_state(wt.path) if os.path.isdir(wt.path) else {"status": "clean"}
+        state["shared"] = rspec.shared
+        states[name] = state
+    return states
+
+
+# ---------------------------------------------------------------------------
+# owm fetch
+# ---------------------------------------------------------------------------
+
+@cli.command("fetch")
+@click.pass_context
+def cmd_fetch(ctx):
+    """Fetch all bare repos in the workspace."""
+    workspace_root = _resolve_workspace(ctx)
+    toml_path = os.path.join(workspace_root, "workspace.toml")
+    with open(toml_path) as f:
+        ws_conf = parse_workspace_config(f.read())
+    repos = list(ws_conf.repos.keys())
+    repos_with_updates = []
+    for name in repos:
+        bare_path = os.path.join(workspace_root, "_repos", f"{name}.git")
+        if os.path.isdir(bare_path) and git_fetch_bare(bare_path):
+            repos_with_updates.append(name)
+    result = fetch_workspace(repos=repos, repos_with_updates=repos_with_updates)
+    if result.warnings:
+        for msg in result.warnings.values():
+            click.echo(f"  warning: {msg}")
+    if result.fetched:
+        for name in result.fetched:
+            click.echo(f"  {name}  updated")
+    else:
+        click.echo("all repos up to date")
+
+
+# ---------------------------------------------------------------------------
+# owm sync
+# ---------------------------------------------------------------------------
+
+@cli.command("sync")
+@click.argument("name", required=False)
+@click.option("--repo", default=None, help="Sync only this repo.")
+@click.option("--rebase", is_flag=True, help="Rebase instead of fast-forward.")
+@click.pass_context
+def cmd_sync(ctx, name, repo, rebase):
+    """Sync an instance's worktrees with their upstream base branches."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    repo_states = _gather_repo_states(instance, workspace_root)
+    results = sync_instance(instance, repo_states, rebase=rebase, repo=repo)
+    conf = _read_instance_conf(instance, workspace_root)
+    for rname, outcome in results.items():
+        status = outcome["status"]
+        if status == "fast-forwarded":
+            rspec = conf.repos[rname]
+            wt = resolve_worktree_path(
+                repo=rname, branch=rspec.branch, shared=rspec.shared,
+                workspace_root=workspace_root, instance_name=instance,
+            )
+            git_fast_forward(wt.path)
+        elif status == "rebased":
+            rspec = conf.repos[rname]
+            wt = resolve_worktree_path(
+                repo=rname, branch=rspec.branch, shared=rspec.shared,
+                workspace_root=workspace_root, instance_name=instance,
+            )
+            git_rebase(wt.path)
+        click.echo(f"  {rname}  {status}")
+
+
+# ---------------------------------------------------------------------------
+# owm push
+# ---------------------------------------------------------------------------
+
+@cli.command("push")
+@click.argument("name", required=False)
+@click.option("--repo", default=None, help="Push only this repo.")
+@click.option("--all", "all_repos", is_flag=True, help="Push all owned repos.")
+@click.pass_context
+def cmd_push(ctx, name, repo, all_repos):
+    """Push instance branches to origin."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    repo_states = _gather_repo_states(instance, workspace_root)
+    try:
+        results = push_instance(
+            instance, repo=repo, all_repos=all_repos, repo_states=repo_states,
+        )
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    conf = _read_instance_conf(instance, workspace_root)
+    for rname, outcome in results.items():
+        if outcome["status"] == "pushed":
+            rspec = conf.repos[rname]
+            wt = resolve_worktree_path(
+                repo=rname, branch=rspec.branch, shared=rspec.shared,
+                workspace_root=workspace_root, instance_name=instance,
+            )
+            git_push(wt.path)
+        click.echo(f"  {rname}  {outcome['status']}")
+
+
+# ---------------------------------------------------------------------------
+# owm reset
+# ---------------------------------------------------------------------------
+
+@cli.command("reset")
+@click.argument("name", required=False)
+@click.option("--repo", default=None, help="Reset only this repo.")
+@click.option("--force", is_flag=True, help="Discard uncommitted changes.")
+@click.option("--all", "all_repos", is_flag=True, help="Reset all non-shared repos.")
+@click.pass_context
+def cmd_reset(ctx, name, repo, force, all_repos):
+    """Reset instance worktrees to origin HEAD."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    repo_states = _gather_repo_states(instance, workspace_root)
+    try:
+        results = reset_instance(
+            instance, repo=repo, force=force, all_repos=all_repos, repo_states=repo_states,
+        )
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    conf = _read_instance_conf(instance, workspace_root)
+    for rname, outcome in results.items():
+        if outcome["status"] == "reset":
+            rspec = conf.repos[rname]
+            wt = resolve_worktree_path(
+                repo=rname, branch=rspec.branch, shared=rspec.shared,
+                workspace_root=workspace_root, instance_name=instance,
+            )
+            git_reset_hard(wt.path)
+        click.echo(f"  {rname}  {outcome['status']}")

@@ -164,6 +164,40 @@ def tmp_workspace(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Worktree directory helpers
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def make_instance_worktrees():
+    """
+    Factory: create the worktree directories for an instance on disk.
+
+    Reads the instance.toml to determine per-instance vs shared layout,
+    then mkdir's each path so _gather_repo_states can find them.
+    Shared repos land at _shared/<repo>/<branch>/;
+    per-instance repos at instances/<instance>/<repo>/.
+
+    Usage:
+        make_instance_worktrees(tmp_workspace, "feat-789")
+    """
+    import tomllib
+
+    def _make(workspace_root: Path, instance: str) -> None:
+        toml_path = workspace_root / "instances" / instance / "instance.toml"
+        with open(toml_path, "rb") as f:
+            data = tomllib.load(f)
+        for repo_name, spec in data["repos"].items():
+            branch = spec["branch"]
+            if spec.get("shared", False):
+                path = workspace_root / "_shared" / repo_name / branch
+            else:
+                path = workspace_root / "instances" / instance / repo_name
+            path.mkdir(parents=True, exist_ok=True)
+
+    return _make
+
+
+# ---------------------------------------------------------------------------
 # Config helpers
 # ---------------------------------------------------------------------------
 

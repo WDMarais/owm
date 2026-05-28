@@ -534,3 +534,150 @@ def test_upgrade_reinstall_flag(runner, tmp_workspace):
     ])
     assert result.exit_code == 0
     assert "reinstalled" in result.output
+
+
+# ---------------------------------------------------------------------------
+# owm fetch
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_fetch_no_repos_exits_zero_up_to_date(runner, tmp_workspace):
+    # workspace.toml has no repos — nothing to fetch
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "fetch"])
+    assert result.exit_code == 0
+    assert "up to date" in result.output
+
+
+@pytest.mark.cli_integration
+def test_fetch_repo_with_update_printed(runner, tmp_workspace):
+    (tmp_workspace / "workspace.toml").write_text('[repos]\nodoo = "git@example.com:odoo.git"\n[clusters]\n')
+    (tmp_workspace / "_repos" / "odoo.git").mkdir(parents=True, exist_ok=True)
+    with patch("owm.cli.git_fetch_bare", return_value=True):
+        result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "fetch"])
+    assert result.exit_code == 0
+    assert "odoo" in result.output
+    assert "updated" in result.output
+
+
+@pytest.mark.cli_integration
+def test_fetch_repo_no_update_says_up_to_date(runner, tmp_workspace):
+    (tmp_workspace / "workspace.toml").write_text('[repos]\nodoo = "git@example.com:odoo.git"\n[clusters]\n')
+    (tmp_workspace / "_repos" / "odoo.git").mkdir(parents=True, exist_ok=True)
+    with patch("owm.cli.git_fetch_bare", return_value=False):
+        result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "fetch"])
+    assert result.exit_code == 0
+    assert "up to date" in result.output
+
+
+# ---------------------------------------------------------------------------
+# owm sync
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_sync_clean_repo_skipped(runner, standard_instance_toml, tmp_workspace, make_instance_worktrees):
+    make_instance_worktrees(tmp_workspace, "feat-789")
+    with patch("owm.cli.read_repo_state", return_value={"status": "clean"}), \
+         patch("owm.cli.git_fast_forward"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "sync", "feat-789",
+        ])
+    assert result.exit_code == 0
+    assert "skipped" in result.output
+
+
+@pytest.mark.cli_integration
+def test_sync_behind_repo_fast_forwarded(runner, standard_instance_toml, tmp_workspace, make_instance_worktrees):
+    make_instance_worktrees(tmp_workspace, "feat-789")
+    with patch("owm.cli.read_repo_state", return_value={"status": "behind", "behind_by": 2}), \
+         patch("owm.cli.git_fast_forward") as mock_ff:
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "sync", "feat-789",
+        ])
+    assert result.exit_code == 0
+    assert "fast-forwarded" in result.output
+    assert mock_ff.called
+
+
+@pytest.mark.cli_integration
+def test_sync_rebase_flag_rebases_diverged(runner, standard_instance_toml, tmp_workspace, make_instance_worktrees):
+    make_instance_worktrees(tmp_workspace, "feat-789")
+    with patch("owm.cli.read_repo_state", return_value={"status": "diverged", "ahead_by": 1, "behind_by": 1}), \
+         patch("owm.cli.git_rebase") as mock_rb:
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "sync", "feat-789", "--rebase",
+        ])
+    assert result.exit_code == 0
+    assert "rebased" in result.output
+    assert mock_rb.called
+
+
+# ---------------------------------------------------------------------------
+# owm push
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_push_all_exits_zero(runner, standard_instance_toml, tmp_workspace, make_instance_worktrees):
+    make_instance_worktrees(tmp_workspace, "feat-789")
+    with patch("owm.cli.read_repo_state", return_value={"status": "ahead", "ahead_by": 1}), \
+         patch("owm.cli.git_push"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "push", "feat-789", "--all",
+        ])
+    assert result.exit_code == 0
+    assert "pushed" in result.output
+
+
+@pytest.mark.cli_integration
+def test_push_shared_repo_skipped(runner, tmp_workspace, make_instance_worktrees):
+    inst_dir = tmp_workspace / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    (inst_dir / "instance.toml").write_text(
+        '[repos]\nodoo = {branch = "main", shared = true}\n\n'
+        '[database]\nname = "feat-789"\npg_port = 5432\n\n'
+        '[server]\nhttp_port = 8100\ngevent_port = 8101\nworkers = 2\n'
+    )
+    make_instance_worktrees(tmp_workspace, "feat-789")
+    with patch("owm.cli.read_repo_state", return_value={"status": "ahead"}), \
+         patch("owm.cli.git_push"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "push", "feat-789", "--all",
+        ])
+    assert result.exit_code == 0
+    assert "skipped" in result.output
+
+
+# ---------------------------------------------------------------------------
+# owm reset
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_reset_all_clean_exits_zero(runner, standard_instance_toml, tmp_workspace, make_instance_worktrees):
+    make_instance_worktrees(tmp_workspace, "feat-789")
+    with patch("owm.cli.read_repo_state", return_value={"status": "clean"}), \
+         patch("owm.cli.git_reset_hard"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "reset", "feat-789", "--all",
+        ])
+    assert result.exit_code == 0
+
+
+@pytest.mark.cli_integration
+def test_reset_dirty_without_force_exits_nonzero(runner, standard_instance_toml, tmp_workspace, make_instance_worktrees):
+    make_instance_worktrees(tmp_workspace, "feat-789")
+    with patch("owm.cli.read_repo_state", return_value={"status": "dirty", "dirty": True}):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "reset", "feat-789", "--all",
+        ])
+    assert result.exit_code != 0
+    assert "DIRTY_WORKTREE" in result.output
+
+
+@pytest.mark.cli_integration
+def test_reset_dirty_with_force_exits_zero(runner, standard_instance_toml, tmp_workspace, make_instance_worktrees):
+    make_instance_worktrees(tmp_workspace, "feat-789")
+    with patch("owm.cli.read_repo_state", return_value={"status": "dirty", "dirty": True}), \
+         patch("owm.cli.git_reset_hard"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "reset", "feat-789", "--all", "--force",
+        ])
+    assert result.exit_code == 0
