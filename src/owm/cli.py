@@ -320,3 +320,34 @@ def cmd_rename(ctx, name, new_name):
     click.echo(f"{name} → {new_name}")
     if result.old_url and result.new_url:
         click.echo(f"  {result.old_url} → {result.new_url}")
+
+
+@cli.command("logs")
+@click.argument("name", required=False)
+@click.option("--lines", "-n", default=50, show_default=True, help="Number of lines to show.")
+@click.option("--level", default=None, help="Filter by log level (e.g. ERROR).")
+@click.option("--follow", "-f", is_flag=True, help="Stream new log lines (not yet implemented).")
+@click.pass_context
+def cmd_logs(ctx, name, lines, level, follow):
+    """Show recent log lines for an instance."""
+    if follow:
+        raise NotImplementedError("--follow is not yet implemented")
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    try:
+        result = show_logs(instance=instance, n=lines, follow=False, level=level,
+                           workspace_root=workspace_root)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    if result.warning:
+        click.echo(f"warning: {result.warning}", err=True)
+    for line in result.lines:
+        if isinstance(line, dict):
+            ts = line.get("ts") or line.get("time") or ""
+            lvl = line.get("level") or line.get("severity") or ""
+            msg = line.get("msg") or line.get("message") or str(line)
+            parts = [p for p in (ts, lvl, msg) if p]
+            click.echo("  ".join(parts))
+        else:
+            click.echo(str(line))

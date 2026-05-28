@@ -267,6 +267,44 @@ def test_rename_stopped_exits_zero_with_output(runner, tmp_workspace):
 
 
 # ---------------------------------------------------------------------------
+# owm logs
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_logs_prints_lines(runner, tmp_workspace):
+    import json
+    inst_dir = tmp_workspace / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    lines = [{"level": "INFO", "msg": "started"}, {"level": "ERROR", "msg": "crash"}]
+    (inst_dir / "instance.log").write_text("\n".join(json.dumps(l) for l in lines) + "\n")
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "logs", "feat-789"])
+    assert result.exit_code == 0
+    assert "started" in result.output
+    assert "crash" in result.output
+
+
+@pytest.mark.cli_integration
+def test_logs_level_filter(runner, tmp_workspace):
+    import json
+    inst_dir = tmp_workspace / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    lines = [{"level": "INFO", "msg": "started"}, {"level": "ERROR", "msg": "crash"}]
+    (inst_dir / "instance.log").write_text("\n".join(json.dumps(l) for l in lines) + "\n")
+    result = runner.invoke(cli, [
+        "--workspace", str(tmp_workspace), "logs", "feat-789", "--level", "ERROR",
+    ])
+    assert result.exit_code == 0
+    assert "crash" in result.output
+    assert "started" not in result.output
+
+
+@pytest.mark.cli_integration
+def test_logs_follow_not_implemented(runner, tmp_workspace):
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "logs", "feat-789", "--follow"])
+    assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
 # owm list
 # ---------------------------------------------------------------------------
 
