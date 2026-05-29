@@ -59,7 +59,9 @@ class CaddyBackend:
     ) -> None:
         block = (
             f"{name}.{domain_suffix} {{\n"
-            f"    reverse_proxy /websocket* localhost:{gevent_port}\n"
+            f"    reverse_proxy /websocket* localhost:{gevent_port} {{\n"
+            f"        header_up Origin {{http.request.header.Origin}}\n"
+            f"    }}\n"
             f"    reverse_proxy /longpolling/* localhost:{gevent_port}\n"
             f"    reverse_proxy localhost:{http_port}\n"
             f"    tls internal\n"
