@@ -20,6 +20,7 @@ from owm.operations import (
     delete_instance, rename_instance, show_logs,
     db_dump, db_restore, validate_instance,
 )
+from owm.database import reset_db
 from owm.sync import (
     fetch_workspace, sync_instance, push_instance, reset_instance,
     git_fetch_bare, read_repo_state, git_fast_forward, git_rebase,
@@ -442,6 +443,36 @@ def cmd_db_restore(ctx, name, path_arg):
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
     click.echo(f"restored: {result.resolved_path}")
+
+
+@cli.command("db-reset")
+@click.argument("name", required=False)
+@click.pass_context
+def cmd_db_reset(ctx, name):
+    """Reset instance database to its template. Requires the instance to be stopped."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    conf = _read_instance_conf(instance, workspace_root)
+    if conf.database.template is None:
+        click.echo("error: no template configured for this instance", err=True)
+        sys.exit(1)
+    if _is_running(instance, workspace_root):
+        click.echo("error: stop the instance first", err=True)
+        sys.exit(1)
+    try:
+        result = reset_db(
+            name=conf.database.name,
+            template=conf.database.template,
+            pg_port=conf.database.pg_port,
+            seed_script=None,
+        )
+    except Exception as e:
+        click.echo(f"error: {e}", err=True)
+        sys.exit(1)
+    msg = f"reset: {instance}  restored from {result.restored_from}"
+    if result.warning:
+        msg += f"\nwarn: {result.warning}"
+    click.echo(msg)
 
 
 @cli.command("env")
