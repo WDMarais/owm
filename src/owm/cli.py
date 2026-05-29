@@ -365,14 +365,21 @@ def cmd_rename(ctx, name, new_name):
 @click.argument("name", required=False)
 @click.option("--lines", "-n", default=50, show_default=True, help="Number of lines to show.")
 @click.option("--level", default=None, help="Filter by log level (e.g. ERROR).")
-@click.option("--follow", "-f", is_flag=True, help="Stream new log lines (not yet implemented).")
+@click.option("--follow", "-f", is_flag=True, help="Stream new log lines (tail -f).")
 @click.pass_context
 def cmd_logs(ctx, name, lines, level, follow):
     """Show recent log lines for an instance."""
-    if follow:
-        raise NotImplementedError("--follow is not yet implemented")
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
+    if follow:
+        instance_dir = os.path.join(workspace_root, "instances", instance)
+        if not os.path.isdir(instance_dir):
+            click.echo(f"error: instance {instance!r} not found", err=True)
+            sys.exit(1)
+        log_path = os.path.join(instance_dir, "instance.log")
+        if level:
+            click.echo("warning: --level is ignored with --follow", err=True)
+        os.execvp("tail", ["tail", "-f", log_path])
     try:
         result = show_logs(instance=instance, n=lines, follow=False, level=level,
                            workspace_root=workspace_root)
