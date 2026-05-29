@@ -21,6 +21,7 @@ from owm.operations import (
     db_dump, db_restore, validate_instance,
 )
 from owm.database import reset_db
+from owm.oplog import workspace_log
 from owm.sync import (
     fetch_workspace, sync_instance, push_instance, reset_instance,
     git_fetch_bare, read_repo_state, git_fast_forward, git_rebase,
@@ -503,8 +504,10 @@ def cmd_db_reset(ctx, name):
             seed_script=None,
         )
     except Exception as e:
+        workspace_log(workspace_root, "db_reset", instance=instance, template=conf.database.template, status="error", error=str(e))
         click.echo(f"error: {e}", err=True)
         sys.exit(1)
+    workspace_log(workspace_root, "db_reset", instance=instance, template=result.restored_from, status="ok")
     msg = f"reset: {instance}  restored from {result.restored_from}"
     if result.warning:
         msg += f"\nwarn: {result.warning}"

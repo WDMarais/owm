@@ -13,6 +13,7 @@ import psutil
 from owm.addons import resolve_addons_path
 from owm.config import parse_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO
+from owm.oplog import workspace_log, instance_separator
 from owm.ports import assign_port, find_conflicting_process
 from owm.proxy import get_proxy_backend
 from owm.venv import create_venv
@@ -422,9 +423,11 @@ def start_instance(
 
     cmd = _build_start_command(instance, workspace_root, conf, init_modules=init_modules)
     log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
+    instance_separator(log_path, f"{instance} started")
     log_fh = open(log_path, "a")
     proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
     _write_pid(instance, workspace_root, proc.pid)
+    workspace_log(workspace_root, "start", instance=instance, pid=proc.pid, status="dispatched")
 
     events = ["instance_starting"]
 
@@ -457,8 +460,12 @@ def stop_instance(
 
     if _wait_for_stop(pid, timeout_seconds):
         _clear_pid(instance, workspace_root)
+        log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
+        instance_separator(log_path, f"{instance} stopped")
+        workspace_log(workspace_root, "stop", instance=instance, pid=pid, status="ok")
         return StopResult(status="stopped", pid=pid, events_emitted=["instance_stopped"])
 
+    workspace_log(workspace_root, "stop", instance=instance, pid=pid, status="timeout")
     return StopResult(
         status="stop_timeout",
         force_killed=False,
@@ -472,6 +479,9 @@ def kill_instance(instance: str, workspace_root: str) -> KillResult:
         return KillResult(status="not_running")
     os.kill(pid, signal.SIGKILL)
     _clear_pid(instance, workspace_root)
+    log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
+    instance_separator(log_path, f"{instance} killed")
+    workspace_log(workspace_root, "kill", instance=instance, pid=pid, status="ok")
     return KillResult(status="killed", pid=pid)
 
 
