@@ -169,13 +169,19 @@ def find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
     )
 
 
-def _build_start_command(instance: str, workspace_root: str, conf: InstanceConfig) -> list[str]:
+def _build_start_command(
+    instance: str, workspace_root: str, conf: InstanceConfig,
+    *, init_modules: list[str] | None = None,
+) -> list[str]:
     odoo_repo, odoo_spec = find_odoo_repo(conf)
     wt = resolve_worktree_path(odoo_repo, odoo_spec.branch, True, workspace_root, instance)
     python = os.path.join(workspace_root, "instances", instance, ".venv", "bin", "python")
     odoo_bin = os.path.join(wt.path, "odoo-bin")
     conf_file = os.path.join(workspace_root, "instances", instance, "instance.conf")
-    return [python, odoo_bin, "--config", conf_file]
+    cmd = [python, odoo_bin, "--config", conf_file]
+    if init_modules:
+        cmd += ["-i", ",".join(init_modules)]
+    return cmd
 
 
 def _wait_for_http(port: int, timeout_seconds: int) -> None:
@@ -400,6 +406,7 @@ def start_instance(
     *,
     wait: bool = False,
     timeout_seconds: int = 30,
+    init_modules: list[str] | None = None,
 ) -> StartResult:
     pid = _read_pid(instance, workspace_root)
     if pid is not None and _process_alive(pid):
@@ -413,7 +420,7 @@ def start_instance(
     with open(os.path.join(instance_dir, "instance.toml")) as f:
         conf = parse_instance_config(f.read())
 
-    cmd = _build_start_command(instance, workspace_root, conf)
+    cmd = _build_start_command(instance, workspace_root, conf, init_modules=init_modules)
     log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
     log_fh = open(log_path, "a")
     proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)

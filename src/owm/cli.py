@@ -197,6 +197,42 @@ def cmd_start(ctx, name, wait):
         click.echo(f"{instance} spawned  pid={result.pid}")
 
 
+@cli.command("install")
+@click.argument("name", required=False)
+@click.argument("modules", nargs=-1, required=True)
+@click.option("--timeout", default=600, show_default=True, metavar="SECS", help="Seconds to wait for Odoo to finish installing.")
+@click.pass_context
+def cmd_install(ctx, name, modules, timeout):
+    """Install Odoo modules into an instance database, then stop.
+
+    Starts Odoo with -i <modules>, waits for HTTP (install complete), then
+    stops. Use this for initial DB setup or to add modules to a template instance.
+
+    \b
+    Examples:
+      owm install odoo19-base base
+      owm install feat-789 sale purchase stock
+    """
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    if _is_running(instance, workspace_root):
+        click.echo("error: stop the instance first", err=True)
+        sys.exit(1)
+    click.echo(f"installing {','.join(modules)} into {instance} …")
+    try:
+        start_instance(
+            instance, workspace_root,
+            wait=True,
+            timeout_seconds=timeout,
+            init_modules=list(modules),
+        )
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    stop_instance(instance, workspace_root, wait=True)
+    click.echo(f"{instance}  install complete")
+
+
 @cli.command("stop")
 @click.argument("name", required=False)
 @click.option("--wait/--no-wait", default=True, help="Block until process exits.")
