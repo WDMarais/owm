@@ -19,6 +19,7 @@ from owm.instance import (
 from owm.archive import archive_instance
 from owm.config import parse_workspace_config, parse_instance_config, parse_repo_spec
 from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
+from owm.database import reset_db
 from owm.sync import (
     fetch_workspace, sync_instance, push_instance, reset_instance,
     read_repo_state, has_local_commits, branch_exists_on_origin,
@@ -54,8 +55,34 @@ def owm_ps(workspace_root=None, **kwargs):
     }
 
 
-def owm_validate(instance, live=False, **kwargs):
-    return {"valid": True, "errors": [], "warnings": [], "live_checks_run": live}
+def owm_validate(instance, live=False, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
+    errors = []
+    warnings = []
+
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    if not os.path.exists(toml_path):
+        return {"valid": False, "errors": [f"instance.toml not found for {instance!r}"], "warnings": [], "live_checks_run": False}
+    try:
+        with open(toml_path) as f:
+            conf = parse_instance_config(f.read())
+    except Exception as e:
+        return {"valid": False, "errors": [f"instance.toml parse error: {e}"], "warnings": [], "live_checks_run": False}
+
+    inst_dir = os.path.join(workspace_root, "instances", instance)
+    venv_dir = os.path.join(inst_dir, ".venv")
+    if not os.path.isdir(venv_dir):
+        warnings.append("venv not found — run owm create first")
+
+    if live:
+        try:
+            result = health_check(instance, workspace_root)
+            if not result.get("http_ok"):
+                errors.append(f"HTTP port {conf.server.http_port} not reachable")
+        except Exception as e:
+            errors.append(f"live check failed: {e}")
+
+    return {"valid": not errors, "errors": errors, "warnings": warnings, "live_checks_run": live}
 
 
 def owm_env(instance, workspace_root=None, **kwargs):
@@ -464,8 +491,36 @@ def owm_upgrade(instance, modules, in_place=False, workers=2, simulate_failure=F
 # DB tools
 # ---------------------------------------------------------------------------
 
-def owm_db_reset(instance, **kwargs):
-    return {"status": "ok", "restored_from": f"{instance}_base"}
+def owm_db_reset(instance, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    try:
+        with open(toml_path) as f:
+            conf = parse_instance_config(f.read())
+    except (OSError, ValueError) as e:
+        return format_error(str(e), "NOT_FOUND")
+
+    if conf.database.template is None:
+        return format_error("no template configured for this instance", "NO_TEMPLATE")
+
+    running = [r for r in list_running_instances(workspace_root) if r.get("instance") == instance]
+    if running:
+        return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
+
+    try:
+        result = reset_db(
+            name=conf.database.name,
+            template=conf.database.template,
+            pg_port=conf.database.pg_port,
+            seed_script=None,
+        )
+    except Exception as e:
+        return format_error(str(e), "DB_RESET_FAILED")
+
+    out = {"status": "ok", "restored_from": result.restored_from}
+    if result.warning:
+        out["warning"] = result.warning
+    return out
 
 
 def owm_db_dump(instance, out=None, workspace_root=None, **kwargs):

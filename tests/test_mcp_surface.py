@@ -23,6 +23,7 @@ from owm.mcp import (
 )
 from owm.errors import OwmError, ALREADY_EXISTS
 from owm.operations import LogsResult
+from owm.database import ResetDbResult
 
 
 # ---------------------------------------------------------------------------
@@ -809,10 +810,19 @@ def test_owm_upgrade_in_place_requires_workers():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.mcp_surface
-def test_owm_db_reset():
-    result = owm_db_reset(instance="feat-789")
+def test_owm_db_reset(tmp_workspace):
+    inst_dir = tmp_workspace / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    (inst_dir / "instance.toml").write_text(
+        '[repos]\nodoo = {branch = "19.0", shared = true}\n'
+        "[database]\nname = \"feat789_db\"\npg_port = 5432\ntemplate = \"feat789_base\"\n"
+        "[server]\nhttp_port = 8142\ngevent_port = 8143\n"
+    )
+    fake = ResetDbResult(restored_from="feat789_base")
+    with patch("owm.mcp.reset_db", return_value=fake):
+        result = owm_db_reset(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["status"] == "ok"
-    assert result["restored_from"] is not None
+    assert result["restored_from"] == "feat789_base"
 
 
 @pytest.mark.mcp_surface
