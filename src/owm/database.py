@@ -1,8 +1,16 @@
 import getpass
 import subprocess
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 from owm.errors import OwmError, DB_UNAVAILABLE
+
+
+class SeedScriptState(StrEnum):
+    UNSET = "unset"
+    PENDING = "pending"
+    EXECUTED = "executed"
+    FAILED = "failed"
 
 
 @dataclass
@@ -27,7 +35,7 @@ class CreateDbResult:
 @dataclass
 class ResetDbResult:
     restored_from: str
-    seed_script_run: bool = False
+    seed_script_state: SeedScriptState = SeedScriptState.UNSET
     seed_script: str | None = None
     warning: str | None = None
 
@@ -80,7 +88,7 @@ def _createdb(name: str, pg_host: str, pg_port: int, template: str | None = None
 
 def _dropdb(name: str, pg_host: str, pg_port: int) -> None:
     subprocess.run(
-        ["dropdb", "-h", pg_host, "-p", str(pg_port), name],
+        ["dropdb", "-h", pg_host, "-p", str(pg_port), "--if-exists", name],
         check=True, capture_output=True,
     )
 
@@ -126,13 +134,15 @@ def reset_db(name: str, template: str, pg_port: int, seed_script: str | None) ->
     pg_host = "/var/run/postgresql"
     _dropdb(name, pg_host, pg_port)
     _createdb(name, pg_host, pg_port, template=template)
-    warning = (
-        None if seed_script
-        else "instance-specific state not restored; re-run seed script manually"
-    )
+    if seed_script:
+        state = SeedScriptState.PENDING
+        warning = "seed script configured but not run — re-run manually"
+    else:
+        state = SeedScriptState.UNSET
+        warning = None
     return ResetDbResult(
         restored_from=template,
-        seed_script_run=seed_script is not None,
+        seed_script_state=state,
         seed_script=seed_script,
         warning=warning,
     )

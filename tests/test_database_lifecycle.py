@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from owm.database import create_db, reset_db, sync_db_from_template
 from owm.database import check_template_staleness, check_pg_reachability
-from owm.database import DatabaseConfig, TemplateStatus
+from owm.database import DatabaseConfig, TemplateStatus, SeedScriptState
 from owm.instance import generate_instance_conf
 from owm.workspace import init_workspace
 
@@ -100,12 +100,12 @@ def test_db_reset_with_seed_script_reruns_it():
             seed_script="scripts/seed.py",
         )
     assert result.restored_from == "odoo19_base"
-    assert result.seed_script_run is True
+    assert result.seed_script_state == SeedScriptState.PENDING
     assert result.seed_script == "scripts/seed.py"
 
 
 @pytest.mark.database_lifecycle
-def test_db_reset_no_seed_script_warns_instance_state_not_restored():
+def test_db_reset_no_seed_script_no_warning():
     with patch("owm.database._dropdb"), patch("owm.database._createdb"):
         result = reset_db(
             name="odoo19_feat789",
@@ -113,8 +113,8 @@ def test_db_reset_no_seed_script_warns_instance_state_not_restored():
             pg_port=5432,
             seed_script=None,
         )
-    assert result.warning is not None
-    assert "instance-specific state" in result.warning.lower() or "not restored" in result.warning.lower()
+    assert result.warning is None
+    assert result.seed_script_state == SeedScriptState.UNSET
 
 
 # ---------------------------------------------------------------------------
