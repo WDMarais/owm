@@ -6,10 +6,13 @@ import click
 
 from owm.api import instance_status, workspace_status
 from owm.config import parse_instance_config, parse_workspace_config
+from owm.addons import resolve_addons_path
+from owm.database import check_pg_reachability
 from owm.errors import OwmError
 from owm.instance import (
     new_instance, create_instance, list_running_instances,
     start_instance, stop_instance, kill_instance, health_check,
+    generate_instance_conf,
     _read_pid, _process_alive,
 )
 from owm.archive import archive_instance
@@ -572,37 +575,125 @@ def cmd_upgrade(ctx, name, modules, reinstall):
 
 @cli.command("validate")
 @click.argument("name", required=False)
-@click.option("--live", is_flag=True, help="Also check worktrees, DB, venv, and proxy block.")
+@click.option("--live", is_flag=True, help="Run live checks: DB reachable, HTTP port responds.")
 @click.pass_context
 def cmd_validate(ctx, name, live):
-    """Validate instance configuration. Static by default; --live checks materialised state."""
+    """Validate instance configuration.
+
+    Runs in tiers:
+      static     — toml parses, repo names known in workspace.toml
+      materialised — venv present, addon paths exist, instance.conf in sync
+      live       — DB reachable, HTTP port responds (opt-in via --live)
+    """
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
+
+    errors = []
+    warnings = []
+
+    # --- Tier 1: static ---
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    toml_valid = True
-    missing_fields = []
     try:
         with open(toml_path) as f:
-            parse_instance_config(f.read())
+            conf = parse_instance_config(f.read())
     except FileNotFoundError:
-        toml_valid = False
-        missing_fields = ["instance.toml not found — run owm create --toml-only first"]
-    except Exception as e:
-        toml_valid = False
-        missing_fields = [str(e)]
-    result = validate_instance(
-        instance=instance,
-        live=live,
-        toml_valid=toml_valid,
-        missing_fields=missing_fields if not toml_valid else None,
-    )
-    if result.valid:
-        suffix = "  (live)" if result.live_checks_run else ""
-        click.echo(f"{instance}  ok{suffix}")
-    else:
-        for err in result.errors:
-            click.echo(f"error: {err}", err=True)
+        click.echo(f"error: instance.toml not found — run owm create --toml-only first", err=True)
         sys.exit(1)
+    except Exception as e:
+        click.echo(f"error: instance.toml: {e}", err=True)
+        sys.exit(1)
+
+    ws_toml_path = os.path.join(workspace_root, "workspace.toml")
+    try:
+        with open(ws_toml_path) as f:
+            ws_conf = parse_workspace_config(f.read())
+        for repo_name in conf.repos:
+            if repo_name not in ws_conf.repos:
+                errors.append(f"repo {repo_name!r} not found in workspace.toml")
+    except Exception as e:
+        warnings.append(f"could not read workspace.toml: {e}")
+        ws_conf = None
+
+    # --- Tier 2: materialised ---
+    instance_dir = os.path.join(workspace_root, "instances", instance)
+    venv_dir = os.path.join(instance_dir, ".venv")
+    if not os.path.isdir(venv_dir):
+        warnings.append("venv not found — run owm create")
+
+    if ws_conf:
+        workspace_repos_meta = {
+            n: {"has_addons": r.has_addons, "addons_paths": r.addons_paths}
+            for n, r in ws_conf.repos.items()
+        }
+        instance_repos_dict = {
+            n: {"shared": s.shared, "branch": s.branch}
+            for n, s in conf.repos.items()
+        }
+        addons_paths = resolve_addons_path(
+            workspace_repos=workspace_repos_meta,
+            instance_repos=instance_repos_dict,
+            workspace_root=workspace_root,
+            instance_name=instance,
+            instances_dir=ws_conf.defaults.instances_dir,
+        )
+        for ap in (addons_paths or []):
+            if not os.path.isdir(ap):
+                warnings.append(f"addon path missing: {ap}")
+            elif not any(
+                os.path.isfile(os.path.join(ap, d, "__manifest__.py"))
+                for d in os.listdir(ap)
+                if os.path.isdir(os.path.join(ap, d))
+            ):
+                warnings.append(f"addon path has no modules: {ap}")
+    else:
+        addons_paths = None
+
+    conf_path = os.path.join(instance_dir, "instance.conf")
+    if not os.path.isfile(conf_path):
+        warnings.append("instance.conf missing — run owm create")
+    else:
+        log_path = os.path.join(instance_dir, "instance.log")
+        expected_conf = generate_instance_conf(
+            instance,
+            conf.server.http_port,
+            conf.server.gevent_port,
+            conf.server.workers,
+            db_name=conf.database.name,
+            db_port=conf.database.pg_port,
+            proxy_active=True,
+            addons_path=addons_paths or None,
+            logfile=log_path,
+        )
+        with open(conf_path) as f:
+            on_disk = f.read()
+        if on_disk != expected_conf:
+            warnings.append("instance.conf is out of sync with instance.toml — run owm create")
+
+    # --- Tier 3: live ---
+    if live:
+        pg_host = "/var/run/postgresql"
+        reach = check_pg_reachability(pg_host, conf.database.pg_port)
+        if reach.method == "error":
+            errors.append(f"DB not reachable at port {conf.database.pg_port}")
+        try:
+            result = health_check(instance, workspace_root)
+            if not result.get("http_ok"):
+                warnings.append(f"HTTP port {conf.server.http_port} not responding")
+        except Exception as e:
+            warnings.append(f"live HTTP check failed: {e}")
+
+    if errors:
+        for e in errors:
+            click.echo(f"error: {e}", err=True)
+        for w in warnings:
+            click.echo(f"warn:  {w}", err=True)
+        sys.exit(1)
+    elif warnings:
+        for w in warnings:
+            click.echo(f"warn:  {w}")
+    else:
+        suffix = "  (live)" if live else ""
+        click.echo(f"{instance}  ok{suffix}")
 
 
 def _gather_repo_states(instance: str, workspace_root: str) -> dict:

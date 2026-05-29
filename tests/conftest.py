@@ -160,7 +160,11 @@ def tmp_workspace(tmp_path):
         (ws / subdir).mkdir(parents=True)
     (ws / "owm.log").touch()
     (ws / "workspace.toml").write_text(
-        "[repos]\n\n[clusters]\n\n[proxy]\nbackend = \"nginx\"\ndomain_suffix = \"localhost\"\n"
+        "[repos]\n"
+        "odoo_like       = {path = \"/dev/null\", has_addons = true}\n"
+        "product_core    = {path = \"/dev/null\", has_addons = true}\n"
+        "customer_config = {path = \"/dev/null\", has_addons = true}\n"
+        "\n[clusters]\n\n[proxy]\nbackend = \"nginx\"\ndomain_suffix = \"localhost\"\n"
     )
     return ws
 
