@@ -42,9 +42,6 @@ def _resolve_workspace(ctx) -> str:
     w = ctx.obj.get("workspace")
     if w:
         return w
-    env = os.environ.get("OWM_WORKSPACE")
-    if env:
-        return env
     return _find_workspace_root()
 
 
