@@ -33,6 +33,7 @@ class NginxBackend:
             f"    proxy_set_header X-Real-IP $remote_addr;\n"
             f"\n"
             f"    location / {{ proxy_pass http://{upstream}; }}\n"
+            f"    location /websocket {{ proxy_pass http://{upstream}_lp; }}\n"
             f"    location /longpolling {{ proxy_pass http://{upstream}_lp; }}\n"
             f"}}\n"
         )
@@ -58,6 +59,7 @@ class CaddyBackend:
     ) -> None:
         block = (
             f"{name}.{domain_suffix} {{\n"
+            f"    reverse_proxy /websocket* localhost:{gevent_port}\n"
             f"    reverse_proxy /longpolling/* localhost:{gevent_port}\n"
             f"    reverse_proxy localhost:{http_port}\n"
             f"    tls internal\n"
