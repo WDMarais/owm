@@ -6,7 +6,7 @@ import pytest
 
 from owm.config import parse_workspace_config, parse_instance_config
 from owm.config import WorkspaceConfig, InstanceConfig, RepoSpec, ClusterConfig
-from owm.config import WorkspaceDefaults, RepoMeta
+from owm.config import WorkspaceDefaults, WorkspaceRepo
 
 # ---------------------------------------------------------------------------
 # Workspace.toml — integration: parse full valid config
@@ -16,16 +16,10 @@ from owm.config import WorkspaceDefaults, RepoMeta
 def test_parse_workspace_config_full_valid():
     toml = """
 [repos]
-odoo            = "git@github.com:odoo/odoo.git"
-product-core    = "git@bitbucket.org:org/product-core.git"
-customer-config = "git@bitbucket.org:org/customer-config.git"
-scripts         = "git@bitbucket.org:org/scripts.git"
-
-[repos.meta]
-odoo.has_addons            = true
-product-core.has_addons    = true
-customer-config.has_addons = true
-scripts.has_addons         = false
+odoo            = {path = "git@github.com:odoo/odoo.git", has_addons = true}
+product-core    = {path = "git@bitbucket.org:org/product-core.git", has_addons = true}
+customer-config = {path = "git@bitbucket.org:org/customer-config.git", has_addons = true}
+scripts         = {path = "git@bitbucket.org:org/scripts.git"}
 
 [clusters]
 "19" = {pg_version = "16", port = 5432}
@@ -54,10 +48,10 @@ scripts_dir = "scripts/workspace"
 domain_suffix = "localhost"
 """
     config = parse_workspace_config(toml)
-    assert config.repos["odoo"] == "git@github.com:odoo/odoo.git"
-    assert config.repos["scripts"] == "git@bitbucket.org:org/scripts.git"
-    assert config.repos_meta["odoo"].has_addons is True
-    assert config.repos_meta["scripts"].has_addons is False
+    assert config.repos["odoo"].path == "git@github.com:odoo/odoo.git"
+    assert config.repos["scripts"].path == "git@bitbucket.org:org/scripts.git"
+    assert config.repos["odoo"].has_addons is True
+    assert config.repos["scripts"].has_addons is False
     assert config.clusters["19"].pg_version == "16"
     assert config.clusters["19"].port == 5432
     assert config.clusters["12"].port == 5433
@@ -110,21 +104,6 @@ odoo = "git@github.com:odoo/odoo.git"
         parse_workspace_config(toml)
     assert not isinstance(exc_info.value, NotImplementedError), "stub not wired up"
 
-
-@pytest.mark.config_schemas
-def test_parse_workspace_config_meta_reserved_name_raises():
-    """'meta' is a reserved key in [repos] — using it as a repo name must raise."""
-    import textwrap
-    toml = textwrap.dedent("""
-        [repos]
-        meta = "git@example.com/meta.git"
-        odoo = "git@example.com/odoo.git"
-
-        [clusters]
-        "19" = {pg_version = "16", port = 5432}
-    """)
-    with pytest.raises(ValueError, match="reserved"):
-        parse_workspace_config(toml)
 
 
 @pytest.mark.config_schemas

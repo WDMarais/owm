@@ -331,8 +331,8 @@ def create_instance(
 
     # Addons paths from workspace repo metadata
     workspace_repos_meta = {
-        n: {"has_addons": m.has_addons, "addons_paths": m.addons_paths}
-        for n, m in ws_conf.repos_meta.items()
+        n: {"has_addons": r.has_addons, "addons_paths": r.addons_paths}
+        for n, r in ws_conf.repos.items()
     }
     instance_repos_dict = {
         n: {"shared": s.shared, "branch": s.branch}

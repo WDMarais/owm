@@ -62,13 +62,15 @@ def init_workspace(
 
     bare_clones_created = []
     skipped = []
-    for name, url in config.repos.items():
+    for name, repo in config.repos.items():
+        url = repo.path
         dest = os.path.join(workspace_root, "_repos", f"{name}.git")
         if os.path.exists(dest):
             skipped.append(name)
         else:
             _git_clone_bare(url, dest)
             bare_clones_created.append(name)
+
 
     # Check/create operator superuser per cluster; report aggregate result.
     superuser_created = False

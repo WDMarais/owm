@@ -13,8 +13,9 @@ class RepoSpec:
 
 
 @dataclass
-class RepoMeta:
-    has_addons: bool
+class WorkspaceRepo:
+    path: str
+    has_addons: bool = False
     addons_paths: list[str] = field(default_factory=lambda: ["."])
 
 
@@ -50,8 +51,7 @@ class WorkspaceScripts:
 
 @dataclass
 class WorkspaceConfig:
-    repos: dict[str, str]
-    repos_meta: dict[str, RepoMeta]
+    repos: dict[str, WorkspaceRepo]
     clusters: dict[str, ClusterConfig]
     defaults: WorkspaceDefaults
     patches: dict[str, list[str]]
@@ -168,22 +168,17 @@ def parse_workspace_config(toml: str) -> WorkspaceConfig:
         raise ValueError("workspace.toml must have [clusters]")
 
     repos_raw = dict(raw["repos"])
-    if "meta" in repos_raw and isinstance(repos_raw["meta"], str):
-        raise ValueError(
-            "'meta' is a reserved key in [repos] and cannot be used as a repo name; "
-            "rename the repo and use [repos.meta] for per-repo metadata"
-        )
-    meta_raw = repos_raw.pop("meta", {})
 
-    repos_meta: dict[str, RepoMeta] = {}
-    for name, meta in meta_raw.items():
-        repos_meta[name] = RepoMeta(
-            has_addons=meta.get("has_addons", False),
-            addons_paths=meta.get("addons_paths", ["."]),
-        )
-    for name in repos_raw:
-        if name not in repos_meta:
-            repos_meta[name] = RepoMeta(has_addons=False)
+    repos: dict[str, WorkspaceRepo] = {}
+    for name, val in repos_raw.items():
+        if isinstance(val, str):
+            repos[name] = WorkspaceRepo(path=val)
+        else:
+            repos[name] = WorkspaceRepo(
+                path=val["path"],
+                has_addons=val.get("has_addons", False),
+                addons_paths=val.get("addons_paths", ["."]),
+            )
 
     clusters = {
         k: ClusterConfig(pg_version=v["pg_version"], port=v["port"])
@@ -221,8 +216,7 @@ def parse_workspace_config(toml: str) -> WorkspaceConfig:
         scripts = WorkspaceScripts(scripts_dir=raw["scripts"]["scripts_dir"])
 
     return WorkspaceConfig(
-        repos=repos_raw,
-        repos_meta=repos_meta,
+        repos=repos,
         clusters=clusters,
         defaults=defaults,
         patches=patches,

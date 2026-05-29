@@ -313,15 +313,9 @@ def test_addons_path_declaration_order_is_load_bearing():
     import textwrap
     toml = textwrap.dedent("""
         [repos]
-        customer-config = "git@example.com/customer-config.git"
-        product-core    = "git@example.com/product-core.git"
-        odoo            = "git@example.com/odoo.git"
-
-        [repos.meta]
-        customer-config.has_addons = true
-        product-core.has_addons    = true
-        odoo.has_addons            = true
-        odoo.addons_paths          = ["addons", "odoo/addons"]
+        customer-config = {path = "git@example.com/customer-config.git", has_addons = true}
+        product-core    = {path = "git@example.com/product-core.git", has_addons = true}
+        odoo            = {path = "git@example.com/odoo.git", has_addons = true, addons_paths = ["addons", "odoo/addons"]}
 
         [clusters]
         "19" = {pg_version = "16", port = 5432}
