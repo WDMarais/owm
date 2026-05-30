@@ -289,8 +289,16 @@ def _append_modules_to_toml(toml_path: str, new_modules: list[str]) -> tuple[lis
 def _rewrite_ports_in_toml(toml_path: str, http_port: int, gevent_port: int) -> None:
     with open(toml_path) as f:
         content = f.read()
-    content = re.sub(r'(http_port\s*=\s*)\d+', rf'\g<1>{http_port}', content)
-    content = re.sub(r'(gevent_port\s*=\s*)\d+', rf'\g<1>{gevent_port}', content)
+    if re.search(r'^http_port\s*=', content, re.MULTILINE):
+        content = re.sub(r'(http_port\s*=\s*)\d+', rf'\g<1>{http_port}', content)
+        content = re.sub(r'(gevent_port\s*=\s*)\d+', rf'\g<1>{gevent_port}', content)
+    else:
+        # ports were stripped (e.g. from archive) — insert after [server]
+        content = re.sub(
+            r'(\[server\])',
+            rf'\1\nhttp_port = {http_port}\ngevent_port = {gevent_port}',
+            content,
+        )
     with open(toml_path, "w") as f:
         f.write(content)
 
@@ -362,9 +370,9 @@ def create_instance(
     with open(ws_toml_path) as f:
         ws_conf = parse_workspace_config(f.read())
 
-    # Assign port: use pinned port if free, otherwise pick from the default range
+    # Assign port: pick fresh if unassigned (http_port=0) or pinned port is taken
     occupied = _collect_occupied_ports(workspace_root, exclude_instance=name)
-    if conf.server.http_port in occupied:
+    if not conf.server.http_port or conf.server.http_port in occupied:
         pair = assign_port({"range": [8100, 8299], "occupied": occupied})
         http_port, gevent_port = pair.http_port, pair.gevent_port
         _rewrite_ports_in_toml(toml_path, http_port, gevent_port)

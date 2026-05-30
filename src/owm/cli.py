@@ -653,6 +653,62 @@ def cmd_archive(ctx, name, discard_db):
     click.echo(f"{instance}  archived  _archive/{instance}/")
 
 
+@cli.command("unarchive")
+@click.argument("name")
+@click.option("--discard", is_flag=True, help="Remove the archive directory after restoring.")
+@click.pass_context
+def cmd_unarchive(ctx, name, discard):
+    """Restore an instance from its archive."""
+    workspace_root = _resolve_workspace(ctx)
+    archive_dir = os.path.join(workspace_root, "_archive", name)
+    archived_toml = os.path.join(archive_dir, "instance.toml")
+    archived_dump = os.path.join(archive_dir, "db.dump")
+
+    if not os.path.isdir(archive_dir):
+        click.echo(f"error: no archive found for {name!r}", err=True)
+        sys.exit(1)
+    if not os.path.exists(archived_toml):
+        click.echo(f"error: archive is missing instance.toml", err=True)
+        sys.exit(1)
+
+    instance_dir = os.path.join(workspace_root, "instances", name)
+    if os.path.exists(instance_dir):
+        click.echo(f"error: instances/{name}/ already exists — delete or rename it first", err=True)
+        sys.exit(1)
+
+    # Restore toml and materialise
+    os.makedirs(instance_dir)
+    import shutil
+    shutil.copy2(archived_toml, os.path.join(instance_dir, "instance.toml"))
+    try:
+        result = create_instance(name, workspace_root)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    click.echo(f"  materialised {name}")
+
+    # Restore database
+    if os.path.exists(archived_dump):
+        conf = _read_instance_conf(name, workspace_root)
+        try:
+            db_restore(
+                instance=name, path=archived_dump, workspace_root=workspace_root,
+                db_name=conf.database.name, pg_port=conf.database.pg_port, running=False,
+            )
+        except OwmError as e:
+            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+            sys.exit(1)
+        click.echo(f"  restored DB from archive dump")
+    else:
+        click.echo(f"  note: no db.dump in archive — DB not restored")
+
+    if discard:
+        shutil.rmtree(archive_dir)
+        click.echo(f"  archive removed")
+
+    click.echo(f"{name}  unarchived")
+
+
 @cli.command("upgrade")
 @click.argument("name")
 @click.argument("modules", nargs=-1)

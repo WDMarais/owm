@@ -183,8 +183,9 @@ def _pg_dump(db_name: str, path: str, pg_port: int) -> None:
 
 
 def _pg_restore(db_name: str, path: str, pg_port: int) -> None:
+    # --exit-on-error: fail on real errors, not on warnings (pg_restore exits 1 for warnings too)
     subprocess.run(
-        ["pg_restore", "-h", "/var/run/postgresql", "-p", str(pg_port), "-d", db_name, path],
+        ["pg_restore", "--exit-on-error", "-h", "/var/run/postgresql", "-p", str(pg_port), "-d", db_name, path],
         check=True, capture_output=True,
     )
 

@@ -247,8 +247,9 @@ def parse_instance_config(toml: str) -> InstanceConfig:
     )
 
     srv = raw["server"]
-    http_port, gevent_port = srv["http_port"], srv["gevent_port"]
-    if gevent_port != http_port + 1:
+    http_port = srv.get("http_port", 0)
+    gevent_port = srv.get("gevent_port", 0)
+    if http_port and gevent_port and gevent_port != http_port + 1:
         raise ValueError(
             f"gevent_port must equal http_port + 1 (got http={http_port}, gevent={gevent_port})"
         )
