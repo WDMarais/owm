@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from dashboard.fixtures import REPO_FETCH_AGES, INSTANCE_REPOS_SYNC, INSTANCE_SCRIPTS, PROCESSES
+from dashboard.fixtures import REPO_FETCH_AGES, INSTANCE_REPOS_SYNC, INSTANCE_SCRIPTS, PROCESSES, WORKSPACE_ALERTS
 
 WORKSPACE = Path(__file__).parent.parent / "test_fixtures" / "workspace"
 DASHBOARD = Path(__file__).parent
@@ -239,6 +239,19 @@ def api_notifications():
 
     notifications.sort(key=lambda n: _TIER_ORDER.get(n["tier"], 99))
     return {"notifications": notifications}
+
+
+# ── Fetch + banner ────────────────────────────────────────────────────────
+
+@app.post("/api/fetch")
+def api_fetch():
+    # In production: git fetch all remotes; fixture is instant
+    return {"ok": True}
+
+
+@app.get("/api/banner")
+def api_banner():
+    return {"alerts": WORKSPACE_ALERTS}
 
 
 # ── Static files (dashboard UI) ────────────────────────────────────────────

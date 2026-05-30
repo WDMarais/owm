@@ -18,6 +18,8 @@ const _esc = s => String(s)
 document.addEventListener("DOMContentLoaded", async () => {
     await loadStatus();
 
+    document.getElementById("fetch-btn").addEventListener("click", doFetch);
+
     document.getElementById("actions-btn").addEventListener("click", e => {
         e.stopPropagation();
         document.getElementById("actions-menu").classList.toggle("hidden");
@@ -48,7 +50,47 @@ async function loadStatus() {
         selectInstance(data.instances[0].name);
     }
     loadNotifications();
+    loadBanner();
     setInterval(loadNotifications, 30_000);
+}
+
+async function doFetch() {
+    const btn = document.getElementById("fetch-btn");
+    btn.disabled = true;
+    btn.textContent = "Fetching…";
+    try {
+        await fetch("/api/fetch", { method: "POST" });
+        const data = await api("/api/status");
+        renderRepoList(data.repos);
+        await loadNotifications();
+    } catch (_) {}
+    btn.textContent = "Fetch";
+    btn.disabled = false;
+}
+
+async function loadBanner() {
+    try {
+        const data = await api("/api/banner");
+        renderBanner(data.alerts);
+    } catch (_) {}
+}
+
+function renderBanner(alerts) {
+    const banner = document.getElementById("header-banner");
+    const items  = document.getElementById("banner-items");
+    items.innerHTML = "";
+    if (!alerts || !alerts.length) {
+        banner.classList.add("hidden");
+        return;
+    }
+    for (const a of alerts) {
+        const el = document.createElement("div");
+        el.className = `banner-item ${a.level}`;
+        el.innerHTML = `<span class="banner-icon">${a.level === "critical" ? "✕" : "⚠"}</span>
+                        <span class="banner-msg">${_esc(a.msg)}</span>`;
+        items.appendChild(el);
+    }
+    banner.classList.remove("hidden");
 }
 
 async function loadNotifications() {

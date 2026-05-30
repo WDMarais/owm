@@ -52,6 +52,10 @@ PROCESSES: dict = {
     ],
 }
 
+WORKSPACE_ALERTS: list[dict] = [
+    {"level": "critical", "msg": "PostgreSQL not responding — instances cannot start"},
+]
+
 INSTANCE_SCRIPTS: dict[str, dict] = {
     "dev": {
         "setup":     {"status": "ok",   "last_run_at": "2026-05-18T10:21:00Z"},

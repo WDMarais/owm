@@ -33,7 +33,7 @@ body {
   line-height: 1.5;
   height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   overflow: hidden;
 }
 
@@ -120,6 +120,37 @@ body {
 .action-item:hover               { background: var(--bg); }
 .action-item.btn-stop:hover      { color: var(--c-warn); }
 .action-item.btn-kill:hover      { color: var(--c-err); }
+
+/* ── Header banner (workspace-critical alerts) ──────────────────────────── */
+
+#header-banner {
+  border-bottom: 1px solid transparent;
+}
+
+.banner-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 1px solid transparent;
+}
+.banner-item:last-child { border-bottom: none; }
+
+.banner-item.critical {
+  background: var(--c-err-bg);
+  color: #991b1b;
+  border-bottom-color: #fca5a5;
+}
+.banner-item.warning {
+  background: var(--c-warn-bg);
+  color: #92400e;
+  border-bottom-color: #fcd34d;
+}
+#header-banner:not(.hidden) { border-bottom-color: var(--border); }
+
+.banner-icon { font-size: 12px; flex-shrink: 0; }
 
 /* ── Workspace (3-pane container) ─────────────────────────────────────────── */
 
@@ -291,6 +322,9 @@ body {
   cursor: pointer;
 }
 .btn:hover { border-color: var(--muted); }
+
+.btn-fetch { font-size: 12px; padding: 4px 12px; flex-shrink: 0; }
+.btn-fetch:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Cards */
 .card {

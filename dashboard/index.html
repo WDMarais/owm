@@ -11,6 +11,7 @@
   <!-- ── Top navbar ────────────────────────────────────────────────────── -->
   <header id="top-nav">
     <span class="wordmark">owm</span>
+    <button id="fetch-btn" class="btn btn-fetch">Fetch</button>
     <div id="instance-dock" class="hidden">
       <span id="dock-name" class="dock-name"></span>
       <span id="dock-status" class="status-badge"></span>
@@ -26,6 +27,11 @@
       </div>
     </div>
   </header>
+
+  <!-- ── Header banner (workspace-critical alerts) ────────────────────── -->
+  <div id="header-banner" class="hidden">
+    <div id="banner-items"></div>
+  </div>
 
   <!-- ── Three-pane workspace ──────────────────────────────────────────── -->
   <div id="workspace">
