@@ -1,11 +1,12 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import parse_instance_config
+from owm.config import parse_instance_config, parse_workspace_config
 from owm.errors import OwmError, INSTANCE_RUNNING, NOT_FOUND
 from owm.archive import _remove_proxy_block, _remove_worktrees, _dropdb_archive
 
@@ -120,6 +121,7 @@ def rename_instance(
     new_name: str,
     *,
     running: bool,
+    workspace_root: str = ".",
     workspace_compare_pairs: list | None = None,
 ) -> RenameResult:
     if running:
@@ -127,6 +129,66 @@ def rename_instance(
             f"instance {instance!r} is running; stop it before renaming",
             code=INSTANCE_RUNNING,
         )
+
+    old_dir = os.path.join(workspace_root, "instances", instance)
+    new_dir = os.path.join(workspace_root, "instances", new_name)
+    toml_path = os.path.join(old_dir, "instance.toml")
+    conf_path = os.path.join(old_dir, "instance.conf")
+
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+
+    old_db = conf.database.name
+    pg_port = conf.database.pg_port
+    http_port = conf.server.http_port
+    gevent_port = conf.server.gevent_port
+
+    # 1. Rename Postgres database
+    subprocess.run(
+        ["psql", "-p", str(pg_port), "-h", "/var/run/postgresql", "-d", "postgres",
+         "-c", f'ALTER DATABASE "{old_db}" RENAME TO "{new_name}"'],
+        check=True, capture_output=True,
+    )
+
+    # 2. Patch instance.toml in place (before directory rename)
+    with open(toml_path) as f:
+        toml_content = f.read()
+    toml_content = re.sub(
+        r'(^\s*name\s*=\s*")[^"]*(")',
+        rf'\g<1>{new_name}\g<2>',
+        toml_content, flags=re.MULTILINE,
+    )
+    with open(toml_path, "w") as f:
+        f.write(toml_content)
+
+    # 3. Patch instance.conf
+    if os.path.exists(conf_path):
+        with open(conf_path) as f:
+            conf_content = f.read()
+        conf_content = re.sub(r'(?m)^(db_name\s*=\s*).*$', rf'\g<1>{new_name}', conf_content)
+        conf_content = re.sub(r'(?m)^(dbfilter\s*=\s*).*$', rf'\g<1>^{new_name}$', conf_content)
+        conf_content = conf_content.replace(
+            f"/instances/{instance}/instance.log",
+            f"/instances/{new_name}/instance.log",
+        )
+        with open(conf_path, "w") as f:
+            f.write(conf_content)
+
+    # 4. Rename the instance directory
+    shutil.move(old_dir, new_dir)
+
+    # 5. Update proxy block
+    ws_toml_path = os.path.join(workspace_root, "workspace.toml")
+    if os.path.exists(ws_toml_path):
+        with open(ws_toml_path) as f:
+            ws_conf = parse_workspace_config(f.read())
+        from owm.proxy import get_proxy_backend
+        proxy = get_proxy_backend(ws_conf.proxy)
+        if proxy:
+            domain_suffix = ws_conf.proxy.domain_suffix if ws_conf.proxy else "localhost"
+            proxy.remove_instance(instance, workspace_root)
+            proxy.write_instance(new_name, http_port, gevent_port, domain_suffix, workspace_root)
+
     remaining = [
         [new_name if p == instance else p for p in pair]
         for pair in (workspace_compare_pairs or [])

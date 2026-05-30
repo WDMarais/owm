@@ -496,6 +496,7 @@ def cmd_rename(ctx, name, new_name):
             instance=name,
             new_name=new_name,
             running=running,
+            workspace_root=workspace_root,
             workspace_compare_pairs=compare_pairs,
         )
     except OwmError as e:
