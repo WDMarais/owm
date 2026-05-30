@@ -51,7 +51,8 @@ def test_init_creates_expected_dirs(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / "workspace.toml").write_text(_workspace_toml({"odoo": str(remote)}))
-    with patch("owm.workspace._superuser_exists", return_value=True):
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         init_workspace(str(ws))
     for d in ["_repos", "_shared", "instances", "_archive", "_dumps"]:
         assert (ws / d).is_dir(), f"expected {d}/ to exist"
@@ -67,7 +68,8 @@ def test_init_clones_repo_as_bare(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / "workspace.toml").write_text(_workspace_toml({"odoo": str(remote)}))
-    with patch("owm.workspace._superuser_exists", return_value=True):
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         result = init_workspace(str(ws))
     assert "odoo" in result.bare_clones_created
     bare = ws / "_repos" / "odoo.git"
@@ -84,7 +86,8 @@ def test_init_configures_fetch_refspec(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / "workspace.toml").write_text(_workspace_toml({"odoo": str(remote)}))
-    with patch("owm.workspace._superuser_exists", return_value=True):
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         init_workspace(str(ws))
     bare = ws / "_repos" / "odoo.git"
     r = subprocess.run(
@@ -101,7 +104,8 @@ def test_init_fetch_refspec_means_branches_visible_after_fetch(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / "workspace.toml").write_text(_workspace_toml({"odoo": str(remote)}))
-    with patch("owm.workspace._superuser_exists", return_value=True):
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         init_workspace(str(ws))
     bare = ws / "_repos" / "odoo.git"
     r = subprocess.run(
@@ -121,7 +125,8 @@ def test_init_idempotent_second_run_skips_existing(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / "workspace.toml").write_text(_workspace_toml({"odoo": str(remote)}))
-    with patch("owm.workspace._superuser_exists", return_value=True):
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         init_workspace(str(ws))
         result2 = init_workspace(str(ws))
     assert "odoo" in result2.skipped
@@ -135,14 +140,16 @@ def test_init_second_repo_added_clones_only_new(tmp_path):
     ws = tmp_path / "workspace"
     ws.mkdir()
     (ws / "workspace.toml").write_text(_workspace_toml({"odoo": str(remote_odoo)}))
-    with patch("owm.workspace._superuser_exists", return_value=True):
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         init_workspace(str(ws))
     # Simulate adding a second repo to workspace.toml.
     (ws / "workspace.toml").write_text(_workspace_toml({
         "odoo": str(remote_odoo),
         "product-core": str(remote_core),
     }))
-    with patch("owm.workspace._superuser_exists", return_value=True):
+    with patch("owm.workspace._superuser_exists", return_value=True), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         result = init_workspace(str(ws))
     assert "product-core" in result.bare_clones_created
     assert "odoo" in result.skipped

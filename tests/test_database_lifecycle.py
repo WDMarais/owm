@@ -230,7 +230,8 @@ def test_init_creates_operator_superuser_role_if_absent(tmp_path):
     (tmp_path / "workspace.toml").write_text(_DB_WS_TOML)
     with patch("owm.workspace._superuser_exists", return_value=False), \
          patch("owm.workspace._git_clone_bare"), \
-         patch("owm.workspace.subprocess.run"):
+         patch("owm.workspace._pg_is_ready", return_value=True), \
+         patch("owm.workspace._create_superuser_role"):
         result = init_workspace(str(tmp_path), operator_user="devuser")
     assert result.postgres.superuser_created is True
     assert result.postgres.superuser_role == "devuser"
@@ -241,7 +242,8 @@ def test_init_creates_operator_superuser_role_if_absent(tmp_path):
 def test_init_superuser_already_exists_is_idempotent(tmp_path):
     (tmp_path / "workspace.toml").write_text(_DB_WS_TOML)
     with patch("owm.workspace._superuser_exists", return_value=True), \
-         patch("owm.workspace._git_clone_bare"):
+         patch("owm.workspace._git_clone_bare"), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         result = init_workspace(str(tmp_path), operator_user="devuser")
     assert result.postgres.superuser_created is False
     assert result.postgres.skipped is True

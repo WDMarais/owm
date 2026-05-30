@@ -30,6 +30,7 @@ from owm.sync import (
     git_fetch_bare, read_repo_state, git_fast_forward, git_rebase,
     git_push, git_reset_hard,
 )
+from owm.workspace import init_workspace
 from owm.worktrees import resolve_worktree_path
 
 
@@ -96,6 +97,60 @@ def _workspace_compare_pairs(workspace_root: str) -> list:
 def cli(ctx, workspace):
     ctx.ensure_object(dict)
     ctx.obj["workspace"] = workspace
+
+
+@cli.command("init")
+@click.option(
+    "--local-copies", default=None, metavar="PATH",
+    help="Workspace dir to scan for existing bare repos; clones from local instead of downloading.",
+)
+@click.pass_context
+def cmd_init(ctx, local_copies):
+    """Initialise a workspace from workspace.toml in the current directory.
+
+    Creates the directory structure, bare-clones all repos declared in [repos],
+    provisions Postgres clusters declared in [clusters] (idempotent — skips if
+    already running), and writes a proxy config stub to _proxy/.
+
+    Safe to re-run: existing repos, running clusters, and existing roles are skipped.
+
+    \b
+    Examples:
+      owm init
+      owm init --local-copies ~/old-workspace   # clone objects from local copy
+    """
+    workspace_root = str(Path.cwd())
+    toml_path = os.path.join(workspace_root, "workspace.toml")
+    if not os.path.isfile(toml_path):
+        click.echo("error: no workspace.toml in current directory", err=True)
+        sys.exit(1)
+    click.echo("initialising workspace…")
+    try:
+        result = init_workspace(workspace_root, local_copies_dir=local_copies)
+    except Exception as e:
+        click.echo(f"error: {e}", err=True)
+        sys.exit(1)
+    for clone in sorted(result.clones, key=lambda c: c.name):
+        if clone.status == "error":
+            click.echo(f"  error: {clone.name}: {clone.error}", err=True)
+        elif clone.status == "skipped":
+            click.echo(f"  {clone.name}  (already exists)")
+        elif clone.status == "local_copy":
+            click.echo(f"  {clone.name}  cloned from local copy")
+        else:
+            click.echo(f"  {clone.name}  cloned")
+    pg = result.postgres
+    if pg.clusters_created:
+        click.echo(f"  pg: created {', '.join(pg.clusters_created)}")
+    if pg.clusters_started:
+        click.echo(f"  pg: started {', '.join(pg.clusters_started)}")
+    if pg.superuser_created:
+        click.echo(f"  pg: created superuser role {pg.superuser_role!r}")
+    if pg.skipped:
+        click.echo("  pg: clusters already running")
+    if result.proxy_stub_path:
+        click.echo(f"  proxy stub: {result.proxy_stub_path}")
+    click.echo("done.")
 
 
 def _parse_repo_specs(repos: tuple) -> dict[str, str]:

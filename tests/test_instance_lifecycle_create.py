@@ -213,7 +213,8 @@ _TWO_REPO_WS_TOML = (
 def test_init_fresh_workspace_runs_all_steps(tmp_path):
     (tmp_path / "workspace.toml").write_text(_SIMPLE_WS_TOML)
     with patch("owm.workspace._superuser_exists", return_value=True), \
-         patch("owm.workspace._git_clone_bare"):
+         patch("owm.workspace._git_clone_bare"), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         result = init_workspace(str(tmp_path), docker_context=False)
     assert result.bare_clones_created != []
     assert result.db_clusters_provisioned != []
@@ -227,7 +228,8 @@ def test_init_skips_existing_repos(tmp_path):
     (tmp_path / "workspace.toml").write_text(_SIMPLE_WS_TOML)
     (tmp_path / "_repos" / "odoo.git").mkdir(parents=True)
     with patch("owm.workspace._superuser_exists", return_value=True), \
-         patch("owm.workspace._git_clone_bare"):
+         patch("owm.workspace._git_clone_bare"), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         result = init_workspace(str(tmp_path))
     assert "odoo" in result.skipped
     assert "odoo" not in result.bare_clones_created
@@ -238,7 +240,8 @@ def test_init_new_repo_added_clones_only_new(tmp_path):
     (tmp_path / "workspace.toml").write_text(_TWO_REPO_WS_TOML)
     (tmp_path / "_repos" / "odoo.git").mkdir(parents=True)
     with patch("owm.workspace._superuser_exists", return_value=True), \
-         patch("owm.workspace._git_clone_bare"):
+         patch("owm.workspace._git_clone_bare"), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         result = init_workspace(str(tmp_path))
     assert "product-core" in result.bare_clones_created
     assert "odoo" not in result.bare_clones_created
@@ -249,7 +252,8 @@ def test_init_docker_context_skips_system_level_steps(tmp_path):
     """In Docker: container owns system setup; owm skips CA cert, system proxy config."""
     (tmp_path / "workspace.toml").write_text(_SIMPLE_WS_TOML)
     with patch("owm.workspace._superuser_exists", return_value=True), \
-         patch("owm.workspace._git_clone_bare"):
+         patch("owm.workspace._git_clone_bare"), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         result = init_workspace(str(tmp_path), docker_context=True)
     assert result.local_ca_installed is False
     assert result.bare_clones_created != []
@@ -259,10 +263,11 @@ def test_init_docker_context_skips_system_level_steps(tmp_path):
 def test_init_writes_reverse_proxy_block_for_dashboard(tmp_path):
     (tmp_path / "workspace.toml").write_text(_SIMPLE_WS_TOML)
     with patch("owm.workspace._superuser_exists", return_value=True), \
-         patch("owm.workspace._git_clone_bare"):
+         patch("owm.workspace._git_clone_bare"), \
+         patch("owm.workspace._pg_is_ready", return_value=True):
         result = init_workspace(str(tmp_path), docker_context=False)
     assert result.proxy_block_written is True
-    assert result.proxy_block_target == "owm_dashboard"
+    assert not hasattr(result, "proxy_block_target")
 
 
 # === SPEC GAPS ===
