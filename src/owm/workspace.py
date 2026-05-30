@@ -205,9 +205,9 @@ def init_workspace(
     - Writes a proxy config stub (_proxy/) appropriate to proxy.backend (caddy or nginx).
 
     Pass local_copies_dir to clone from an existing on-disk workspace instead of downloading
-    (e.g. rowm init --local-copies ~/old-workspace). Objects are fully copied; no shared
+    (e.g. owm init --local-copies ~/old-workspace). Objects are fully copied; no shared
     object store. After init, set the real upstream with the usual remote or just run
-    rowm fetch to verify.
+    owm fetch to verify.
     """
     operator_user = operator_user or getpass.getuser()
     workspace_root = os.path.abspath(workspace_root)
