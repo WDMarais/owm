@@ -177,6 +177,70 @@ def api_logs(name: str, log: str, n: int = 50):
     }
 
 
+# ── Notifications queue ────────────────────────────────────────────────────
+
+_TIER_ORDER = {"blocking": 0, "attention": 1, "active": 2}
+
+@app.get("/api/notifications")
+def api_notifications():
+    notifications = []
+    now = datetime.now(timezone.utc)
+
+    for inst_name in _instances():
+        # Script failures
+        for sname, ss in INSTANCE_SCRIPTS.get(inst_name, {}).items():
+            if ss.get("status") == "fail":
+                notifications.append({
+                    "tier": "attention", "instance": inst_name,
+                    "msg": f"Scripts: {sname} failed", "section": "scripts",
+                })
+
+        # Repo sync issues
+        for repo_name, s in INSTANCE_REPOS_SYNC.get(inst_name, {}).items():
+            vob    = s.get("vs_origin_branch", {})
+            ahead  = vob.get("ahead_by", 0)
+            behind = vob.get("behind_by", 0)
+            dirty  = s.get("dirty", False)
+
+            if ahead > 0 and behind > 0:
+                notifications.append({
+                    "tier": "blocking", "instance": inst_name,
+                    "msg": f"{repo_name} diverged", "section": "repos",
+                })
+            elif dirty:
+                notifications.append({
+                    "tier": "attention", "instance": inst_name,
+                    "msg": f"{repo_name} uncommitted changes", "section": "repos",
+                })
+            elif behind > 0:
+                notifications.append({
+                    "tier": "attention", "instance": inst_name,
+                    "msg": f"{repo_name} {behind} behind", "section": "repos",
+                })
+
+    # Stale fetches — workspace-level, one per remote
+    for repo_name, ts in REPO_FETCH_AGES.items():
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        age_secs = (now - dt).total_seconds()
+        if age_secs > 86400:
+            age_str = f"{int(age_secs // 86400)}d ago"
+            notifications.append({
+                "tier": "attention", "instance": None,
+                "msg": f"{repo_name} fetched {age_str}", "section": "remotes",
+            })
+
+    # Port squatters — workspace-level
+    for sq in PROCESSES.get("squatters", []):
+        port = sq["ports"][0] if sq["ports"] else "?"
+        notifications.append({
+            "tier": "blocking", "instance": None,
+            "msg": f"port :{port} squatted", "section": "processes",
+        })
+
+    notifications.sort(key=lambda n: _TIER_ORDER.get(n["tier"], 99))
+    return {"notifications": notifications}
+
+
 # ── Static files (dashboard UI) ────────────────────────────────────────────
 
 @app.get("/")

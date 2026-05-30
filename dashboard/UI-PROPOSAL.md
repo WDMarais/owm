@@ -2,7 +2,7 @@
 
 > Supersedes the "Layout" and "Settled > Centre" sections of `DASHBOARD-FRAMING.md`.
 > All other framing decisions (notifications queue, header banner, onboarder model) hold.
-> Status: agreed in principle, not yet implemented.
+> Status: implemented (navbar, pane proportions, 2-line card rows, Actions dropdown). Modals section below is superseded — see DASHBOARD-FRAMING.md "Dashboard scope" for rationale.
 
 ---
 

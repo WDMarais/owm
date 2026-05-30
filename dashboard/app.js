@@ -47,6 +47,70 @@ async function loadStatus() {
     if (data.instances.length > 0) {
         selectInstance(data.instances[0].name);
     }
+    loadNotifications();
+    setInterval(loadNotifications, 30_000);
+}
+
+async function loadNotifications() {
+    try {
+        const data = await api("/api/notifications");
+        renderNotifications(data.notifications);
+    } catch (_) {}
+}
+
+function renderNotifications(notifications) {
+    const section = document.getElementById("notifications-section");
+    section.innerHTML = '<div class="section-label">Notifications</div>';
+
+    const scroll = document.createElement("div");
+    scroll.className = "notif-scroll";
+
+    if (!notifications.length) {
+        const el = document.createElement("div");
+        el.className = "notif-empty";
+        el.textContent = "all clear";
+        scroll.appendChild(el);
+    } else {
+        for (const n of notifications) {
+            const el = document.createElement("div");
+            el.className = `notif-row ${n.tier}`;
+            el.innerHTML = `<span class="notif-content">
+                              ${n.instance ? `<span class="notif-tag">[${_esc(n.instance)}]</span>` : ""}${_esc(n.msg)}
+                            </span>`;
+            el.addEventListener("click", () => _notifPivot(n));
+            scroll.appendChild(el);
+        }
+    }
+
+    section.appendChild(scroll);
+}
+
+function _notifPivot(n) {
+    if (n.section === "processes" && !n.instance) {
+        showProcessesPage();
+        return;
+    }
+    if (n.instance && n.instance !== _selectedInstance) {
+        selectInstance(n.instance, n.section);
+    } else {
+        _scrollToSection(n.section);
+    }
+}
+
+function _scrollToSection(section) {
+    if (!section) return;
+    const cards = document.querySelectorAll("#centre-pane .card");
+    for (const card of cards) {
+        const title = card.querySelector(".card-title");
+        if (title && title.textContent.trim().toLowerCase() === section.toLowerCase()) {
+            card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            card.classList.remove("highlight");
+            void card.offsetWidth; // reflow to restart animation
+            card.classList.add("highlight");
+            setTimeout(() => card.classList.remove("highlight"), 1100);
+            return;
+        }
+    }
 }
 
 function renderInstanceList(instances) {
@@ -78,7 +142,7 @@ function renderRepoList(repos) {
 
 // ── Instance selection ─────────────────────────────────────────────────────
 
-async function selectInstance(name) {
+async function selectInstance(name, scrollTo = null) {
     _selectedInstance = name;
 
     document.getElementById("centre-pane").classList.remove("hidden");
@@ -91,6 +155,7 @@ async function selectInstance(name) {
 
     const data = await api(`/api/instance/${name}`);
     renderCentre(data);
+    if (scrollTo) _scrollToSection(scrollTo);
 }
 
 // ── Centre pane ────────────────────────────────────────────────────────────

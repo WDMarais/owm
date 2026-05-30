@@ -43,11 +43,20 @@ Constraint-driven decisions; changing them requires reversing a stated premise.
 
 ### Layout
 
+*Implemented: top navbar (instance dock + Actions dropdown), 25 / 25 / 50 pane proportions, 2-line card rows throughout.*
+
 - **Three-pane (left / centre / right) holds.** Fixed structure, no priority-stacking-mode.
 - **Left pane = workspace territory** (instances/repos inventory + notifications queue).
 - **Centre pane = currently-selected instance's operating surface** (fixed section order, doesn't shift dynamically).
-- **Right pane = logs**, stays right; proportions open (see below).
+- **Right pane = logs**, stays right; **proportions settled at 25 / 25 / 50**.
 - **No mode toggles, no priority-stacking opt-in, no expert-vs-beginner switch.** Modes have a real cost (designed twice, persisted state, mental model fork) and contradict the single-archetype model below.
+
+### Dashboard scope: ambient context, not a tool bundler
+
+- **The dashboard is ambient context concentration and happy-path guidance.** It is not a general-purpose git / psql / venv manager.
+- **Complex states signal "go use the CLI", they don't offer resolution UI.** A diverged repo shows a blocking notification; it does not offer a rebase flow. A dirty working tree shows a warning; there is no commit/stash button.
+- **Actions are happy-path only**: fast-forward sync (behind origin, clean), script run, instance start/stop/kill/archive. Anything requiring judgment or multi-step git ops belongs in the terminal.
+- **Implication for modals**: no need for detailed repo/git modals. The detail the user needs to resolve a complex state isn't dashboardable — they need the CLI. Surface the alert, trust the user to handle it.
 
 ### Notifications queue (left-pane bottom)
 
