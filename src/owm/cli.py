@@ -279,21 +279,21 @@ def cmd_install(ctx, name, modules, timeout, no_save):
       owm install feat-789                 # install from toml manifest
       owm install feat-789 sale --no-save  # install without saving
     """
-    from owm.instance import _append_modules_to_toml
+    from owm.instance import _append_modules_to_toml, _query_installed_modules
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
 
+    try:
+        with open(toml_path) as f:
+            conf = parse_instance_config(f.read())
+    except Exception as e:
+        click.echo(f"error: {e}", err=True)
+        sys.exit(1)
+
     if modules:
         install_modules = list(modules)
     else:
-        # install from manifest
-        try:
-            with open(toml_path) as f:
-                conf = parse_instance_config(f.read())
-        except Exception as e:
-            click.echo(f"error: {e}", err=True)
-            sys.exit(1)
         install_modules = conf.install.modules if conf.install else []
         if not install_modules:
             click.echo("error: no modules specified and none declared in [install].modules", err=True)
@@ -302,6 +302,11 @@ def cmd_install(ctx, name, modules, timeout, no_save):
     if _is_running(instance, workspace_root):
         click.echo("error: stop the instance first", err=True)
         sys.exit(1)
+
+    already_in_db = _query_installed_modules(conf.database.name, conf.database.pg_port, install_modules)
+    if already_in_db:
+        click.echo(f"  note: {', '.join(already_in_db)} already installed in DB — use `owm upgrade` to update")
+
     click.echo(f"installing {','.join(install_modules)} into {instance} …")
     try:
         start_instance(
@@ -315,8 +320,11 @@ def cmd_install(ctx, name, modules, timeout, no_save):
         sys.exit(1)
     stop_instance(instance, workspace_root, wait=True)
     if modules and not no_save:
-        _append_modules_to_toml(toml_path, install_modules)
-        click.echo(f"  saved to {toml_path}")
+        added, already_in_manifest = _append_modules_to_toml(toml_path, install_modules)
+        if added:
+            click.echo(f"  manifest: added {', '.join(added)}")
+        if already_in_manifest:
+            click.echo(f"  manifest: {', '.join(already_in_manifest)} already recorded")
     click.echo(f"{instance}  install complete")
 
 

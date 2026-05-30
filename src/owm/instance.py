@@ -245,13 +245,34 @@ def _collect_occupied_ports(workspace_root: str, exclude_instance: str) -> set[i
     return occupied
 
 
-def _append_modules_to_toml(toml_path: str, new_modules: list[str]) -> None:
-    """Add new_modules to [install].modules in place, deduplicating and preserving order."""
+def _query_installed_modules(db_name: str, pg_port: int, module_names: list[str]) -> list[str]:
+    """Return the subset of module_names already installed in the given DB."""
+    if not module_names:
+        return []
+    names_sql = ", ".join(f"'{m}'" for m in module_names)
+    r = subprocess.run(
+        ["psql", "-h", "/var/run/postgresql", "-p", str(pg_port), "-d", db_name,
+         "-tAc", f"SELECT name FROM ir_module_module WHERE state='installed' AND name IN ({names_sql})"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return []
+    return [line.strip() for line in r.stdout.splitlines() if line.strip()]
+
+
+def _append_modules_to_toml(toml_path: str, new_modules: list[str]) -> tuple[list[str], list[str]]:
+    """Add new_modules to [install].modules in place, deduplicating and preserving order.
+
+    Returns (added, already_present) so the caller can report what changed.
+    """
     import tomllib
     with open(toml_path) as f:
         content = f.read()
     existing = tomllib.loads(content).get("install", {}).get("modules", [])
-    merged = list(dict.fromkeys(existing + [m for m in new_modules if m not in existing]))
+    existing_set = set(existing)
+    added = [m for m in new_modules if m not in existing_set]
+    already_present = [m for m in new_modules if m in existing_set]
+    merged = list(dict.fromkeys(existing + added))
     modules_line = f'modules = {merged!r}'.replace("'", '"')
     if re.search(r'^\[install\]', content, re.MULTILINE):
         if re.search(r'^modules\s*=', content, re.MULTILINE):
@@ -262,6 +283,7 @@ def _append_modules_to_toml(toml_path: str, new_modules: list[str]) -> None:
         content = content.rstrip() + f'\n\n[install]\n{modules_line}\n'
     with open(toml_path, "w") as f:
         f.write(content)
+    return added, already_present
 
 
 def _rewrite_ports_in_toml(toml_path: str, http_port: int, gevent_port: int) -> None:
