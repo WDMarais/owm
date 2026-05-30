@@ -245,6 +245,25 @@ def _collect_occupied_ports(workspace_root: str, exclude_instance: str) -> set[i
     return occupied
 
 
+def _append_modules_to_toml(toml_path: str, new_modules: list[str]) -> None:
+    """Add new_modules to [install].modules in place, deduplicating and preserving order."""
+    import tomllib
+    with open(toml_path) as f:
+        content = f.read()
+    existing = tomllib.loads(content).get("install", {}).get("modules", [])
+    merged = list(dict.fromkeys(existing + [m for m in new_modules if m not in existing]))
+    modules_line = f'modules = {merged!r}'.replace("'", '"')
+    if re.search(r'^\[install\]', content, re.MULTILINE):
+        if re.search(r'^modules\s*=', content, re.MULTILINE):
+            content = re.sub(r'^modules\s*=.*$', modules_line, content, flags=re.MULTILINE)
+        else:
+            content = re.sub(r'(\[install\])', rf'\1\n{modules_line}', content)
+    else:
+        content = content.rstrip() + f'\n\n[install]\n{modules_line}\n'
+    with open(toml_path, "w") as f:
+        f.write(content)
+
+
 def _rewrite_ports_in_toml(toml_path: str, http_port: int, gevent_port: int) -> None:
     with open(toml_path) as f:
         content = f.read()

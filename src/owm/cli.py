@@ -260,37 +260,61 @@ def cmd_start(ctx, name, wait):
 
 @cli.command("install")
 @click.argument("name", required=False)
-@click.argument("modules", nargs=-1, required=True)
+@click.argument("modules", nargs=-1, required=False)
 @click.option("--timeout", default=600, show_default=True, metavar="SECS", help="Seconds to wait for Odoo to finish installing.")
+@click.option("--no-save", is_flag=True, help="Do not append modules to instance.toml.")
 @click.pass_context
-def cmd_install(ctx, name, modules, timeout):
+def cmd_install(ctx, name, modules, timeout, no_save):
     """Install Odoo modules into an instance database, then stop.
 
-    Starts Odoo with -i <modules>, waits for HTTP (install complete), then
-    stops. Use this for initial DB setup or to add modules to a template instance.
+    With MODULES: installs them and appends to [install].modules in instance.toml.
+    Without MODULES: installs from [install].modules already declared in instance.toml.
+    Use --no-save to install without updating the toml.
 
     \b
     Examples:
-      owm install odoo19-base base
-      owm install feat-789 sale purchase stock
+      owm install feat-789 sale purchase   # install + save to toml
+      owm install feat-789                 # install from toml manifest
+      owm install feat-789 sale --no-save  # install without saving
     """
+    from owm.instance import _append_modules_to_toml
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+
+    if modules:
+        install_modules = list(modules)
+    else:
+        # install from manifest
+        try:
+            with open(toml_path) as f:
+                conf = parse_instance_config(f.read())
+        except Exception as e:
+            click.echo(f"error: {e}", err=True)
+            sys.exit(1)
+        install_modules = conf.install.modules if conf.install else []
+        if not install_modules:
+            click.echo("error: no modules specified and none declared in [install].modules", err=True)
+            sys.exit(1)
+
     if _is_running(instance, workspace_root):
         click.echo("error: stop the instance first", err=True)
         sys.exit(1)
-    click.echo(f"installing {','.join(modules)} into {instance} …")
+    click.echo(f"installing {','.join(install_modules)} into {instance} …")
     try:
         start_instance(
             instance, workspace_root,
             wait=True,
             timeout_seconds=timeout,
-            init_modules=list(modules),
+            init_modules=install_modules,
         )
     except OwmError as e:
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
     stop_instance(instance, workspace_root, wait=True)
+    if modules and not no_save:
+        _append_modules_to_toml(toml_path, install_modules)
+        click.echo(f"  saved to {toml_path}")
     click.echo(f"{instance}  install complete")
 
 
