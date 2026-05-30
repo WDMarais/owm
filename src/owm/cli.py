@@ -485,6 +485,9 @@ def cmd_logs(ctx, name, lines, level, follow):
         click.echo(f"warning: {result.warning}", err=True)
     for line in result.lines:
         if isinstance(line, dict):
+            if "raw" in line and len(line) == 1:
+                click.echo(line["raw"])
+                continue
             ts = line.get("ts") or line.get("time") or ""
             lvl = line.get("level") or line.get("severity") or ""
             msg = line.get("msg") or line.get("message") or str(line)
