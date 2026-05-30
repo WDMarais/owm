@@ -55,9 +55,10 @@ def git_fetch_bare(bare_path: str, *, timeout: int = 30) -> bool:
     from owm.errors import OwmError, FETCH_TIMEOUT
     try:
         r = subprocess.run(
-            ["git", "fetch", "--prune", "--porcelain", "origin"],
+            ["git", "fetch", "--prune", "--update-head-ok", "--porcelain", "origin"],
             cwd=str(bare_path),
             stdout=subprocess.PIPE,
+            stderr=None,  # inherited — git progress streams to terminal
             text=True,
             timeout=timeout,
         )

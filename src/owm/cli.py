@@ -789,14 +789,14 @@ def cmd_fetch(ctx):
         bare_path = os.path.join(workspace_root, "_repos", f"{name}.git")
         if not os.path.isdir(bare_path):
             continue
-        click.echo(f"  fetching {name}...", nl=False)
+        click.echo(f"  fetching {name}...")
         try:
             updated = git_fetch_bare(bare_path)
         except OwmError as e:
-            click.echo(f"  warning: {e.args[0]} [{e.code}]")
+            click.echo(f"  {name}: warning: {e.args[0]} [{e.code}]")
             unreachable.append(name)
             continue
-        click.echo("  updated" if updated else "  up to date")
+        click.echo(f"  {name}: updated" if updated else f"  {name}: up to date")
         if updated:
             repos_with_updates.append(name)
     result = fetch_workspace(
