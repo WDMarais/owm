@@ -44,12 +44,12 @@ def test_assign_port_gevent_is_http_plus_one():
 
 @pytest.mark.port_assignment
 def test_assign_port_range_exhausted_raises():
-    """All 100 pairs in [8100, 8299] occupied → PORT_EXHAUSTED."""
+    """All 100 pairs in [8100, 8299] occupied → PORT_RANGE_EXHAUSTED."""
     occupied = set(range(8100, 8300))
     pool = {"range": [8100, 8299], "occupied": occupied}
     with pytest.raises(Exception) as exc_info:
         assign_port(pool=pool)
-    assert "PORT_EXHAUSTED" in str(exc_info.value) or "port range exhausted" in str(exc_info.value).lower()
+    assert "PORT_RANGE_EXHAUSTED" in str(exc_info.value) or "port range exhausted" in str(exc_info.value).lower()
 
 
 @pytest.mark.port_assignment

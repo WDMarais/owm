@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import psutil
 
-from owm.errors import OwmError, PORT_EXHAUSTED, PORT_CONTESTED
+from owm.errors import OwmError, PORT_RANGE_EXHAUSTED, PORT_CONTESTED
 
 
 @dataclass
@@ -65,9 +65,9 @@ def assign_port(pool: dict) -> PortPair:
             return PortPair(http_port=n, gevent_port=n + 1)
 
     raise PortExhaustedError(
-        f"[{PORT_EXHAUSTED}] port range {low}-{high} exhausted; "
+        f"[{PORT_RANGE_EXHAUSTED}] port range {low}-{high} exhausted; "
         "archive or delete unused instances to free ports",
-        code=PORT_EXHAUSTED,
+        code=PORT_RANGE_EXHAUSTED,
     )
 
 

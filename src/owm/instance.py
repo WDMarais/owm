@@ -2,6 +2,7 @@ import json
 import os
 import re
 import signal
+import socket
 import subprocess
 import time
 import urllib.error
@@ -12,7 +13,7 @@ import psutil
 
 from owm.addons import resolve_addons_path
 from owm.config import parse_instance_config, parse_workspace_config, InstanceConfig
-from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO
+from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO, PORT_CONTESTED
 from owm.oplog import workspace_log, instance_separator
 from owm.ports import assign_port, find_conflicting_process
 from owm.proxy import get_proxy_backend
@@ -420,6 +421,15 @@ def start_instance(
     instance_dir = os.path.join(workspace_root, "instances", instance)
     with open(os.path.join(instance_dir, "instance.toml")) as f:
         conf = parse_instance_config(f.read())
+
+    for port in (conf.server.http_port, conf.server.gevent_port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) == 0:
+                raise OwmError(
+                    f"port {port} is already in use — another process may be running; check with: lsof -i :{port}",
+                    code=PORT_CONTESTED,
+                    port=port,
+                )
 
     cmd = _build_start_command(instance, workspace_root, conf, init_modules=init_modules)
     log_path = os.path.join(workspace_root, "instances", instance, "instance.log")

@@ -15,7 +15,7 @@ from owm.errors import (
     BRANCH_NOT_FOUND, NOT_OWNED, SHARED_REPO, DIVERGED,
     NO_COMPARE_TARGET, START_TIMEOUT, STOP_TIMEOUT,
     DB_UNAVAILABLE, UPGRADE_FAILED, XMLRPC_UNAVAILABLE,
-    NO_WORKERS, PORT_EXHAUSTED, PORT_CONTESTED,
+    NO_WORKERS, PORT_RANGE_EXHAUSTED, PORT_CONTESTED,
 )
 from owm.errors import OwmError, format_error
 from owm.mcp import (
@@ -74,7 +74,7 @@ def test_all_codes_are_uppercase_strings():
         BRANCH_NOT_FOUND, NOT_OWNED, SHARED_REPO, DIVERGED,
         NO_COMPARE_TARGET, START_TIMEOUT, STOP_TIMEOUT,
         DB_UNAVAILABLE, UPGRADE_FAILED, XMLRPC_UNAVAILABLE,
-        NO_WORKERS, PORT_EXHAUSTED, PORT_CONTESTED,
+        NO_WORKERS, PORT_RANGE_EXHAUSTED, PORT_CONTESTED,
     ]
     for code in codes:
         assert isinstance(code, str)
@@ -89,7 +89,7 @@ def test_all_codes_are_distinct():
         BRANCH_NOT_FOUND, NOT_OWNED, SHARED_REPO, DIVERGED,
         NO_COMPARE_TARGET, START_TIMEOUT, STOP_TIMEOUT,
         DB_UNAVAILABLE, UPGRADE_FAILED, XMLRPC_UNAVAILABLE,
-        NO_WORKERS, PORT_EXHAUSTED, PORT_CONTESTED,
+        NO_WORKERS, PORT_RANGE_EXHAUSTED, PORT_CONTESTED,
     ]
     assert len(codes) == len(set(codes))
 
@@ -251,7 +251,7 @@ def test_no_workers_on_in_place_upgrade_without_workers():
 def test_port_exhausted_when_range_full():
     with pytest.raises(Exception) as exc_info:
         assign_port(pool={"range": [8100, 8299], "occupied": set(range(8100, 8300))})
-    assert PORT_EXHAUSTED in str(exc_info.value)
+    assert PORT_RANGE_EXHAUSTED in str(exc_info.value)
 
 
 @pytest.mark.error_taxonomy
