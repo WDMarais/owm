@@ -247,6 +247,8 @@ def cmd_start(ctx, name, wait):
         result = start_instance(instance, workspace_root, wait=wait)
     except OwmError as e:
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        if e.code == "PORT_CONTESTED" and "port" in e.extra:
+            click.echo(f"  hint: lsof -i :{e.extra['port']}", err=True)
         sys.exit(1)
     if result.status == "already_running":
         click.echo(f"{instance} already running (pid {result.pid})")

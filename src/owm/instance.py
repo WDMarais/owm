@@ -426,7 +426,7 @@ def start_instance(
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if s.connect_ex(("127.0.0.1", port)) == 0:
                 raise OwmError(
-                    f"port {port} is already in use — another process may be running; check with: lsof -i :{port}",
+                    f"port {port} is already in use",
                     code=PORT_CONTESTED,
                     port=port,
                 )
