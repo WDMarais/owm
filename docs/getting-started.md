@@ -259,22 +259,40 @@ kill <pid>
 
 ```bash
 owm stop feat-789
-owm install feat-789 sale purchase account
+owm install feat-789 sale purchase account   # installs + appends to [install].modules
 owm start feat-789
 ```
 
 `owm install` runs Odoo with `-i` and leaves the instance stopped. Stop first, start
 again after.
 
+Modules are appended to `[install].modules` in `instance.toml` automatically, so the
+toml always reflects what this instance has installed. Duplicates are ignored.
+
+To install without recording to the toml (ephemeral, e.g. debugging):
+
+```bash
+owm install feat-789 some_module --no-save
+```
+
+To re-install everything declared in the manifest (e.g. after `db-reset`):
+
+```bash
+owm install feat-789   # no modules listed → installs from [install].modules
+```
+
 ### Reset the database
 
 ```bash
 owm stop feat-789
-owm db-reset feat-789
+owm db-reset feat-789      # clone from template — fast regardless of DB size
+owm install feat-789       # re-apply module manifest from [install].modules
 owm start feat-789
 ```
 
-Requires `template` configured in `[database]` of `instance.toml`.
+Requires `template` configured in `[database]` of `instance.toml`. The install step
+re-applies whatever was recorded in the manifest — no need to remember which modules
+the instance had.
 
 ### Inspect logs
 
