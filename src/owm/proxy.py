@@ -23,7 +23,7 @@ class NginxBackend:
             f"upstream {upstream} {{ server 127.0.0.1:{http_port}; }}\n"
             f"upstream {upstream}_lp {{ server 127.0.0.1:{gevent_port}; }}\n"
             f"server {{\n"
-            f"    listen 443 ssl;\n"
+            f"    listen 80;\n"
             f"    server_name {name}.{domain_suffix};\n"
             f"\n"
             f"    proxy_read_timeout 720s;\n"

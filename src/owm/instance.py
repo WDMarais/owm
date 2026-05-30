@@ -163,6 +163,15 @@ def find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
     if len(shared) == 1:
         return shared[0]
 
+    if "odoo" in conf.repos:
+        import sys
+        print(
+            "note: odoo_repo not set — assuming repo 'odoo'; "
+            "set odoo_repo explicitly in [server] to suppress this",
+            file=sys.stderr,
+        )
+        return "odoo", conf.repos["odoo"]
+
     raise OwmError(
         "cannot locate odoo-bin: "
         + ("multiple shared repos; " if len(shared) > 1 else "no shared repo; ")
@@ -308,6 +317,9 @@ def new_instance(name: str, repos: dict, workspace_root: str, *, force: bool = F
     if os.path.exists(toml_path) and not force:
         raise OwmError(f"instance {name!r} already exists", code=ALREADY_EXISTS)
     repo_lines = "\n".join(f'{repo} = "{spec}"' for repo, spec in repos.items())
+    odoo_repo_line = ""
+    if len(repos) > 1 and "odoo" in repos:
+        odoo_repo_line = 'odoo_repo = "odoo"  # assumed; set explicitly if different\n'
     toml_content = f"""[repos]
 {repo_lines}
 
@@ -319,7 +331,7 @@ pg_port = 5432
 http_port = 8100
 gevent_port = 8101
 workers = 2
-"""
+{odoo_repo_line}"""
     os.makedirs(os.path.dirname(toml_path), exist_ok=True)
     with open(toml_path, "w") as f:
         f.write(toml_content)
