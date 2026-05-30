@@ -335,13 +335,14 @@ Restore it later from any workspace that has the same cluster:
 ```bash
 owm unarchive feat-789
 # → rematerialises worktrees/venv/proxy, assigns fresh ports, restores DB
+# archive directory is left in place — it's a restore point, not a one-shot
 owm start feat-789
 ```
 
-Pass `--discard` to remove the archive directory after a successful restore:
+Once you're confident you no longer need the archive, remove it with `--discard`:
 
 ```bash
-owm unarchive feat-789 --discard
+owm unarchive feat-789 --discard   # removes _archive/feat-789/ after restore
 ```
 
 > `_archive/` is for suspended instances. `_dumps/` is for intentional exports you want to
@@ -421,7 +422,7 @@ owm start feat-789
 owm stop feat-789
 owm archive feat-789
 
-# Restore
+# Restore (archive stays in place as a restore point)
 owm unarchive feat-789
 owm start feat-789
 
