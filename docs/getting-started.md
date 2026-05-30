@@ -281,6 +281,15 @@ To re-install everything declared in the manifest (e.g. after `db-reset`):
 owm install feat-789   # no modules listed → installs from [install].modules
 ```
 
+`owm install` uses Odoo's `-i` flag — it's a no-op for modules already installed in the
+DB. To update already-installed modules, use `owm upgrade` instead:
+
+```bash
+owm upgrade feat-789 sale          # -u sale
+owm upgrade feat-789               # -u all installed modules
+owm upgrade feat-789 sale --reinstall  # force reinstall
+```
+
 ### Reset the database
 
 ```bash

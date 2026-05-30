@@ -271,6 +271,8 @@ def cmd_install(ctx, name, modules, timeout, no_save):
     Without MODULES: installs from [install].modules already declared in instance.toml.
     Use --no-save to install without updating the toml.
 
+    Uses Odoo -i (install). For modules already installed, use `owm upgrade` (-u).
+
     \b
     Examples:
       owm install feat-789 sale purchase   # install + save to toml
