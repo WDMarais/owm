@@ -436,7 +436,7 @@ def cmd_status(ctx, name):
 
 @cli.command("delete")
 @click.argument("name", required=False)
-@click.option("--force", "-f", is_flag=True, help="Skip confirmation checklist and delete immediately.")
+@click.option("--force", "-f", is_flag=True, help="Skip interactive confirmation (for scripting).")
 @click.pass_context
 def cmd_delete(ctx, name, force):
     """Delete an instance and all its resources."""
@@ -456,10 +456,22 @@ def cmd_delete(ctx, name, force):
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
     if result.status == "pending_confirmation":
-        click.echo(f"instance {instance!r} — pass --force to confirm deletion:", err=True)
         for item in result.checklist or []:
-            click.echo(f"  • {item}", err=True)
-        sys.exit(1)
+            click.echo(f"  • {item}")
+        if not click.confirm(f"Delete {instance!r}?", default=False):
+            click.echo("aborted")
+            sys.exit(1)
+        try:
+            result = delete_instance(
+                instance=instance,
+                running=running,
+                force=True,
+                workspace_root=workspace_root,
+                workspace_compare_pairs=compare_pairs,
+            )
+        except OwmError as e:
+            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+            sys.exit(1)
     click.echo(f"{instance}  deleted")
 
 
@@ -679,7 +691,10 @@ def cmd_unarchive(ctx, name, discard):
     # Restore toml and materialise
     os.makedirs(instance_dir)
     import shutil
-    shutil.copy2(archived_toml, os.path.join(instance_dir, "instance.toml"))
+    from owm.archive import _strip_archived_sections
+    dest_toml = os.path.join(instance_dir, "instance.toml")
+    shutil.copy2(archived_toml, dest_toml)
+    _strip_archived_sections(dest_toml)
     try:
         result = create_instance(name, workspace_root)
     except OwmError as e:

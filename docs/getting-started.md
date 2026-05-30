@@ -320,6 +320,55 @@ owm fetch
 Fetches only the branches currently referenced by active instances — not all remote
 branches. This keeps fetches fast even for large repos like odoo.
 
+### Archive and unarchive
+
+Archiving suspends an instance: strips its port reservations, dumps its database, and moves everything to `_archive/`. The workspace port slots are freed for other instances.
+
+```bash
+owm stop feat-789
+owm archive feat-789
+# → _archive/feat-789/ with instance.toml (ports stripped) + db.dump + instance.log
+```
+
+Restore it later from any workspace that has the same cluster:
+
+```bash
+owm unarchive feat-789
+# → rematerialises worktrees/venv/proxy, assigns fresh ports, restores DB
+owm start feat-789
+```
+
+Pass `--discard` to remove the archive directory after a successful restore:
+
+```bash
+owm unarchive feat-789 --discard
+```
+
+> `_archive/` is for suspended instances. `_dumps/` is for intentional exports you want to
+> keep around — e.g. a known-good snapshot before a risky migration. Use `owm db-dump` for
+> those.
+
+### Delete an instance
+
+```bash
+owm delete feat-789
+```
+
+Prompts for confirmation, then removes worktrees, drops the database, removes the proxy
+block, and deletes the instance directory. This is permanent — archive first if you might
+want the instance back.
+
+```
+  • all instance data will be permanently deleted
+Delete 'feat-789'? [y/N]:
+```
+
+Skip the prompt in scripts with `--force`:
+
+```bash
+owm delete feat-789 --force
+```
+
 ### Other useful commands
 
 ```bash
@@ -329,8 +378,56 @@ owm env feat-789            # print env vars (paths, ports, db name)
 owm validate feat-789       # config consistency check
 owm push feat-789           # push instance branches to origin
 owm db-dump feat-789        # dump database to _dumps/
-owm archive feat-789        # stop + move to _archive/
-owm delete feat-789         # remove instance entirely
+```
+
+---
+
+## End-to-end quick reference
+
+Minimal command sequence from a fresh workspace to a deleted instance:
+
+```bash
+mkdir ~/my-workspace && cd ~/my-workspace
+# write workspace.toml (see above)
+
+owm init
+
+# Optional but recommended: set up a base template DB
+owm create odoo19-base odoo=19.0:shared --toml-only
+# edit instances/odoo19-base/instance.toml: set db name = "odoo19_base"
+owm install odoo19-base base web mail
+
+# Create a working instance
+owm create feat-789 odoo=19.0:shared
+owm start feat-789
+owm status feat-789
+
+# Install modules
+owm stop feat-789
+owm install feat-789 sale purchase account
+owm start feat-789
+owm logs feat-789 --follow
+
+# Fetch upstream changes
+owm fetch
+
+# Reset to template
+owm stop feat-789
+owm db-reset feat-789
+owm install feat-789   # re-applies [install].modules manifest
+owm start feat-789
+
+# Suspend (keeps DB, frees ports)
+owm stop feat-789
+owm archive feat-789
+
+# Restore
+owm unarchive feat-789
+owm start feat-789
+
+# Permanent removal
+owm stop feat-789
+owm delete feat-789
 ```
 
 ---

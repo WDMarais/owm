@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -155,6 +156,15 @@ def _patch_archived_toml(toml_path: str, shas: dict[str, str]) -> None:
             f.write("\n[archived_commits]\n")
             for repo, sha in shas.items():
                 f.write(f'{repo} = "{sha}"\n')
+
+
+def _strip_archived_sections(toml_path: str) -> None:
+    """Remove [archived] and [archived_commits] sections from a restored toml."""
+    with open(toml_path) as f:
+        content = f.read()
+    content = re.sub(r'\n\[archived\].*', '', content, flags=re.DOTALL)
+    with open(toml_path, "w") as f:
+        f.write(content)
 
 
 # ---------------------------------------------------------------------------
