@@ -774,24 +774,49 @@ def _gather_repo_states(instance: str, workspace_root: str) -> dict:
 # owm fetch
 # ---------------------------------------------------------------------------
 
+def _collect_active_branches(workspace_root: str) -> dict[str, set[str]]:
+    """Return {repo_name: {branch, ...}} by scanning all instance tomls."""
+    active: dict[str, set[str]] = {}
+    instances_dir = os.path.join(workspace_root, "instances")
+    if not os.path.isdir(instances_dir):
+        return active
+    for entry in os.scandir(instances_dir):
+        if not entry.is_dir():
+            continue
+        toml_path = os.path.join(entry.path, "instance.toml")
+        if not os.path.exists(toml_path):
+            continue
+        try:
+            with open(toml_path) as f:
+                conf = parse_instance_config(f.read())
+            for repo_name, spec in conf.repos.items():
+                active.setdefault(repo_name, set()).add(spec.branch)
+        except Exception:
+            pass
+    return active
+
+
 @cli.command("fetch")
 @click.pass_context
 def cmd_fetch(ctx):
-    """Fetch all bare repos in the workspace."""
+    """Fetch only branches active in instances (fast); skips unused remote branches."""
     workspace_root = _resolve_workspace(ctx)
     toml_path = os.path.join(workspace_root, "workspace.toml")
     with open(toml_path) as f:
         ws_conf = parse_workspace_config(f.read())
     repos = list(ws_conf.repos.keys())
+    active_branches = _collect_active_branches(workspace_root)
     repos_with_updates = []
     unreachable = []
     for name in repos:
         bare_path = os.path.join(workspace_root, "_repos", f"{name}.git")
         if not os.path.isdir(bare_path):
             continue
-        click.echo(f"  fetching {name}...")
+        branches = sorted(active_branches.get(name, []))
+        branch_hint = f" ({', '.join(branches)})" if branches else ""
+        click.echo(f"  fetching {name}{branch_hint}...")
         try:
-            updated = git_fetch_bare(bare_path)
+            updated = git_fetch_bare(bare_path, branches=branches or None)
         except OwmError as e:
             click.echo(f"  {name}: warning: {e.args[0]} [{e.code}]")
             unreachable.append(name)

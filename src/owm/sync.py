@@ -43,9 +43,10 @@ def has_local_commits(worktree_path: str) -> bool:
     return r.returncode == 0 and int(r.stdout.strip() or "0") > 0
 
 
-def git_fetch_bare(bare_path: str, *, timeout: int = 30) -> bool:
-    """Fetch a bare repo; returns True if any branch/tag refs were updated.
+def git_fetch_bare(bare_path: str, *, branches: list[str] | None = None, timeout: int = 60) -> bool:
+    """Fetch a bare repo; returns True if any branch refs were updated.
 
+    Pass `branches` to fetch only specific refs instead of all remote branches.
     FETCH_HEAD always appears in --porcelain output even when nothing changed,
     so we filter it out and only count real ref updates.
 
@@ -53,9 +54,14 @@ def git_fetch_bare(bare_path: str, *, timeout: int = 30) -> bool:
     Raises OwmError(FETCH_TIMEOUT) if the fetch exceeds `timeout` seconds.
     """
     from owm.errors import OwmError, FETCH_TIMEOUT
+    if branches:
+        refspecs = [f"+refs/heads/{b}:refs/heads/{b}" for b in branches]
+        cmd = ["git", "fetch", "--update-head-ok", "--porcelain", "origin", *refspecs]
+    else:
+        cmd = ["git", "fetch", "--prune", "--update-head-ok", "--porcelain", "origin"]
     try:
         r = subprocess.run(
-            ["git", "fetch", "--prune", "--update-head-ok", "--porcelain", "origin"],
+            cmd,
             cwd=str(bare_path),
             stdout=subprocess.PIPE,
             stderr=None,  # inherited — git progress streams to terminal
