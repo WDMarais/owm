@@ -1,5 +1,7 @@
 import os
+import subprocess
 import sys
+import webbrowser
 from pathlib import Path
 
 import click
@@ -12,7 +14,7 @@ from owm.errors import OwmError
 from owm.instance import (
     new_instance, create_instance, list_running_instances,
     start_instance, stop_instance, kill_instance, health_check,
-    generate_instance_conf,
+    generate_instance_conf, find_odoo_repo,
     _read_pid, _process_alive,
 )
 from owm.archive import archive_instance
@@ -356,6 +358,22 @@ def cmd_stop(ctx, name, wait):
         click.echo(f"{instance} stopping (pid {result.pid})")
 
 
+@cli.command("restart")
+@click.argument("name", required=False)
+@click.pass_context
+def cmd_restart(ctx, name):
+    """Stop then start an instance."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    try:
+        stop_instance(instance, workspace_root, wait=True)
+        result = start_instance(instance, workspace_root, wait=False)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    click.echo(f"{instance}  restarted  pid={result.pid}")
+
+
 @cli.command("kill")
 @click.argument("name", required=False)
 @click.pass_context
@@ -384,6 +402,22 @@ def cmd_health(ctx, name):
     if h.get("url"):
         line += f"  {h['url']}"
     click.echo(line)
+
+
+@cli.command("open")
+@click.argument("name", required=False)
+@click.pass_context
+def cmd_open(ctx, name):
+    """Open the instance URL in the default browser."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    ws_toml_path = os.path.join(workspace_root, "workspace.toml")
+    with open(ws_toml_path) as f:
+        ws_conf = parse_workspace_config(f.read())
+    domain = ws_conf.proxy.domain_suffix if ws_conf.proxy else "localhost"
+    url = f"https://{instance}.{domain}"
+    webbrowser.open(url)
+    click.echo(url)
 
 
 @cli.command("status")
@@ -546,6 +580,26 @@ def cmd_logs(ctx, name, lines, level, follow):
             click.echo("  ".join(parts))
         else:
             click.echo(str(line))
+
+
+@cli.command("shell")
+@click.argument("name", required=False)
+@click.pass_context
+def cmd_shell(ctx, name):
+    """Open an interactive Odoo shell for an instance (must be stopped)."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    if _is_running(instance, workspace_root):
+        click.echo("error: stop the instance first", err=True)
+        sys.exit(1)
+    conf = _read_instance_conf(instance, workspace_root)
+    odoo_repo_name, odoo_spec = find_odoo_repo(conf)
+    wt = resolve_worktree_path(odoo_repo_name, odoo_spec.branch, True, workspace_root, instance)
+    odoo_bin = os.path.join(wt.path, "odoo-bin")
+    venv = os.path.join(workspace_root, "instances", instance, ".venv")
+    python = os.path.join(venv, "bin", "python")
+    conf_path = os.path.join(workspace_root, "instances", instance, "instance.conf")
+    os.execv(python, [python, odoo_bin, "shell", "-c", conf_path])
 
 
 @cli.command("db-dump")
@@ -904,6 +958,77 @@ def _collect_active_branches(workspace_root: str) -> dict[str, set[str]]:
         except Exception:
             pass
     return active
+
+
+@cli.command("branches")
+@click.argument("repo", required=False)
+@click.pass_context
+def cmd_branches(ctx, repo):
+    """List branches available in the workspace bare repos."""
+    workspace_root = _resolve_workspace(ctx)
+    repos_dir = os.path.join(workspace_root, "_repos")
+    if not os.path.isdir(repos_dir):
+        click.echo("error: _repos/ not found — run owm init first", err=True)
+        sys.exit(1)
+    names = sorted(
+        d.removesuffix(".git")
+        for d in os.listdir(repos_dir)
+        if d.endswith(".git") and (repo is None or d == f"{repo}.git")
+    )
+    for name in names:
+        bare = os.path.join(repos_dir, f"{name}.git")
+        result = subprocess.run(
+            ["git", "-C", bare, "branch", "--format=%(refname:short)"],
+            capture_output=True, text=True,
+        )
+        branches = sorted(result.stdout.splitlines())
+        click.echo(f"{name}:")
+        for b in branches:
+            click.echo(f"  {b}")
+
+
+@cli.command("regen-conf")
+@click.argument("name", required=False)
+@click.pass_context
+def cmd_regen_conf(ctx, name):
+    """Regenerate instance.conf from current toml and workspace config."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    conf = _read_instance_conf(instance, workspace_root)
+    ws_toml_path = os.path.join(workspace_root, "workspace.toml")
+    with open(ws_toml_path) as f:
+        ws_conf = parse_workspace_config(f.read())
+    workspace_repos_meta = {
+        n: {"has_addons": r.has_addons, "addons_paths": r.addons_paths}
+        for n, r in ws_conf.repos.items()
+    }
+    instance_repos_dict = {
+        n: {"shared": s.shared, "branch": s.branch}
+        for n, s in conf.repos.items()
+    }
+    addons_paths = resolve_addons_path(
+        workspace_repos=workspace_repos_meta,
+        instance_repos=instance_repos_dict,
+        workspace_root=workspace_root,
+        instance_name=instance,
+        instances_dir=ws_conf.defaults.instances_dir,
+    )
+    log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
+    content = generate_instance_conf(
+        instance,
+        conf.server.http_port,
+        conf.server.gevent_port,
+        conf.server.workers,
+        db_name=conf.database.name,
+        db_port=conf.database.pg_port,
+        proxy_active=True,
+        addons_path=addons_paths or None,
+        logfile=log_path,
+    )
+    conf_path = os.path.join(workspace_root, "instances", instance, "instance.conf")
+    with open(conf_path, "w") as f:
+        f.write(content)
+    click.echo(f"{instance}  instance.conf regenerated")
 
 
 @cli.command("fetch")
