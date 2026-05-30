@@ -5,12 +5,27 @@
 let _selectedInstance = null;
 let _activeTab        = "owm";
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+const _esc = s => String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", async () => {
     await loadStatus();
-    document.getElementById("left-pane").querySelector(".collapse-btn")
-        .addEventListener("click", toggleLeftPane);
+
+    document.getElementById("actions-btn").addEventListener("click", e => {
+        e.stopPropagation();
+        document.getElementById("actions-menu").classList.toggle("hidden");
+    });
+    document.addEventListener("click", () => {
+        document.getElementById("actions-menu").classList.add("hidden");
+    });
+
     document.querySelector(".nav-item[data-page='processes']")
         .addEventListener("click", e => { e.preventDefault(); showProcessesPage(); });
 });
@@ -29,8 +44,6 @@ async function loadStatus() {
     const data = await api("/api/status");
     renderInstanceList(data.instances);
     renderRepoList(data.repos);
-
-    // Select first instance by default
     if (data.instances.length > 0) {
         selectInstance(data.instances[0].name);
     }
@@ -44,21 +57,21 @@ function renderInstanceList(instances) {
         el.className = "instance-item";
         el.dataset.instance = inst.name;
         el.innerHTML = `<span class="dot dot-${inst.status === "running" ? "running" : "stopped"}"></span>
-                        <span class="instance-name">${inst.name}</span>`;
+                        <span class="instance-name">${_esc(inst.name)}</span>`;
         el.addEventListener("click", () => selectInstance(inst.name));
         section.appendChild(el);
     }
 }
 
 function renderRepoList(repos) {
-    const section = document.querySelector(".nav-section-repos");
-    section.innerHTML = '<div class="section-label">Repos</div>';
+    const section = document.querySelector(".nav-section-remotes");
+    section.innerHTML = '<div class="section-label">Remotes</div>';
     for (const repo of repos) {
         const stale = repo.last_fetch && (repo.last_fetch.includes("h") || repo.last_fetch.includes("d"));
         const el = document.createElement("div");
         el.className = `repo-item${stale ? " stale" : ""}`;
-        el.innerHTML = `<span class="repo-name">${repo.name}</span>
-                        <span class="repo-age">${repo.last_fetch ?? "—"}</span>`;
+        el.innerHTML = `<span class="repo-name">${_esc(repo.name)}</span>
+                        <span class="repo-age">${_esc(repo.last_fetch ?? "—")}</span>`;
         section.appendChild(el);
     }
 }
@@ -83,22 +96,35 @@ async function selectInstance(name) {
 // ── Centre pane ────────────────────────────────────────────────────────────
 
 function renderCentre(inst) {
-    renderHeader(inst);
+    renderNavbar(inst);
+    renderCommands(inst);
     renderHealth(inst);
     renderScripts(inst);
     renderRepos(inst);
-    renderCommands(inst);
     renderTabStrip(inst);
 }
 
-function renderHeader(inst) {
-    const h1 = document.querySelector(".instance-title h1");
-    const badge = document.querySelector(".instance-title .status-badge");
-    h1.textContent = inst.name;
-    badge.textContent = inst.status === "running"
+// ── Top navbar: instance dock ──────────────────────────────────────────────
+
+function renderNavbar(inst) {
+    const dock = document.getElementById("instance-dock");
+    dock.classList.remove("hidden");
+
+    document.getElementById("dock-name").textContent = inst.name;
+
+    const statusEl = document.getElementById("dock-status");
+    statusEl.textContent = inst.status === "running"
         ? `running · pid ${inst.pid}`
         : inst.status;
-    badge.className = `status-badge ${inst.status}`;
+    statusEl.className = `status-badge ${inst.status}`;
+
+    const urlEl = document.getElementById("dock-url");
+    const url = `https://${inst.name}.localhost`;
+    urlEl.href = url;
+    urlEl.textContent = url;
+
+    const metaEl = document.getElementById("dock-meta");
+    metaEl.textContent = inst.started_at ? `started ${inst.started_at}` : "";
 }
 
 function renderHealth(inst) {
@@ -114,12 +140,11 @@ function renderHealth(inst) {
     ];
     for (const [label, h] of items) {
         if (!h) continue;
-        // Ports being "not ok" is expected for a stopped instance — mute rather than alarm
         const stateClass = stopped && !h.ok ? "muted" : h.ok ? "ok" : "err";
         const el = document.createElement("div");
         el.className = "health-item";
-        el.innerHTML = `<span class="health-label">${label}</span>
-                        <span class="health-value ${stateClass}">${h.value}</span>`;
+        el.innerHTML = `<span class="health-label">${_esc(label)}</span>
+                        <span class="health-value ${stateClass}">${_esc(h.value)}</span>`;
         grid.appendChild(el);
     }
 }
@@ -128,27 +153,30 @@ function renderScripts(inst) {
     const list = document.querySelector(".script-list");
     list.innerHTML = "";
     for (const s of inst.scripts) {
-        const badgeClass = s.status === "ok" ? "badge-ok"
+        const badgeClass = s.status === "ok"  ? "badge-ok"
                          : s.status === "fail" ? "badge-fail"
                          : "badge-none";
-        const badgeText = s.status ?? "—";
         const el = document.createElement("div");
         el.className = "script-row";
-        el.innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>
-                        <span class="script-name">${s.name}</span>
-                        <span class="script-time">${s.last_run ?? "never"}</span>
-                        <button class="btn-run" data-script="${s.name}">Run</button>`;
+        el.innerHTML = `
+            <div class="script-name-line">
+              <span class="script-name">${_esc(s.name)}</span>
+              <button class="btn-run" data-script="${_esc(s.name)}">Run</button>
+            </div>
+            <div class="script-meta-line">
+              <span class="badge ${badgeClass}">${_esc(s.status ?? "—")}</span>
+              <span class="script-time">${_esc(s.last_run ?? "never")}</span>
+            </div>`;
         list.appendChild(el);
     }
 }
 
 function _syncSummary(repo) {
-    // Returns [{label, state, canSync}] — multiple issues possible per repo
     const issues = [];
-    const vob     = repo.vs_origin_branch ?? {};
-    const vobase  = repo.vs_origin_base   ?? {};
-    const behind  = vob.behind_by  ?? 0;
-    const ahead   = vob.ahead_by   ?? 0;
+    const vob      = repo.vs_origin_branch ?? {};
+    const vobase   = repo.vs_origin_base   ?? {};
+    const behind   = vob.behind_by  ?? 0;
+    const ahead    = vob.ahead_by   ?? 0;
     const baseBehind = vobase.behind_by ?? 0;
 
     if (repo.dirty)              issues.push({label: "uncommitted changes", state: "dirty",  canSync: false});
@@ -168,19 +196,20 @@ function renderRepos(inst) {
     for (const repo of inst.repos) {
         const issues  = _syncSummary(repo);
         const primary = issues[0];
-        const extra   = issues.slice(1).map(i => `<span class="sync-state ${i.state}">${i.label}</span>`).join(" · ");
-        const label   = extra
-            ? `<span class="sync-state ${primary.state}">${primary.label}</span> · ${extra}`
-            : `<span class="sync-state ${primary.state}">${primary.label}</span>`;
+        const extra   = issues.slice(1).map(i =>
+            `<span class="sync-state ${i.state}">${_esc(i.label)}</span>`).join(" · ");
+        const syncLine = extra
+            ? `<span class="sync-state ${primary.state}">${_esc(primary.label)}</span> · ${extra}`
+            : `<span class="sync-state ${primary.state}">${_esc(primary.label)}</span>`;
         const canSync = issues.some(i => i.canSync);
         const el = document.createElement("div");
         el.className = "repo-row";
-        el.innerHTML = `<span class="repo-col repo-name">${repo.name}</span>
-                        <span class="repo-col branch">${repo.branch}</span>
-                        <span class="repo-col sync-state-cell">${label}</span>
-                        <span class="repo-col repo-action">${canSync
-                            ? `<button class="btn-sync" data-repo="${repo.name}">Sync</button>`
-                            : ""}</span>`;
+        el.innerHTML = `
+            <div class="repo-name-line">
+              <span class="repo-name" title="${_esc(repo.branch ?? "")}">${_esc(repo.name)}</span>
+              ${canSync ? `<button class="btn-sync" data-repo="${_esc(repo.name)}">Sync</button>` : ""}
+            </div>
+            <div class="repo-sync-line">${syncLine}</div>`;
         list.appendChild(el);
     }
 }
@@ -191,27 +220,20 @@ function renderCommands(inst) {
     for (const cmd of inst.commands) {
         const el = document.createElement("div");
         el.className = "cmd-row";
-        el.innerHTML = `<span class="cmd-label">${cmd.label}</span>
-                        <code class="cmd-value">${cmd.cmd}</code>
-                        <button class="btn-copy" data-cmd="${cmd.cmd}">Copy</button>`;
+        el.dataset.cmd = cmd.cmd;
+        el.innerHTML = `<span class="cmd-label">${_esc(cmd.label)}</span>
+                        <code class="cmd-value" title="${_esc(cmd.cmd)}">${_esc(cmd.cmd)}</code>`;
         list.appendChild(el);
     }
     list.addEventListener("click", e => {
-        const btn = e.target.closest(".btn-copy");
-        if (btn) navigator.clipboard.writeText(btn.dataset.cmd).then(() => {
-            btn.textContent = "✓";
-            setTimeout(() => btn.textContent = "Copy", 1500);
+        const row = e.target.closest(".cmd-row");
+        if (!row) return;
+        navigator.clipboard.writeText(row.dataset.cmd).then(() => {
+            const val = row.querySelector(".cmd-value");
+            val.classList.add("copied");
+            setTimeout(() => val.classList.remove("copied"), 1200);
         });
     });
-}
-
-// ── Left pane collapse ─────────────────────────────────────────────────────
-
-function toggleLeftPane() {
-    const pane = document.getElementById("left-pane");
-    const btn  = pane.querySelector(".collapse-btn");
-    const collapsed = pane.classList.toggle("collapsed");
-    btn.textContent = collapsed ? "›" : "‹";
 }
 
 // ── Processes page ─────────────────────────────────────────────────────────
@@ -223,7 +245,6 @@ async function showProcessesPage() {
     document.querySelectorAll(".instance-item").forEach(el => el.classList.remove("active"));
     document.querySelector(".nav-item[data-page='processes']").classList.add("active");
 
-    // Right pane: just owm.log, no instance context
     const strip = document.querySelector(".tab-strip");
     strip.innerHTML = "";
     strip.appendChild(_makeTab({ key: "owm", label: "owm.log", cls: "" }));
@@ -235,28 +256,27 @@ async function showProcessesPage() {
 
 function renderProcesses(data) {
     const page = document.getElementById("processes-page");
-
     page.innerHTML = '<div class="page-header"><h2>Processes</h2></div>';
 
-    _renderProcessSection(page, "Managed",                  data.managed,      _managedRow);
-    _renderProcessSection(page, "Orphaned owm processes",   data.orphaned,     _orphanedRow);
-    _renderProcessSection(page, "Unregistered (owm-shaped)",data.unregistered, _unregisteredRow);
-    _renderProcessSection(page, "Port squatters",           data.squatters,    _squatterRow);
+    _renderProcessSection(page, "Managed",                   data.managed,      _managedRow);
+    _renderProcessSection(page, "Orphaned owm processes",    data.orphaned,     _orphanedRow);
+    _renderProcessSection(page, "Unregistered (owm-shaped)", data.unregistered, _unregisteredRow);
+    _renderProcessSection(page, "Port squatters",            data.squatters,    _squatterRow);
 }
 
 function _renderProcessSection(page, label, rows, rowFn) {
     if (!rows.length) return;
     const sec = document.createElement("div");
     sec.className = "process-section";
-    sec.innerHTML = `<div class="section-label">${label}</div>`;
+    sec.innerHTML = `<div class="section-label">${_esc(label)}</div>`;
     for (const r of rows) sec.appendChild(rowFn(r));
     page.appendChild(sec);
 }
 
 function _pill(port, label) {
     return label
-        ? `<span class="port-pill"><span class="port-label">${label}</span>:${port}</span>`
-        : `<span class="port-pill">:${port}</span>`;
+        ? `<span class="port-pill"><span class="port-label">${_esc(label)}</span>:${_esc(port)}</span>`
+        : `<span class="port-pill">:${_esc(port)}</span>`;
 }
 
 function _managedRow(p) {
@@ -264,10 +284,15 @@ function _managedRow(p) {
     el.className = "process-row";
     const pills = [p.http && _pill(p.http, "http"), p.gevent && _pill(p.gevent, "gevent")]
         .filter(Boolean).join("");
-    el.innerHTML = `<span class="dot dot-${p.status === "running" ? "running" : "stopped"}"></span>
-                    <span class="proc-name">${p.name}</span>
-                    <span class="proc-ports">${pills}</span>
-                    <span class="proc-pid">pid ${p.pid}</span>`;
+    el.innerHTML = `
+        <div class="proc-name-line">
+          <span class="dot dot-${p.status === "running" ? "running" : "stopped"}"></span>
+          <span class="proc-name" title="${_esc(p.name)}">${_esc(p.name)}</span>
+        </div>
+        <div class="proc-detail-line">
+          <span class="proc-ports">${pills}</span>
+          <span class="proc-pid">pid ${_esc(p.pid)}</span>
+        </div>`;
     return el;
 }
 
@@ -275,11 +300,16 @@ function _orphanedRow(p) {
     const el = document.createElement("div");
     el.className = "process-row";
     const pills = p.ports.map(n => _pill(n, null)).join("");
-    el.innerHTML = `<span class="dot dot-warn"></span>
-                    <span class="proc-name">${p.name}</span>
-                    <span class="proc-ports">${pills}</span>
-                    <span class="proc-pid">pid ${p.pid}</span>
-                    <button class="btn-readopt" data-pid="${p.pid}">Re-adopt</button>`;
+    el.innerHTML = `
+        <div class="proc-name-line">
+          <span class="dot dot-warn"></span>
+          <span class="proc-name" title="${_esc(p.name)}">${_esc(p.name)}</span>
+        </div>
+        <div class="proc-detail-line">
+          <span class="proc-ports">${pills}</span>
+          <span class="proc-pid">pid ${_esc(p.pid)}</span>
+          <button class="btn-readopt" data-pid="${_esc(p.pid)}">Re-adopt</button>
+        </div>`;
     return el;
 }
 
@@ -287,11 +317,16 @@ function _unregisteredRow(p) {
     const el = document.createElement("div");
     el.className = "process-row";
     const pills = p.ports.map(n => _pill(n, null)).join("");
-    el.innerHTML = `<span class="dot dot-warn"></span>
-                    <span class="proc-name">${p.cmd}</span>
-                    <span class="proc-ports">${pills}</span>
-                    <span class="proc-pid">pid ${p.pid}</span>
-                    <button class="btn-adopt-flow" data-pid="${p.pid}">Adopt…</button>`;
+    el.innerHTML = `
+        <div class="proc-name-line">
+          <span class="dot dot-warn"></span>
+          <span class="proc-name" title="${_esc(p.cmd)}">${_esc(p.cmd)}</span>
+        </div>
+        <div class="proc-detail-line">
+          <span class="proc-ports">${pills}</span>
+          <span class="proc-pid">pid ${_esc(p.pid)}</span>
+          <button class="btn-adopt-flow" data-pid="${_esc(p.pid)}">Adopt…</button>
+        </div>`;
     return el;
 }
 
@@ -299,11 +334,16 @@ function _squatterRow(p) {
     const el = document.createElement("div");
     el.className = "process-row";
     const pills = p.ports.map(n => _pill(n, null)).join("");
-    el.innerHTML = `<span class="dot dot-err"></span>
-                    <span class="proc-name">${p.cmd}</span>
-                    <span class="proc-ports">${pills}</span>
-                    <span class="proc-pid">pid ${p.pid}</span>
-                    <span class="proc-note">not owm-managed</span>`;
+    el.innerHTML = `
+        <div class="proc-name-line">
+          <span class="dot dot-err"></span>
+          <span class="proc-name" title="${_esc(p.cmd)}">${_esc(p.cmd)}</span>
+        </div>
+        <div class="proc-detail-line">
+          <span class="proc-ports">${pills}</span>
+          <span class="proc-pid">pid ${_esc(p.pid)}</span>
+          <span class="proc-note">not owm-managed</span>
+        </div>`;
     return el;
 }
 
@@ -355,11 +395,10 @@ async function _loadTabLogs(key) {
         const data = await api(`/api/logs/${_selectedInstance}/${key}`);
         _renderLogLines(data.lines);
     } catch (e) {
-        viewport.innerHTML = `<div class="log-line log-err">${e.message}</div>`;
+        viewport.innerHTML = `<div class="log-line log-err">${_esc(e.message)}</div>`;
     }
 }
 
-// ANSI CSI escape sequences (colours, bold, reset, etc.)
 const _ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 function _renderLogLines(lines) {
@@ -386,10 +425,9 @@ function _levelClass(level) {
     return "log-info";
 }
 
-// Detect level from plain-text Odoo log lines: "... INFO ...", "... WARNING ..."
 function _detectLevel(text) {
-    if (/\bERROR\b/.test(text))              return "err";
-    if (/\bWARNING\b|\bWARN\b/.test(text))  return "warn";
-    if (/\bINFO\b/.test(text))              return "info";
+    if (/\bERROR\b/.test(text))             return "err";
+    if (/\bWARNING\b|\bWARN\b/.test(text)) return "warn";
+    if (/\bINFO\b/.test(text))             return "info";
     return "";
 }
