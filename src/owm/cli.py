@@ -304,27 +304,31 @@ def cmd_install(ctx, name, modules, timeout, no_save):
         sys.exit(1)
 
     already_in_db = _query_installed_modules(conf.database.name, conf.database.pg_port, install_modules)
+    to_install = [m for m in install_modules if m not in already_in_db]
+
     if already_in_db:
         click.echo(f"  note: {', '.join(already_in_db)} already installed in DB — use `owm upgrade` to update")
 
-    click.echo(f"installing {','.join(install_modules)} into {instance} …")
-    try:
-        start_instance(
-            instance, workspace_root,
-            wait=True,
-            timeout_seconds=timeout,
-            init_modules=install_modules,
-        )
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
-    stop_instance(instance, workspace_root, wait=True)
+    if to_install:
+        click.echo(f"installing {','.join(to_install)} into {instance} …")
+        try:
+            start_instance(
+                instance, workspace_root,
+                wait=True,
+                timeout_seconds=timeout,
+                init_modules=to_install,
+            )
+        except OwmError as e:
+            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+            sys.exit(1)
+        stop_instance(instance, workspace_root, wait=True)
+    else:
+        click.echo(f"  nothing to install")
+
     if modules and not no_save:
-        added, already_in_manifest = _append_modules_to_toml(toml_path, install_modules)
+        added, _ = _append_modules_to_toml(toml_path, install_modules)
         if added:
             click.echo(f"  manifest: added {', '.join(added)}")
-        if already_in_manifest:
-            click.echo(f"  manifest: {', '.join(already_in_manifest)} already recorded")
     click.echo(f"{instance}  install complete")
 
 
