@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -584,9 +585,11 @@ def cmd_logs(ctx, name, lines, level, follow):
 
 @cli.command("shell")
 @click.argument("name", required=False)
+@click.option("--script", metavar="FILE", default=None, help="Script to pipe through odoo-bin shell (use - for stdin).")
+@click.option("--json", "json_out", is_flag=True, help="Output result as JSON (non-interactive only).")
 @click.pass_context
-def cmd_shell(ctx, name):
-    """Open an interactive Odoo shell for an instance (must be stopped)."""
+def cmd_shell(ctx, name, script, json_out):
+    """Open an interactive Odoo shell, or pipe a script through it non-interactively."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     if _is_running(instance, workspace_root):
@@ -599,7 +602,36 @@ def cmd_shell(ctx, name):
     venv = os.path.join(workspace_root, "instances", instance, ".venv")
     python = os.path.join(venv, "bin", "python")
     conf_path = os.path.join(workspace_root, "instances", instance, "instance.conf")
-    os.execv(python, [python, odoo_bin, "shell", "-c", conf_path])
+
+    for label, path in [("instance.conf", conf_path), ("odoo-bin", odoo_bin), ("venv", venv)]:
+        if not os.path.exists(path):
+            click.echo(f"error: {label} not found at {path} — run owm create first", err=True)
+            sys.exit(1)
+
+    cmd = [python, odoo_bin, "shell", "-c", conf_path, "-d", conf.database.name, "--no-http"]
+
+    if not script:
+        os.execv(python, cmd)
+
+    # Non-interactive
+    if script == "-":
+        script_input = sys.stdin.read()
+    else:
+        with open(script) as f:
+            script_input = f.read()
+
+    result = subprocess.run(
+        cmd + ["--log-level", "critical"],
+        input=script_input, capture_output=True, text=True,
+    )
+    if json_out:
+        click.echo(json.dumps({"exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr}))
+    else:
+        if result.stdout:
+            click.echo(result.stdout, nl=False)
+        if result.stderr:
+            click.echo(result.stderr, nl=False, err=True)
+        sys.exit(result.returncode)
 
 
 @cli.command("db-dump")
