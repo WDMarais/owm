@@ -85,7 +85,7 @@ def _start_cluster(pg_version: str, cluster_name: str) -> None:
 
 def _superuser_exists(role: str, pg_port: int) -> bool:
     result = subprocess.run(
-        ["psql", "-p", str(pg_port), "-h", "/var/run/postgresql",
+        ["psql", "-p", str(pg_port), "-h", "/var/run/postgresql", "-d", "postgres",
          "-tAc", f"SELECT 1 FROM pg_roles WHERE rolname='{role}' AND rolsuper"],
         capture_output=True, text=True,
     )
