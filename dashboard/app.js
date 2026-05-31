@@ -184,7 +184,7 @@ function renderRepoList(repos) {
 
 // ── Instance selection ─────────────────────────────────────────────────────
 
-async function selectInstance(name, scrollTo = null) {
+async function selectInstance(name, scrollTo = null, restoreTab = null) {
     _selectedInstance = name;
 
     document.getElementById("centre-pane").classList.remove("hidden");
@@ -196,19 +196,19 @@ async function selectInstance(name, scrollTo = null) {
     document.querySelector(".nav-item[data-page='processes']").classList.remove("active");
 
     const data = await api(`/api/instance/${name}`);
-    renderCentre(data);
+    renderCentre(data, restoreTab);
     if (scrollTo) _scrollToSection(scrollTo);
 }
 
 // ── Centre pane ────────────────────────────────────────────────────────────
 
-function renderCentre(inst) {
+function renderCentre(inst, restoreTab = null) {
     renderNavbar(inst);
     renderCommands(inst);
     renderHealth(inst);
     renderScripts(inst);
     renderRepos(inst);
-    renderTabStrip(inst);
+    renderTabStrip(inst, restoreTab);
 }
 
 // ── Top navbar: instance dock ──────────────────────────────────────────────
@@ -299,12 +299,13 @@ function _renderActionsMenu(inst) {
 }
 
 async function _instanceAction(name, action, btn) {
-    const prev = btn.textContent;
-    btn.disabled = true;
+    const prev    = btn.textContent;
+    const prevTab = _activeTab;
+    btn.disabled  = true;
     btn.textContent = action.charAt(0).toUpperCase() + action.slice(1) + "…";
     try {
         await fetch(`/api/instance/${name}/${action}`, { method: "POST" });
-        await selectInstance(name);
+        await selectInstance(name, null, prevTab);
     } catch (_) {
         btn.textContent = prev;
         btn.disabled = false;
@@ -603,7 +604,7 @@ function _makeWrapToggle() {
     return wrap;
 }
 
-function renderTabStrip(inst) {
+function renderTabStrip(inst, restoreTab = null) {
     const strip = document.querySelector(".tab-strip");
     strip.innerHTML = "";
 
@@ -620,7 +621,7 @@ function renderTabStrip(inst) {
     }
 
     strip.appendChild(_makeWrapToggle());
-    _activateTab("owm");
+    _activateTab(restoreTab ?? "owm");
 }
 
 function _makeTab(t) {
