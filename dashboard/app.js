@@ -248,9 +248,47 @@ function renderNavbar(inst) {
     if (running) {
         actionsEl.appendChild(mkBtn("Stop",    "stop",    "btn-stop"));
         actionsEl.appendChild(mkBtn("Restart", "restart", "btn-restart"));
+        actionsEl.appendChild(mkBtn("Kill",    "kill",    "btn-kill"));
     } else {
         actionsEl.appendChild(mkBtn("Start",   "start",   "btn-start"));
     }
+
+    _renderActionsMenu(inst);
+}
+
+function _renderActionsMenu(inst) {
+    const menu = document.getElementById("actions-menu");
+    menu.innerHTML = "";
+
+    const mkItem = (label, fn) => {
+        const el = document.createElement("button");
+        el.className = "action-item";
+        el.textContent = label;
+        el.addEventListener("click", () => {
+            document.getElementById("actions-menu").classList.add("hidden");
+            fn();
+        });
+        return el;
+    };
+
+    menu.appendChild(mkItem("Rename…", () => {
+        const newName = window.prompt(`Rename "${inst.name}" to:`, inst.name);
+        if (!newName || newName === inst.name) return;
+        fetch(`/api/instance/${inst.name}/rename?new_name=${encodeURIComponent(newName)}`, { method: "POST" })
+            .then(() => loadStatus());
+    }));
+
+    menu.appendChild(mkItem("Archive", () => {
+        if (!window.confirm(`Archive "${inst.name}"?`)) return;
+        fetch(`/api/instance/${inst.name}/archive`, { method: "POST" })
+            .then(() => loadStatus());
+    }));
+
+    menu.appendChild(mkItem("Delete…", () => {
+        if (!window.confirm(`Delete "${inst.name}"? This cannot be undone.`)) return;
+        fetch(`/api/instance/${inst.name}/delete`, { method: "POST" })
+            .then(() => loadStatus());
+    }));
 }
 
 async function _instanceAction(name, action, btn) {

@@ -107,6 +107,7 @@ body {
 .btn-dock.btn-start   { border-color: var(--c-running); color: var(--c-running); }
 .btn-dock.btn-stop    { border-color: var(--c-err);     color: var(--c-err); }
 .btn-dock.btn-restart { border-color: var(--c-warn);    color: var(--c-warn); }
+.btn-dock.btn-kill    { border-color: var(--c-err);     color: var(--c-err); opacity: .6; }
 
 .actions-wrap {
   position: relative;

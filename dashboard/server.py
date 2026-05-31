@@ -224,6 +224,26 @@ def api_instance_restart(name: str):
     return _owm(WORKSPACE, "restart", name, timeout=120)
 
 
+@app.post("/api/instance/{name}/kill")
+def api_instance_kill(name: str):
+    return _owm(WORKSPACE, "kill", name)
+
+
+@app.post("/api/instance/{name}/archive")
+def api_instance_archive(name: str):
+    return _owm(WORKSPACE, "archive", name)
+
+
+@app.post("/api/instance/{name}/delete")
+def api_instance_delete(name: str):
+    return _owm(WORKSPACE, "delete", name, "--force")
+
+
+@app.post("/api/instance/{name}/rename")
+def api_instance_rename(name: str, new_name: str):
+    return _owm(WORKSPACE, "rename", name, new_name)
+
+
 @app.get("/api/notifications")
 def api_notifications():
     notifications = []
