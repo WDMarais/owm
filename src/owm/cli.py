@@ -1113,6 +1113,14 @@ def cmd_fetch(ctx):
         existing.update({r: now for r in fetched})
         ts_path.write_text(json.dumps(existing, indent=2))
 
+    workspace_log(
+        workspace_root, "fetch",
+        repos=fetched,
+        updated=repos_with_updates,
+        unreachable=unreachable,
+        status="ok" if not unreachable else "partial",
+    )
+
 
 # ---------------------------------------------------------------------------
 # owm sync
