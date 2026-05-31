@@ -143,12 +143,23 @@ def rename_instance(
     http_port = conf.server.http_port
     gevent_port = conf.server.gevent_port
 
-    # 1. Rename Postgres database
+    # 1. Rename Postgres database — terminate lingering connections first
+    _pg = ["psql", "-p", str(pg_port), "-h", "/var/run/postgresql", "-d", "postgres"]
     subprocess.run(
-        ["psql", "-p", str(pg_port), "-h", "/var/run/postgresql", "-d", "postgres",
-         "-c", f'ALTER DATABASE "{old_db}" RENAME TO "{new_name}"'],
-        check=True, capture_output=True,
+        [*_pg, "-c",
+         f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+         f"WHERE datname = '{old_db}' AND pid <> pg_backend_pid()"],
+        capture_output=True,
     )
+    r = subprocess.run(
+        [*_pg, "-c", f'ALTER DATABASE "{old_db}" RENAME TO "{new_name}"'],
+        capture_output=True,
+    )
+    if r.returncode != 0:
+        raise OwmError(
+            r.stderr.decode().strip() or f"psql exited {r.returncode}",
+            code="DB_RENAME_FAILED",
+        )
 
     # 2. Patch instance.toml in place (before directory rename)
     with open(toml_path) as f:
