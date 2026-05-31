@@ -672,17 +672,20 @@ async function _loadTabLogs(key) {
         return;
     }
 
+    let offset = -1;
     try {
         const logUrl = key === "owm" ? `/api/logs/owm` : `/api/logs/${_selectedInstance}/odoo`;
         const data = await api(logUrl);
         _renderLogLines(data.lines);
+        if (data.offset != null) offset = data.offset;
     } catch (e) {
         viewport.innerHTML = `<div class="log-line log-err">${_esc(e.message)}</div>`;
         return;
     }
 
-    const streamUrl = _streamUrl(key);
-    if (!streamUrl) return;
+    const baseUrl = _streamUrl(key);
+    if (!baseUrl) return;
+    const streamUrl = offset >= 0 ? `${baseUrl}?from_offset=${offset}` : baseUrl;
 
     const src = new EventSource(streamUrl);
     _activeStream = src;

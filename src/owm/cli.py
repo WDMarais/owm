@@ -594,9 +594,6 @@ def cmd_shell(ctx, name, script, json_out):
     """Open an interactive Odoo shell, or pipe a script through it non-interactively."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    if _is_running(instance, workspace_root):
-        click.echo("error: stop the instance first", err=True)
-        sys.exit(1)
     conf = _read_instance_conf(instance, workspace_root)
     odoo_repo_name, odoo_spec = find_odoo_repo(conf)
     wt = resolve_worktree_path(odoo_repo_name, odoo_spec.branch, True, workspace_root, instance)
@@ -1167,17 +1164,36 @@ def cmd_sync(ctx, name, repo, rebase):
 @click.option("--all", "all_repos", is_flag=True, help="Push all owned repos.")
 @click.pass_context
 def cmd_push(ctx, name, repo, all_repos):
-    """Push instance branches to origin."""
+    """Push instance branches to origin (ff-only; requires clean working tree)."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     repo_states = _gather_repo_states(instance, workspace_root)
-    try:
-        results = push_instance(
-            instance, repo=repo, all_repos=all_repos, repo_states=repo_states,
-        )
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+
+    # For single-repo push, surface dirty/diverged before calling push_instance
+    if repo and not all_repos:
+        state = repo_states.get(repo, {})
+        if state.get("status") == "dirty":
+            click.echo(f"error: {repo} has uncommitted changes — commit or stash before pushing", err=True)
+            sys.exit(1)
+        branch_status = state.get("status") if state.get("status") in ("diverged", "ahead") else None
+        try:
+            results = push_instance(
+                instance, repo=repo, branch_status=branch_status,
+                shared=repo_states[repo].get("shared", False),
+                owned=not _read_instance_conf(instance, workspace_root).repos[repo].readonly,
+            )
+        except OwmError as e:
+            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+            sys.exit(1)
+    else:
+        try:
+            results = push_instance(
+                instance, repo=repo, all_repos=all_repos, repo_states=repo_states,
+            )
+        except OwmError as e:
+            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+            sys.exit(1)
+
     conf = _read_instance_conf(instance, workspace_root)
     for rname, outcome in results.items():
         if outcome["status"] == "pushed":
@@ -1187,6 +1203,9 @@ def cmd_push(ctx, name, repo, all_repos):
                 workspace_root=workspace_root, instance_name=instance,
             )
             git_push(wt.path)
+            bare = os.path.join(workspace_root, "_repos", f"{rname}.git")
+            if os.path.isdir(bare):
+                git_fetch_bare(bare, branches=[rspec.branch])
         click.echo(f"  {rname}  {outcome['status']}")
 
 

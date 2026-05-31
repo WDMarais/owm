@@ -89,7 +89,7 @@ def git_rebase(worktree_path: str) -> None:
 
 
 def git_push(worktree_path: str) -> None:
-    git_run(["push", "origin", "HEAD"], cwd=worktree_path)
+    git_run(["push", "origin", "HEAD", "--ff-only"], cwd=worktree_path)
 
 
 def branch_exists_on_origin(bare_path: str, branch: str) -> bool:

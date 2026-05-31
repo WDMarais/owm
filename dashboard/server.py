@@ -466,22 +466,30 @@ def api_notifications():
     return {"notifications": notifications}
 
 
+def _read_log_tail(log_path: Path, n: int, fmt=None) -> dict:
+    """Read last n lines and return lines + byte offset at end of read."""
+    if not log_path.exists():
+        return {"lines": [], "offset": 0}
+    with open(log_path, "rb") as f:
+        raw = f.read()
+        offset = len(raw)
+    text = raw.decode("utf-8", errors="replace")
+    tail = text.splitlines()[-n:]
+    lines = [fmt(l) if fmt else {"text": l} for l in tail]
+    return {"lines": lines, "offset": offset}
+
+
 @app.get("/api/logs/owm")
 def api_logs_owm(n: int = 50):
-    log_path = WORKSPACE / "owm.log"
-    lines = [_format_owm_line(raw) for raw in log_path.read_text().splitlines()[-n:]]
-    return {"lines": lines, "log_path": str(log_path)}
+    result = _read_log_tail(WORKSPACE / "owm.log", n, fmt=_format_owm_line)
+    return {**result, "log_path": str(WORKSPACE / "owm.log")}
 
 
 @app.get("/api/logs/{name}/odoo")
 def api_logs_instance(name: str, n: int = 50):
     log_path = WORKSPACE / "instances" / name / "instance.log"
-    if not log_path.exists():
-        return {"lines": [], "log_path": str(log_path)}
-    return {
-        "lines": [{"text": l} for l in log_path.read_text().splitlines()[-n:]],
-        "log_path": str(log_path),
-    }
+    result = _read_log_tail(log_path, n)
+    return {**result, "log_path": str(log_path)}
 
 
 def _format_owm_line(raw: str) -> dict:
@@ -496,18 +504,19 @@ def _format_owm_line(raw: str) -> dict:
         return {"text": raw}
 
 
-def _sse_tail(log_path: Path, fmt=None):
+def _sse_tail(log_path: Path, from_offset: int = -1, fmt=None):
     async def generate():
         try:
-            f = open(log_path)
-            f.seek(0, 2)
+            f = open(log_path, "rb")
+            f.seek(from_offset if from_offset >= 0 else 0, 0 if from_offset >= 0 else 2)
         except FileNotFoundError:
             return
         try:
             while True:
-                line = f.readline()
-                if line:
-                    entry = fmt(line.rstrip()) if fmt else {"text": line.rstrip()}
+                raw = f.readline()
+                if raw:
+                    line = raw.decode("utf-8", errors="replace").rstrip()
+                    entry = fmt(line) if fmt else {"text": line}
                     yield f"data: {json.dumps(entry)}\n\n"
                 else:
                     await asyncio.sleep(0.5)
@@ -522,13 +531,13 @@ def _sse_tail(log_path: Path, fmt=None):
 
 
 @app.get("/api/logs/owm/stream")
-async def api_logs_owm_stream():
-    return _sse_tail(WORKSPACE / "owm.log", fmt=_format_owm_line)
+async def api_logs_owm_stream(from_offset: int = -1):
+    return _sse_tail(WORKSPACE / "owm.log", from_offset=from_offset, fmt=_format_owm_line)
 
 
 @app.get("/api/logs/{name}/odoo/stream")
-async def api_logs_instance_stream(name: str):
-    return _sse_tail(WORKSPACE / "instances" / name / "instance.log")
+async def api_logs_instance_stream(name: str, from_offset: int = -1):
+    return _sse_tail(WORKSPACE / "instances" / name / "instance.log", from_offset=from_offset)
 
 
 # ── Static files ──────────────────────────────────────────────────────────────
