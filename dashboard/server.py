@@ -195,6 +195,35 @@ def api_instance(name: str):
     }
 
 
+def _owm(workspace_root: Path, *args: str, timeout: int = 60) -> dict:
+    env = os.environ.copy()
+    env["OWM_WORKSPACE"] = str(workspace_root)
+    result = subprocess.run(
+        ["owm", *args],
+        cwd=str(workspace_root),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return {"ok": result.returncode == 0, "output": result.stdout + result.stderr}
+
+
+@app.post("/api/instance/{name}/start")
+def api_instance_start(name: str):
+    return _owm(WORKSPACE, "start", name)
+
+
+@app.post("/api/instance/{name}/stop")
+def api_instance_stop(name: str):
+    return _owm(WORKSPACE, "stop", name)
+
+
+@app.post("/api/instance/{name}/restart")
+def api_instance_restart(name: str):
+    return _owm(WORKSPACE, "restart", name, timeout=120)
+
+
 @app.get("/api/notifications")
 def api_notifications():
     notifications = []

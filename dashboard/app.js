@@ -232,6 +232,38 @@ function renderNavbar(inst) {
 
     const metaEl = document.getElementById("dock-meta");
     metaEl.textContent = inst.started_at ? `started ${inst.started_at}` : "";
+
+    const actionsEl = document.getElementById("dock-actions");
+    actionsEl.innerHTML = "";
+    const running = inst.status === "running";
+
+    const mkBtn = (label, action, cls) => {
+        const btn = document.createElement("button");
+        btn.className = `btn-dock ${cls}`;
+        btn.textContent = label;
+        btn.addEventListener("click", () => _instanceAction(inst.name, action, btn));
+        return btn;
+    };
+
+    if (running) {
+        actionsEl.appendChild(mkBtn("Stop",    "stop",    "btn-stop"));
+        actionsEl.appendChild(mkBtn("Restart", "restart", "btn-restart"));
+    } else {
+        actionsEl.appendChild(mkBtn("Start",   "start",   "btn-start"));
+    }
+}
+
+async function _instanceAction(name, action, btn) {
+    const prev = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = action.charAt(0).toUpperCase() + action.slice(1) + "…";
+    try {
+        await fetch(`/api/instance/${name}/${action}`, { method: "POST" });
+        await selectInstance(name);
+    } catch (_) {
+        btn.textContent = prev;
+        btn.disabled = false;
+    }
 }
 
 function renderHealth(inst) {

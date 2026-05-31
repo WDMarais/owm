@@ -86,6 +86,28 @@ body {
   color: var(--muted);
 }
 
+.dock-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-dock {
+  padding: 4px 12px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text);
+  transition: opacity .15s;
+}
+.btn-dock:disabled { opacity: .5; cursor: default; }
+.btn-dock.btn-start   { border-color: var(--c-running); color: var(--c-running); }
+.btn-dock.btn-stop    { border-color: var(--c-err);     color: var(--c-err); }
+.btn-dock.btn-restart { border-color: var(--c-warn);    color: var(--c-warn); }
+
 .actions-wrap {
   position: relative;
   margin-left: auto;
