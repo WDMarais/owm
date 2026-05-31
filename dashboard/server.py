@@ -7,6 +7,7 @@ Run: OWM_WORKSPACE=~/tmp/owm-walkthrough uvicorn dashboard.server:app --reload
 """
 import json
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -85,6 +86,21 @@ def _rel(iso: str | None) -> str | None:
 # ── API ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI()
+
+
+@app.post("/api/fetch")
+def api_fetch():
+    env = os.environ.copy()
+    env["OWM_WORKSPACE"] = str(WORKSPACE)
+    result = subprocess.run(
+        ["owm", "fetch"],
+        cwd=str(WORKSPACE),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    return {"ok": result.returncode == 0, "output": result.stdout}
 
 
 @app.get("/api/status")
