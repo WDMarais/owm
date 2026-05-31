@@ -425,8 +425,8 @@ function renderRepos(inst) {
         }
 
         el.querySelector(".repo-branch").addEventListener("click", e => {
+            const span = e.currentTarget;
             navigator.clipboard.writeText(repo.branch ?? "").then(() => {
-                const span = e.currentTarget;
                 const prev = span.textContent;
                 span.textContent = " ✓";
                 setTimeout(() => { span.textContent = prev; }, 1000);
