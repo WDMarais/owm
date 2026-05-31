@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import webbrowser
+from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -1098,6 +1099,19 @@ def cmd_fetch(ctx):
     )
     if not repos:
         click.echo("no repos configured")
+
+    fetched = [r for r in repos if r not in unreachable]
+    if fetched:
+        now = datetime.now(timezone.utc).isoformat()
+        ts_path = Path(workspace_root) / "_fetch_timestamps.json"
+        existing = {}
+        if ts_path.exists():
+            try:
+                existing = json.loads(ts_path.read_text())
+            except Exception:
+                pass
+        existing.update({r: now for r in fetched})
+        ts_path.write_text(json.dumps(existing, indent=2))
 
 
 # ---------------------------------------------------------------------------

@@ -177,6 +177,45 @@ def api_instance(name: str):
     }
 
 
+@app.get("/api/notifications")
+def api_notifications():
+    notifications = []
+
+    ws_cfg     = parse_workspace_config((WORKSPACE / "workspace.toml").read_text())
+    timestamps = _fetch_timestamps()
+
+    for repo_name in ws_cfg.repos:
+        ts = timestamps.get(repo_name)
+        if not ts:
+            notifications.append({
+                "tier": "warn", "instance": None,
+                "msg": f"{repo_name}: never fetched", "section": "repos",
+            })
+        else:
+            age_h = (datetime.now(timezone.utc) - datetime.fromisoformat(ts.replace("Z", "+00:00"))).total_seconds() / 3600
+            if age_h > 24:
+                notifications.append({
+                    "tier": "warn", "instance": None,
+                    "msg": f"{repo_name}: last fetch {_rel(ts)}", "section": "repos",
+                })
+
+    for name in _instances():
+        state = _read_state(name)
+        pid   = state.get("pid")
+        if pid and pid != "UNSET":
+            try:
+                if not psutil.pid_exists(int(pid)):
+                    notifications.append({
+                        "tier": "warn", "instance": name,
+                        "msg": f"stale pid {pid} in state.json — instance may have crashed",
+                        "section": "health",
+                    })
+            except Exception:
+                pass
+
+    return {"notifications": notifications}
+
+
 @app.get("/api/logs/{name}/{log}")
 def api_logs(name: str, log: str, n: int = 50):
     if log == "owm":
