@@ -272,7 +272,21 @@ body {
 }
 .nav-section-notifications .section-label {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+.btn-notif-refresh {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.6;
+}
+.btn-notif-refresh:hover { opacity: 1; }
 .nav-section-notifications .notif-scroll {
   flex: 1;
   overflow-y: auto;
@@ -493,7 +507,9 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 160px;
+  cursor: pointer;
 }
+.repo-branch:hover { color: var(--text); }
 .repo-sync-line {
   font-size: 12px;
 }

@@ -102,7 +102,8 @@ async function loadNotifications() {
 
 function renderNotifications(notifications) {
     const section = document.getElementById("notifications-section");
-    section.innerHTML = '<div class="section-label">Notifications</div>';
+    section.innerHTML = `<div class="section-label">Notifications<button class="btn-notif-refresh" title="Refresh notifications">↻</button></div>`;
+    section.querySelector(".btn-notif-refresh").addEventListener("click", loadNotifications);
 
     const scroll = document.createElement("div");
     scroll.className = "notif-scroll";
@@ -422,6 +423,15 @@ function renderRepos(inst) {
                 await selectInstance(_selectedInstance);
             });
         }
+
+        el.querySelector(".repo-branch").addEventListener("click", e => {
+            navigator.clipboard.writeText(repo.branch ?? "").then(() => {
+                const span = e.currentTarget;
+                const prev = span.textContent;
+                span.textContent = " ✓";
+                setTimeout(() => { span.textContent = prev; }, 1000);
+            });
+        });
 
         list.appendChild(el);
     }
