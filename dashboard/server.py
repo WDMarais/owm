@@ -7,6 +7,7 @@ Run: OWM_WORKSPACE=~/tmp/owm-walkthrough uvicorn dashboard.server:app --reload
 """
 import json
 import os
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -86,6 +87,23 @@ def _rel(iso: str | None) -> str | None:
 # ── API ───────────────────────────────────────────────────────────────────────
 
 app = FastAPI()
+
+
+@app.get("/api/banner")
+def api_banner():
+    alerts = []
+    usage   = shutil.disk_usage(str(WORKSPACE))
+    free_gb = usage.free / (1024 ** 3)
+    if free_gb < 2:
+        alerts.append({"level": "critical", "msg": f"Low disk space: {free_gb:.1f} GB free"})
+    elif free_gb < 10:
+        alerts.append({"level": "warn", "msg": f"Disk space low: {free_gb:.1f} GB free"})
+
+    pg = subprocess.run(["pg_isready", "-q"], capture_output=True)
+    if pg.returncode != 0:
+        alerts.append({"level": "critical", "msg": "PostgreSQL unreachable"})
+
+    return {"alerts": alerts}
 
 
 @app.post("/api/fetch")
