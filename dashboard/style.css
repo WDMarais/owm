@@ -708,6 +708,8 @@ body {
   min-width: 48px;
   color: var(--muted);
 }
+.worker-type[data-type="gevent"] { color: var(--c-warn); }
+.worker-type[data-type="cron"]   { color: var(--c-stopped); }
 
 .port-pill {
   display: inline-flex;

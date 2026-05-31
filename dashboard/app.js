@@ -475,7 +475,7 @@ function _managedRow(p) {
     if (hasWorkers) {
         const rows = p.workers.map(w =>
             `<div class="worker-row">
-               <span class="worker-type">${_esc(w.type)}</span>
+               <span class="worker-type" data-type="${_esc(w.type)}">${_esc(w.type)}</span>
                <span class="proc-pid">pid ${_esc(w.pid)}</span>
              </div>`
         ).join("");

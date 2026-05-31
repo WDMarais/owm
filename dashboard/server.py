@@ -277,12 +277,17 @@ def api_processes():
                 for child in psutil.Process(pid_int).children(recursive=True):
                     try:
                         cmdline = child.cmdline()
-                        wtype = "gevent" if "gevent" in cmdline else "worker"
+                        if "gevent" in cmdline:
+                            wtype = "gevent"
+                        else:
+                            listen_ports = {c.laddr.port for c in child.net_connections() if c.status == "LISTEN"}
+                            wtype = "http" if http and http in listen_ports else "cron"
                         workers.append({"pid": child.pid, "type": wtype})
                     except Exception:
                         pass
             except Exception:
                 pass
+            workers.sort(key=lambda w: ({"http": 0, "cron": 1, "gevent": 2}.get(w["type"], 3), w["pid"]))
 
         managed.append({"name": name, "status": status, "pid": pid_int,
                          "http": http, "gevent": gevent, "workers": workers})
