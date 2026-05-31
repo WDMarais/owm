@@ -502,8 +502,14 @@ def test_owm_delete_running_error():
 
 
 @pytest.mark.mcp_surface
-def test_owm_rename_stopped_instance():
-    result = owm_rename(instance="feat-789", new_name="pd-789")
+def test_owm_rename_stopped_instance(standard_instance_toml, tmp_workspace):
+    with patch("owm.operations.subprocess.run"), \
+         patch("owm.operations.shutil.move"):
+        result = owm_rename(
+            instance="feat-789",
+            new_name="pd-789",
+            workspace_root=str(tmp_workspace),
+        )
     assert result == {"status": "renamed", "old": "feat-789", "new": "pd-789", "url": "https://pd-789.localhost"}
 
 

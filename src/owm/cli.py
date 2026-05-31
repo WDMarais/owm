@@ -493,6 +493,7 @@ def cmd_delete(ctx, name, force):
     if result.status == "pending_confirmation":
         for item in result.checklist or []:
             click.echo(f"  • {item}")
+        click.echo("  pass --force to skip this prompt")
         if not click.confirm(f"Delete {instance!r}?", default=False):
             click.echo("aborted")
             sys.exit(1)

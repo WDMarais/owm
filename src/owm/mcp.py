@@ -242,9 +242,11 @@ def owm_delete(instance, force=True, running=False, workspace_root=None, **kwarg
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
 
 
-def owm_rename(instance, new_name, running=False, **kwargs):
+def owm_rename(instance, new_name, running=False, workspace_root=None, **kwargs):
+    workspace_root = workspace_root or default_workspace()
     try:
-        result = rename_instance(instance=instance, new_name=new_name, running=running)
+        result = rename_instance(instance=instance, new_name=new_name, running=running,
+                                 workspace_root=workspace_root)
         return {"status": "renamed", "old": instance, "new": new_name,
                 "url": f"https://{new_name}.localhost"}
     except OwmError as e:

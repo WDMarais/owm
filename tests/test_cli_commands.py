@@ -86,12 +86,15 @@ def test_rename_running_instance_hard_error():
 
 
 @pytest.mark.cli_commands
-def test_rename_stopped_instance_updates_all_references():
-    result = rename_instance(
-        instance="feat-789",
-        new_name="pd-789",
-        running=False,
-    )
+def test_rename_stopped_instance_updates_all_references(standard_instance_toml, tmp_workspace):
+    with patch("owm.operations.subprocess.run"), \
+         patch("owm.operations.shutil.move"):
+        result = rename_instance(
+            instance="feat-789",
+            new_name="pd-789",
+            running=False,
+            workspace_root=str(tmp_workspace),
+        )
     assert result.status == "renamed"
     assert result.old_name == "feat-789"
     assert result.new_name == "pd-789"
@@ -101,20 +104,30 @@ def test_rename_stopped_instance_updates_all_references():
 
 
 @pytest.mark.cli_commands
-def test_rename_updates_workspace_toml_compare_pairs():
-    result = rename_instance(
-        instance="feat-789",
-        new_name="pd-789",
-        running=False,
-        workspace_compare_pairs=[["feat-789", "main"]],
-    )
+def test_rename_updates_workspace_toml_compare_pairs(standard_instance_toml, tmp_workspace):
+    with patch("owm.operations.subprocess.run"), \
+         patch("owm.operations.shutil.move"):
+        result = rename_instance(
+            instance="feat-789",
+            new_name="pd-789",
+            running=False,
+            workspace_root=str(tmp_workspace),
+            workspace_compare_pairs=[["feat-789", "main"]],
+        )
     assert ["pd-789", "main"] in result.remaining_compare_pairs
     assert ["feat-789", "main"] not in result.remaining_compare_pairs
 
 
 @pytest.mark.cli_commands
-def test_rename_updates_proxy_subdomain():
-    result = rename_instance(instance="feat-789", new_name="pd-789", running=False)
+def test_rename_updates_proxy_subdomain(standard_instance_toml, tmp_workspace):
+    with patch("owm.operations.subprocess.run"), \
+         patch("owm.operations.shutil.move"):
+        result = rename_instance(
+            instance="feat-789",
+            new_name="pd-789",
+            running=False,
+            workspace_root=str(tmp_workspace),
+        )
     assert result.old_url == "https://feat-789.localhost"
     assert result.new_url == "https://pd-789.localhost"
 
