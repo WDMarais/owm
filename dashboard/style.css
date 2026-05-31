@@ -680,6 +680,35 @@ body {
 .proc-pid   { padding-left: 8px; border-left: 1px solid var(--border); }
 .proc-note  { font-style: italic; }
 
+.btn-workers {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-workers.active { background: var(--bg); color: var(--text); }
+
+.worker-list { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+.worker-list.hidden { display: none; }
+.worker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 2px 20px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.worker-type {
+  font-family: var(--mono);
+  font-size: 11px;
+  min-width: 48px;
+  color: var(--muted);
+}
+
 .port-pill {
   display: inline-flex;
   align-items: baseline;

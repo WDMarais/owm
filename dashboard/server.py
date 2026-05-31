@@ -244,6 +244,80 @@ def api_instance_rename(name: str, new_name: str):
     return _owm(WORKSPACE, "rename", name, new_name)
 
 
+@app.get("/api/processes")
+def api_processes():
+    managed     = []
+    managed_pids = set()
+
+    for name in _instances():
+        state   = _read_state(name)
+        pid_raw = state.get("pid")
+        status  = _instance_status(name)
+
+        http = gevent = None
+        try:
+            cfg    = parse_instance_config((WORKSPACE / "instances" / name / "instance.toml").read_text())
+            http   = cfg.server.http_port
+            gevent = cfg.server.gevent_port
+        except Exception:
+            pass
+
+        pid_int = None
+        if pid_raw and pid_raw != "UNSET":
+            try:
+                pid_int = int(pid_raw)
+                if status == "running":
+                    managed_pids.add(pid_int)
+            except Exception:
+                pass
+
+        workers = []
+        if pid_int and status == "running":
+            try:
+                for child in psutil.Process(pid_int).children(recursive=True):
+                    try:
+                        cmdline = child.cmdline()
+                        wtype = "gevent" if "gevent" in cmdline else "worker"
+                        workers.append({"pid": child.pid, "type": wtype})
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        managed.append({"name": name, "status": status, "pid": pid_int,
+                         "http": http, "gevent": gevent, "workers": workers})
+
+    # Exclude worker children of managed master pids from orphan scan
+    managed_family: set[int] = set(managed_pids)
+    for entry in managed:
+        for w in entry.get("workers", []):
+            managed_family.add(w["pid"])
+
+    orphaned = []
+    for proc in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            if proc.pid in managed_family:
+                continue
+            cmdline = proc.info.get("cmdline") or []
+            if not any("odoo-bin" in c for c in cmdline):
+                continue
+            name = str(proc.pid)
+            for i, arg in enumerate(cmdline):
+                if arg == "--config" and i + 1 < len(cmdline):
+                    name = Path(cmdline[i + 1]).parent.name
+                    break
+            ports: list[int] = []
+            try:
+                ports = [c.laddr.port for c in proc.net_connections() if c.status == "LISTEN"]
+            except Exception:
+                pass
+            orphaned.append({"name": name, "pid": proc.pid, "ports": ports})
+        except Exception:
+            pass
+
+    return {"managed": managed, "orphaned": orphaned, "unregistered": [], "squatters": []}
+
+
 @app.get("/api/notifications")
 def api_notifications():
     notifications = []

@@ -468,15 +468,40 @@ function _managedRow(p) {
     el.className = "process-row";
     const pills = [p.http && _pill(p.http, "http"), p.gevent && _pill(p.gevent, "gevent")]
         .filter(Boolean).join("");
+    const hasWorkers = p.workers && p.workers.length > 0;
+    const toggleId   = `workers-${p.pid}`;
+
+    let workersHtml = "";
+    if (hasWorkers) {
+        const rows = p.workers.map(w =>
+            `<div class="worker-row">
+               <span class="worker-type">${_esc(w.type)}</span>
+               <span class="proc-pid">pid ${_esc(w.pid)}</span>
+             </div>`
+        ).join("");
+        workersHtml = `<div class="worker-list hidden" id="${_esc(toggleId)}">${rows}</div>`;
+    }
+
     el.innerHTML = `
         <div class="proc-name-line">
           <span class="dot dot-${p.status === "running" ? "running" : "stopped"}"></span>
           <span class="proc-name" title="${_esc(p.name)}">${_esc(p.name)}</span>
+          ${hasWorkers ? `<button class="btn-workers" data-target="${_esc(toggleId)}">${p.workers.length} workers</button>` : ""}
         </div>
         <div class="proc-detail-line">
           <span class="proc-ports">${pills}</span>
-          <span class="proc-pid">pid ${_esc(p.pid)}</span>
-        </div>`;
+          ${p.pid ? `<span class="proc-pid">pid ${_esc(p.pid)}</span>` : ""}
+        </div>
+        ${workersHtml}`;
+
+    if (hasWorkers) {
+        el.querySelector(".btn-workers").addEventListener("click", e => {
+            const list = document.getElementById(e.target.dataset.target);
+            list.classList.toggle("hidden");
+            e.target.classList.toggle("active");
+        });
+    }
+
     return el;
 }
 
