@@ -372,18 +372,18 @@ function _syncSummary(repo) {
         return issues;
     }
 
-    const vob      = repo.vs_origin_branch ?? {};
-    const vobase   = repo.vs_origin_base   ?? {};
-    const behind   = vob.behind_by  ?? 0;
-    const ahead    = vob.ahead_by   ?? 0;
-    const baseBehind = vobase.behind_by ?? 0;
+    const vob    = repo.vs_origin_branch          ?? {};
+    const obob   = repo.origin_branch_vs_origin_base ?? {};
+    const behind = vob.behind_by  ?? 0;
+    const ahead  = vob.ahead_by   ?? 0;
+    const remoteBehindBase = obob.behind_by ?? 0;
 
     if (behind > 0 && ahead > 0) issues.push({label: `diverged (${ahead}↑ ${behind}↓)`, state: "err", canSync: false});
     else {
         if (behind > 0) issues.push({label: `${behind} behind origin`, state: "behind", canSync: true});
         if (ahead  > 0) issues.push({label: `${ahead} unpushed`,       state: "ahead",  canSync: false});
     }
-    if (baseBehind > 0) issues.push({label: `${baseBehind} behind base`, state: "behind", canSync: true});
+    if (remoteBehindBase > 0) issues.push({label: `remote ${remoteBehindBase} behind base`, state: "behind", canSync: true});
     if (issues.length === 0) issues.push({label: "up to date", state: "clean", canSync: false});
     return issues;
 }
@@ -401,8 +401,8 @@ function renderRepos(inst) {
             : `<span class="sync-state ${primary.state}">${_esc(primary.label)}</span>`;
         const canSync = issues.some(i => i.canSync);
         const lc = repo.last_commit;
-        const commitHint = (!repo.has_remote && lc)
-            ? ` · <span class="repo-last-commit" title="${_esc(lc.ts ?? "")}">${_esc(lc.hash)}${lc.rel ? " · " + _esc(lc.rel) : ""}</span>`
+        const commitLine = (!repo.has_remote && lc)
+            ? `<div class="repo-commit-line" title="${_esc(lc.ts ?? "")}">${_esc(lc.hash)}${lc.rel ? " · " + _esc(lc.rel) : ""}</div>`
             : "";
         const el = document.createElement("div");
         el.className = "repo-row";
@@ -411,7 +411,7 @@ function renderRepos(inst) {
               <span class="repo-name" title="${_esc(repo.branch ?? "")}">${_esc(repo.name)}</span>
               ${canSync ? `<button class="btn-sync" data-repo="${_esc(repo.name)}">Sync</button>` : ""}
             </div>
-            <div class="repo-sync-line">${syncLine}${commitHint}</div>`;
+            <div class="repo-sync-line">${syncLine}</div>${commitLine}`;
 
         if (canSync) {
             el.querySelector(".btn-sync").addEventListener("click", async e => {
