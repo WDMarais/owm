@@ -260,14 +260,21 @@ function _renderActionsMenu(inst) {
     const menu = document.getElementById("actions-menu");
     menu.innerHTML = "";
 
-    const mkItem = (label, fn) => {
+    const running = inst.status === "running";
+
+    const mkItem = (label, fn, disabled = false) => {
         const el = document.createElement("button");
         el.className = "action-item";
         el.textContent = label;
-        el.addEventListener("click", () => {
-            document.getElementById("actions-menu").classList.add("hidden");
-            fn();
-        });
+        if (disabled) {
+            el.disabled = true;
+            el.title = "Stop the instance first";
+        } else {
+            el.addEventListener("click", () => {
+                document.getElementById("actions-menu").classList.add("hidden");
+                fn();
+            });
+        }
         return el;
     };
 
@@ -276,19 +283,19 @@ function _renderActionsMenu(inst) {
         if (!newName || newName === inst.name) return;
         fetch(`/api/instance/${inst.name}/rename?new_name=${encodeURIComponent(newName)}`, { method: "POST" })
             .then(() => loadStatus());
-    }));
+    }, running));
 
     menu.appendChild(mkItem("Archive", () => {
         if (!window.confirm(`Archive "${inst.name}"?`)) return;
         fetch(`/api/instance/${inst.name}/archive`, { method: "POST" })
             .then(() => loadStatus());
-    }));
+    }, running));
 
     menu.appendChild(mkItem("Delete…", () => {
         if (!window.confirm(`Delete "${inst.name}"? This cannot be undone.`)) return;
         fetch(`/api/instance/${inst.name}/delete`, { method: "POST" })
             .then(() => loadStatus());
-    }));
+    }, running));
 }
 
 async function _instanceAction(name, action, btn) {

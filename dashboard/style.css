@@ -140,9 +140,11 @@ body {
   cursor: pointer;
   color: var(--text);
 }
-.action-item:hover               { background: var(--bg); }
+.action-item:hover                { background: var(--bg); }
 .action-item.btn-stop:hover      { color: var(--c-warn); }
 .action-item.btn-kill:hover      { color: var(--c-err); }
+.action-item:disabled            { opacity: .4; cursor: not-allowed; }
+.action-item:disabled:hover      { background: none; }
 
 /* ── Header banner (workspace-critical alerts) ──────────────────────────── */
 
