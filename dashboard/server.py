@@ -5,6 +5,7 @@ Workspace: set OWM_WORKSPACE env var, or run uvicorn from inside a workspace dir
 
 Run: OWM_WORKSPACE=~/tmp/owm-walkthrough uvicorn dashboard.server:app --reload
 """
+import asyncio
 import json
 import os
 import shutil
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import psutil
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from owm.config import parse_workspace_config, parse_instance_config
@@ -367,34 +368,69 @@ def api_notifications():
     return {"notifications": notifications}
 
 
-@app.get("/api/logs/{name}/{log}")
-def api_logs(name: str, log: str, n: int = 50):
-    if log == "owm":
-        log_path = WORKSPACE / "owm.log"
-        lines = []
-        for raw in log_path.read_text().splitlines()[-n:]:
-            try:
-                e = json.loads(raw)
-                parts = [
-                    e.get("event", ""),
-                    e.get("repo") or e.get("instance") or "",
-                    e.get("status") or "",
-                ]
-                text = "  ".join(p for p in parts if p)
-                if e.get("pid"):
-                    text += f"  pid={e['pid']}"
-                lines.append({"ts": e.get("ts"), "level": "info", "text": text.strip()})
-            except Exception:
-                lines.append({"text": raw})
-        return {"lines": lines, "log_path": str(log_path)}
+@app.get("/api/logs/owm")
+def api_logs_owm(n: int = 50):
+    log_path = WORKSPACE / "owm.log"
+    lines = [_format_owm_line(raw) for raw in log_path.read_text().splitlines()[-n:]]
+    return {"lines": lines, "log_path": str(log_path)}
 
+
+@app.get("/api/logs/{name}/odoo")
+def api_logs_instance(name: str, n: int = 50):
     log_path = WORKSPACE / "instances" / name / "instance.log"
     if not log_path.exists():
         return {"lines": [], "log_path": str(log_path)}
     return {
-        "lines":    [{"text": l} for l in log_path.read_text().splitlines()[-n:]],
+        "lines": [{"text": l} for l in log_path.read_text().splitlines()[-n:]],
         "log_path": str(log_path),
     }
+
+
+def _format_owm_line(raw: str) -> dict:
+    try:
+        e = json.loads(raw)
+        parts = [e.get("event", ""), e.get("repo") or e.get("instance") or "", e.get("status") or ""]
+        text = "  ".join(p for p in parts if p)
+        if e.get("pid"):
+            text += f"  pid={e['pid']}"
+        return {"ts": e.get("ts"), "level": "info", "text": text.strip()}
+    except Exception:
+        return {"text": raw}
+
+
+def _sse_tail(log_path: Path, fmt=None):
+    async def generate():
+        try:
+            f = open(log_path)
+            f.seek(0, 2)
+        except FileNotFoundError:
+            return
+        try:
+            while True:
+                line = f.readline()
+                if line:
+                    entry = fmt(line.rstrip()) if fmt else {"text": line.rstrip()}
+                    yield f"data: {json.dumps(entry)}\n\n"
+                else:
+                    await asyncio.sleep(0.5)
+        finally:
+            f.close()
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/logs/owm/stream")
+async def api_logs_owm_stream():
+    return _sse_tail(WORKSPACE / "owm.log", fmt=_format_owm_line)
+
+
+@app.get("/api/logs/{name}/odoo/stream")
+async def api_logs_instance_stream(name: str):
+    return _sse_tail(WORKSPACE / "instances" / name / "instance.log")
 
 
 # ── Static files ──────────────────────────────────────────────────────────────

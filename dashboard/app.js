@@ -441,6 +441,7 @@ function renderCommands(inst) {
 // ── Processes page ─────────────────────────────────────────────────────────
 
 async function showProcessesPage() {
+    _closeStream();
     document.getElementById("centre-pane").classList.add("hidden");
     document.getElementById("processes-page").classList.remove("hidden");
 
@@ -577,6 +578,18 @@ function _squatterRow(p) {
 
 // ── Right pane: logs ───────────────────────────────────────────────────────
 
+let _activeStream = null;
+
+function _closeStream() {
+    if (_activeStream) { _activeStream.close(); _activeStream = null; }
+}
+
+function _streamUrl(key) {
+    if (key === "owm")  return "/api/logs/owm/stream";
+    if (key === "odoo") return `/api/logs/${_selectedInstance}/odoo/stream`;
+    return null;
+}
+
 function _makeWrapToggle() {
     const wrap = document.createElement("button");
     wrap.className = "tab-wrap-toggle";
@@ -628,17 +641,41 @@ function _activateTab(key) {
 }
 
 async function _loadTabLogs(key) {
+    _closeStream();
     const viewport = document.querySelector(".log-viewport");
+
     if (key.startsWith("script:")) {
         viewport.innerHTML = `<div class="log-line log-info">— runner log not yet available —</div>`;
         return;
     }
+
     try {
-        const data = await api(`/api/logs/${_selectedInstance}/${key}`);
+        const logUrl = key === "owm" ? `/api/logs/owm` : `/api/logs/${_selectedInstance}/odoo`;
+        const data = await api(logUrl);
         _renderLogLines(data.lines);
     } catch (e) {
         viewport.innerHTML = `<div class="log-line log-err">${_esc(e.message)}</div>`;
+        return;
     }
+
+    const streamUrl = _streamUrl(key);
+    if (!streamUrl) return;
+
+    const src = new EventSource(streamUrl);
+    _activeStream = src;
+    src.onmessage = e => {
+        const line   = JSON.parse(e.data);
+        const text   = (line.text ?? "").replace(_ANSI_RE, "");
+        const cls    = _levelClass(line.level ?? _detectLevel(text));
+        const prefix = line.ts ? `[${line.ts.slice(11, 19)}] ` : "";
+        const el     = document.createElement("div");
+        el.className = `log-line${cls ? " " + cls : ""}`;
+        el.textContent = prefix + text;
+        const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 60;
+        viewport.appendChild(el);
+        if (atBottom) viewport.scrollTop = viewport.scrollHeight;
+    };
+    src.onerror = () => { src.close(); if (_activeStream === src) _activeStream = null; };
 }
 
 const _ANSI_RE = /\x1b\[[0-9;]*m/g;
