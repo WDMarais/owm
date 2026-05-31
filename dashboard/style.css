@@ -371,6 +371,12 @@ body {
 .health-value.err    { color: var(--c-err); }
 
 /* Scripts — 2-line layout */
+.script-empty {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
 .script-list { padding: 4px 0; }
 .script-row {
   display: flex;
@@ -520,6 +526,23 @@ body {
   overflow-y: hidden;
   scrollbar-width: none;
 }
+.tab-wrap-toggle {
+  margin-left: auto;
+  padding: 3px 8px;
+  border-radius: 4px 4px 0 0;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: none;
+  color: #475569;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: center;
+  margin-bottom: 2px;
+}
+.tab-wrap-toggle:hover { color: #94a3b8; }
+.tab-wrap-toggle.active { color: #60a5fa; }
 .tab {
   padding: 5px 10px;
   border-radius: 5px 5px 0 0;
@@ -574,7 +597,9 @@ body {
   line-height: 1.6;
   color: var(--pane-right-fg);
 }
-.log-line { white-space: pre-wrap; word-break: break-all; }
+.log-line { white-space: pre-wrap; }
+.log-viewport.nowrap { overflow-x: auto; }
+.log-viewport.nowrap .log-line { white-space: pre; }
 .log-info  { color: #94a3b8; }
 .log-warn  { color: #fbbf24; }
 .log-err   { color: #f87171; }

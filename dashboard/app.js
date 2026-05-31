@@ -259,6 +259,13 @@ function renderHealth(inst) {
 function renderScripts(inst) {
     const list = document.querySelector(".script-list");
     list.innerHTML = "";
+    if (!inst.scripts.length) {
+        const el = document.createElement("div");
+        el.className = "script-empty";
+        el.textContent = "no scripts configured";
+        list.appendChild(el);
+        return;
+    }
     for (const s of inst.scripts) {
         const badgeClass = s.status === "ok"  ? "badge-ok"
                          : s.status === "fail" ? "badge-fail"
@@ -471,6 +478,17 @@ function renderTabStrip(inst) {
     for (const s of inst.scripts) {
         strip.appendChild(_makeTab({ key: `script:${s.name}`, label: s.name, cls: "tab-runner" }));
     }
+
+    const wrap = document.createElement("button");
+    wrap.className = "tab-wrap-toggle";
+    wrap.textContent = "wrap";
+    wrap.title = "Toggle line wrapping";
+    const viewport = document.querySelector(".log-viewport");
+    wrap.addEventListener("click", () => {
+        const on = viewport.classList.toggle("nowrap");
+        wrap.classList.toggle("active", !on);
+    });
+    strip.appendChild(wrap);
 
     _activateTab("owm");
 }
