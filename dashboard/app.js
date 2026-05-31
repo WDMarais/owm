@@ -394,6 +394,17 @@ function renderRepos(inst) {
               ${canSync ? `<button class="btn-sync" data-repo="${_esc(repo.name)}">Sync</button>` : ""}
             </div>
             <div class="repo-sync-line">${syncLine}</div>`;
+
+        if (canSync) {
+            el.querySelector(".btn-sync").addEventListener("click", async e => {
+                const btn = e.target;
+                btn.disabled = true;
+                btn.textContent = "Syncing…";
+                await fetch(`/api/instance/${_selectedInstance}/sync/${encodeURIComponent(repo.name)}`, { method: "POST" });
+                await selectInstance(_selectedInstance);
+            });
+        }
+
         list.appendChild(el);
     }
 }

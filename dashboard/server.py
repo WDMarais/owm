@@ -244,6 +244,11 @@ def api_instance_rename(name: str, new_name: str):
     return _owm(WORKSPACE, "rename", name, new_name)
 
 
+@app.post("/api/instance/{name}/sync/{repo}")
+def api_instance_sync(name: str, repo: str):
+    return _owm(WORKSPACE, "sync", name, "--repo", repo)
+
+
 @app.get("/api/processes")
 def api_processes():
     managed     = []
