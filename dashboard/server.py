@@ -163,14 +163,14 @@ def api_instance(name: str):
         "proxy":  {"ok": True,  "value": f"{name}.localhost"},
     }
 
-    repos = [
-        {"name": repo_name, "branch": spec.branch,
-         "dirty": False,
-         "vs_origin_branch":             {"ahead_by": 0, "behind_by": 0},
-         "vs_origin_base":               {"ahead_by": 0, "behind_by": 0},
-         "origin_branch_vs_origin_base": {"ahead_by": 0, "behind_by": 0}}
-        for repo_name, spec in cfg.repos.items()
-    ]
+    repos = []
+    for repo_name, spec in cfg.repos.items():
+        if spec.shared:
+            wt = WORKSPACE / "_shared" / repo_name / spec.branch
+        else:
+            wt = WORKSPACE / "instances" / name / repo_name
+        sync = _repo_sync(wt, spec.branch, spec.base, spec.shared)
+        repos.append({"name": repo_name, "branch": spec.branch, **sync})
 
     runners = cfg.scripts.runners if cfg.scripts else {}
     scripts = [{"name": sname, "status": None, "last_run": None} for sname in runners]
@@ -193,6 +193,84 @@ def api_instance(name: str):
         "repos":       repos,
         "scripts":     scripts,
         "commands":    commands,
+    }
+
+
+def _check_has_remote(worktree: Path, branch: str) -> bool:
+    r = subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "--verify", f"origin/{branch}"],
+        capture_output=True, text=True,
+    )
+    return r.returncode == 0
+
+
+def _git_ahead_behind(worktree: Path, ref: str) -> dict:
+    r = subprocess.run(
+        ["git", "-C", str(worktree), "rev-list", "--count", "--left-right", f"HEAD...{ref}"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return {"ahead_by": 0, "behind_by": 0}
+    parts = r.stdout.strip().split()
+    if len(parts) != 2:
+        return {"ahead_by": 0, "behind_by": 0}
+    try:
+        return {"ahead_by": int(parts[0]), "behind_by": int(parts[1])}
+    except ValueError:
+        return {"ahead_by": 0, "behind_by": 0}
+
+
+def _repo_sync(worktree: Path, branch: str, base: str | None, shared: bool) -> dict:
+    _zero = {"ahead_by": 0, "behind_by": 0}
+    if not worktree.exists():
+        return {
+            "dirty": False, "has_remote": False, "last_commit": None,
+            "vs_origin_branch": _zero, "vs_origin_base": _zero,
+            "origin_branch_vs_origin_base": _zero,
+        }
+
+    dirty_r = subprocess.run(
+        ["git", "-C", str(worktree), "status", "--porcelain"],
+        capture_output=True, text=True,
+    )
+    dirty = bool(dirty_r.stdout.strip()) if dirty_r.returncode == 0 else False
+
+    has_remote = _check_has_remote(worktree, branch)
+
+    lc = subprocess.run(
+        ["git", "-C", str(worktree), "log", "-1", "--format=%h %aI"],
+        capture_output=True, text=True,
+    )
+    last_commit = None
+    if lc.returncode == 0 and lc.stdout.strip():
+        parts = lc.stdout.strip().split(" ", 1)
+        last_commit = {"hash": parts[0], "ts": parts[1] if len(parts) > 1 else None}
+
+    vs_branch = _git_ahead_behind(worktree, f"origin/{branch}") if has_remote else _zero
+    vs_base   = _git_ahead_behind(worktree, f"origin/{base}") if base and not shared else _zero
+
+    ob_vs_ob = _zero
+    if base and not shared:
+        r = subprocess.run(
+            ["git", "-C", str(worktree), "rev-list", "--count", "--left-right",
+             f"origin/{branch}...origin/{base}"],
+            capture_output=True, text=True,
+        )
+        if r.returncode == 0:
+            parts = r.stdout.strip().split()
+            if len(parts) == 2:
+                try:
+                    ob_vs_ob = {"ahead_by": int(parts[0]), "behind_by": int(parts[1])}
+                except ValueError:
+                    pass
+
+    return {
+        "dirty":                        dirty,
+        "has_remote":                   has_remote,
+        "last_commit":                  last_commit,
+        "vs_origin_branch":             vs_branch,
+        "vs_origin_base":               vs_base,
+        "origin_branch_vs_origin_base": ob_vs_ob,
     }
 
 
@@ -364,6 +442,25 @@ def api_notifications():
                     })
             except Exception:
                 pass
+
+        try:
+            cfg = parse_instance_config((WORKSPACE / "instances" / name / "instance.toml").read_text())
+        except Exception as e:
+            notifications.append({
+                "tier": "warn", "instance": name,
+                "msg": f"instance.toml unreadable: {e}", "section": "health",
+            })
+            continue
+        for repo_name, spec in cfg.repos.items():
+            if not spec.assert_exists:
+                continue
+            wt = WORKSPACE / "_shared" / repo_name / spec.branch if spec.shared else WORKSPACE / "instances" / name / repo_name
+            if not _check_has_remote(wt, spec.branch):
+                notifications.append({
+                    "tier": "warn", "instance": name,
+                    "msg": f"{repo_name}: branch '{spec.branch}' marked +exists but not found in fetched refs — run owm fetch, or check if branch was deleted upstream",
+                    "section": "repos",
+                })
 
     return {"notifications": notifications}
 

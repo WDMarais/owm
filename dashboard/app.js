@@ -365,13 +365,19 @@ function renderScripts(inst) {
 
 function _syncSummary(repo) {
     const issues = [];
+    if (repo.dirty) issues.push({label: "uncommitted changes", state: "dirty", canSync: false});
+
+    if (!repo.has_remote) {
+        issues.push({label: "local only", state: "local", canSync: false});
+        return issues;
+    }
+
     const vob      = repo.vs_origin_branch ?? {};
     const vobase   = repo.vs_origin_base   ?? {};
     const behind   = vob.behind_by  ?? 0;
     const ahead    = vob.ahead_by   ?? 0;
     const baseBehind = vobase.behind_by ?? 0;
 
-    if (repo.dirty)              issues.push({label: "uncommitted changes", state: "dirty",  canSync: false});
     if (behind > 0 && ahead > 0) issues.push({label: `diverged (${ahead}↑ ${behind}↓)`, state: "err", canSync: false});
     else {
         if (behind > 0) issues.push({label: `${behind} behind origin`, state: "behind", canSync: true});

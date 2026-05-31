@@ -486,6 +486,7 @@ body {
 .sync-state.ahead  { color: #3b82f6; }
 .sync-state.dirty  { color: var(--c-err); }
 .sync-state.err    { color: var(--c-err); }
+.sync-state.local  { color: var(--c-stopped); }
 
 .btn-sync {
   padding: 2px 8px;
