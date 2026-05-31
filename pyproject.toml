@@ -17,7 +17,8 @@ dev = [
 ]
 
 [project.scripts]
-owm = "owm.cli:cli"
+owm                 = "owm.cli:cli"
+owm-dashboard-demo  = "dashboard.fixture_server:app"
 
 [build-system]
 requires = ["hatchling"]
