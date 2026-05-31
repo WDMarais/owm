@@ -672,6 +672,8 @@ body {
 }
 .proc-name  { font-family: var(--mono); font-weight: 600; font-size: 13px; flex: 1;
               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.proc-name-link { cursor: pointer; text-decoration: none; color: inherit; }
+.proc-name-link:hover { text-decoration: underline; color: #3b82f6; }
 
 .proc-detail-line {
   display: flex;

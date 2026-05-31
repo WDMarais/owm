@@ -506,7 +506,7 @@ function _managedRow(p) {
     el.innerHTML = `
         <div class="proc-name-line">
           <span class="dot dot-${p.status === "running" ? "running" : "stopped"}"></span>
-          <span class="proc-name" title="${_esc(p.name)}">${_esc(p.name)}</span>
+          <a class="proc-name proc-name-link" title="${_esc(p.name)}">${_esc(p.name)}</a>
           ${hasWorkers ? `<button class="btn-workers" data-target="${_esc(toggleId)}">${p.workers.length} workers</button>` : ""}
         </div>
         <div class="proc-detail-line">
@@ -514,6 +514,8 @@ function _managedRow(p) {
           ${p.pid ? `<span class="proc-pid">pid ${_esc(p.pid)}</span>` : ""}
         </div>
         ${workersHtml}`;
+
+    el.querySelector(".proc-name-link").addEventListener("click", () => selectInstance(p.name));
 
     if (hasWorkers) {
         el.querySelector(".btn-workers").addEventListener("click", e => {
