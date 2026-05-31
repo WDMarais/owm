@@ -450,6 +450,7 @@ async function showProcessesPage() {
     const strip = document.querySelector(".tab-strip");
     strip.innerHTML = "";
     strip.appendChild(_makeTab({ key: "owm", label: "owm.log", cls: "" }));
+    strip.appendChild(_makeWrapToggle());
     _activateTab("owm");
 
     const data = await api("/api/processes");
@@ -576,6 +577,19 @@ function _squatterRow(p) {
 
 // ── Right pane: logs ───────────────────────────────────────────────────────
 
+function _makeWrapToggle() {
+    const wrap = document.createElement("button");
+    wrap.className = "tab-wrap-toggle";
+    wrap.textContent = "wrap";
+    wrap.title = "Toggle line wrapping";
+    const viewport = document.querySelector(".log-viewport");
+    wrap.addEventListener("click", () => {
+        const on = viewport.classList.toggle("nowrap");
+        wrap.classList.toggle("active", !on);
+    });
+    return wrap;
+}
+
 function renderTabStrip(inst) {
     const strip = document.querySelector(".tab-strip");
     strip.innerHTML = "";
@@ -592,17 +606,7 @@ function renderTabStrip(inst) {
         strip.appendChild(_makeTab({ key: `script:${s.name}`, label: s.name, cls: "tab-runner" }));
     }
 
-    const wrap = document.createElement("button");
-    wrap.className = "tab-wrap-toggle";
-    wrap.textContent = "wrap";
-    wrap.title = "Toggle line wrapping";
-    const viewport = document.querySelector(".log-viewport");
-    wrap.addEventListener("click", () => {
-        const on = viewport.classList.toggle("nowrap");
-        wrap.classList.toggle("active", !on);
-    });
-    strip.appendChild(wrap);
-
+    strip.appendChild(_makeWrapToggle());
     _activateTab("owm");
 }
 
