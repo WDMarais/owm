@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from dashboard.fixtures import REPO_FETCH_AGES, INSTANCE_REPOS_SYNC, INSTANCE_SCRIPTS, PROCESSES, WORKSPACE_ALERTS
+from owm.config import parse_repo_spec
 
 WORKSPACE = Path(__file__).parent.parent / "test_fixtures" / "workspace"
 DASHBOARD = Path(__file__).parent
@@ -94,7 +95,9 @@ def api_instance(name: str):
 
     sync = INSTANCE_REPOS_SYNC.get(name, {})
     repos = [
-        {"name": repo, "branch": spec.split(":")[0], **sync.get(repo, _CLEAN_SYNC)}
+        {"name": repo, "branch": parse_repo_spec(spec).branch,
+         "base": parse_repo_spec(spec).base,
+         **sync.get(repo, _CLEAN_SYNC)}
         for repo, spec in cfg.get("repos", {}).items()
     ]
 

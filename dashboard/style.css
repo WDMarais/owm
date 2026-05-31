@@ -471,21 +471,39 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
+}
+.repo-name-group {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 0;
 }
 .repo-name {
   font-family: var(--mono);
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+}
+.repo-branch {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--c-stopped);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
 }
 .repo-sync-line {
   font-size: 12px;
 }
 
-.repo-last-commit {
+.repo-commit-line {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--c-stopped);
   opacity: 0.7;
+  margin-top: 1px;
 }
 
 .sync-state.clean  { color: var(--c-running); }

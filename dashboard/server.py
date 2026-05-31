@@ -170,7 +170,7 @@ def api_instance(name: str):
         else:
             wt = WORKSPACE / "instances" / name / repo_name
         sync = _repo_sync(wt, spec.branch, spec.base, spec.shared)
-        repos.append({"name": repo_name, "branch": spec.branch, **sync})
+        repos.append({"name": repo_name, "branch": spec.branch, "base": spec.base, **sync})
 
     runners = cfg.scripts.runners if cfg.scripts else {}
     scripts = [{"name": sname, "status": None, "last_run": None} for sname in runners]

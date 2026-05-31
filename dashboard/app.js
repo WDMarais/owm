@@ -384,7 +384,7 @@ function _syncSummary(repo) {
         if (behind > 0) issues.push({label: `${behind} behind ${ref}`,  state: "behind", canSync: true});
         if (ahead  > 0) issues.push({label: `${ahead} unpushed`,        state: "ahead",  canSync: false});
     }
-    if (remoteBehindBase > 0) issues.push({label: `origin ${remoteBehindBase} behind base`, state: "behind", canSync: true});
+    if (remoteBehindBase > 0) issues.push({label: `origin/${repo.branch} ${remoteBehindBase} behind ${repo.base ?? "base"}`, state: "behind", canSync: true});
     if (issues.length === 0) issues.push({label: "up to date", state: "clean", canSync: false});
     return issues;
 }
@@ -406,7 +406,9 @@ function renderRepos(inst) {
         el.className = "repo-row";
         el.innerHTML = `
             <div class="repo-name-line">
-              <span class="repo-name" title="${_esc(repo.branch ?? "")}">${_esc(repo.name)}</span>
+              <span class="repo-name-group">
+                <span class="repo-name">${_esc(repo.name)}</span><span class="repo-branch" title="${_esc(repo.branch ?? "")}"> (${_esc(repo.branch ?? "")})</span>
+              </span>
               ${canSync ? `<button class="btn-sync" data-repo="${_esc(repo.name)}">Sync</button>` : ""}
             </div>
             ${syncLines}${commitLine}`;
