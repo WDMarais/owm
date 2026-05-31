@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from owm.config import parse_workspace_config
+from owm.config import parse_workspace_config, parse_instance_config
 
 DASHBOARD = Path(__file__).parent
 
@@ -102,6 +102,89 @@ def api_status():
     ]
 
     return {"instances": instances, "repos": repos}
+
+
+@app.get("/api/instance/{name}")
+def api_instance(name: str):
+    instance_dir = WORKSPACE / "instances" / name
+    if not instance_dir.exists():
+        return {"error": "not found", "code": "NOT_FOUND"}
+
+    try:
+        cfg = parse_instance_config((instance_dir / "instance.toml").read_text())
+    except Exception as e:
+        return {"error": f"instance.toml unreadable: {e}", "code": "CONFIG_ERROR"}
+
+    state  = _read_state(name)
+    pid    = state.get("pid")
+    status = _instance_status(name)
+    live   = status == "running"
+
+    health = {
+        "http":   {"ok": live,  "value": f":{cfg.server.http_port}"},
+        "gevent": {"ok": live,  "value": f":{cfg.server.gevent_port}"},
+        "db":     {"ok": True,  "value": cfg.database.name},
+        "venv":   {"ok": (instance_dir / ".venv").exists(), "value": "ok"},
+        "proxy":  {"ok": True,  "value": f"{name}.localhost"},
+    }
+
+    repos = [
+        {"name": repo_name, "branch": spec.branch,
+         "dirty": False,
+         "vs_origin_branch":             {"ahead_by": 0, "behind_by": 0},
+         "vs_origin_base":               {"ahead_by": 0, "behind_by": 0},
+         "origin_branch_vs_origin_base": {"ahead_by": 0, "behind_by": 0}}
+        for repo_name, spec in cfg.repos.items()
+    ]
+
+    runners = cfg.scripts.runners if cfg.scripts else {}
+    scripts = [{"name": sname, "status": None, "last_run": None} for sname in runners]
+
+    commands = [
+        {"label": "shell", "cmd": f"owm shell {name}"},
+        {"label": "psql",  "cmd": f"owm psql {name}"},
+        {"label": "logs",  "cmd": f"owm logs {name}"},
+        {"label": "venv",  "cmd": f"source instances/{name}/.venv/bin/activate"},
+    ]
+
+    return {
+        "name":        name,
+        "status":      status,
+        "pid":         pid if pid and pid != "UNSET" else None,
+        "http_port":   cfg.server.http_port,
+        "gevent_port": cfg.server.gevent_port,
+        "started_at":  _rel(state.get("started_at")),
+        "health":      health,
+        "repos":       repos,
+        "scripts":     scripts,
+        "commands":    commands,
+    }
+
+
+@app.get("/api/logs/{name}/{log}")
+def api_logs(name: str, log: str, n: int = 50):
+    if log == "owm":
+        log_path = WORKSPACE / "owm.log"
+        lines = []
+        for raw in log_path.read_text().splitlines()[-n:]:
+            try:
+                e = json.loads(raw)
+                parts = [e.get("event", ""), e.get("instance") or "", e.get("status") or ""]
+                text  = "  ".join(p for p in parts if p)
+                if e.get("pid"):
+                    text += f"  pid={e['pid']}"
+                lines.append({"ts": e.get("ts"), "level": "info", "text": text.strip()})
+            except Exception:
+                lines.append({"text": raw})
+        return {"lines": lines, "log_path": str(log_path)}
+
+    log_path = WORKSPACE / "instances" / name / "instance.log"
+    if not log_path.exists():
+        return {"lines": [], "log_path": str(log_path)}
+    return {
+        "lines":    [{"text": l} for l in log_path.read_text().splitlines()[-n:]],
+        "log_path": str(log_path),
+    }
 
 
 # ── Static files ──────────────────────────────────────────────────────────────
