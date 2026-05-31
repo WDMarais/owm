@@ -1113,13 +1113,13 @@ def cmd_fetch(ctx):
         existing.update({r: now for r in fetched})
         ts_path.write_text(json.dumps(existing, indent=2))
 
-    workspace_log(
-        workspace_root, "fetch",
-        repos=fetched,
-        updated=repos_with_updates,
-        unreachable=unreachable,
-        status="ok" if not unreachable else "partial",
-    )
+    for repo in repos:
+        if repo in unreachable:
+            workspace_log(workspace_root, "fetch", repo=repo, status="unreachable")
+        elif repo in repos_with_updates:
+            workspace_log(workspace_root, "fetch", repo=repo, status="updated")
+        else:
+            workspace_log(workspace_root, "fetch", repo=repo, status="up_to_date")
 
 
 # ---------------------------------------------------------------------------

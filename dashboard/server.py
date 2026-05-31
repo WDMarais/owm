@@ -242,8 +242,12 @@ def api_logs(name: str, log: str, n: int = 50):
         for raw in log_path.read_text().splitlines()[-n:]:
             try:
                 e = json.loads(raw)
-                parts = [e.get("event", ""), e.get("instance") or "", e.get("status") or ""]
-                text  = "  ".join(p for p in parts if p)
+                parts = [
+                    e.get("event", ""),
+                    e.get("repo") or e.get("instance") or "",
+                    e.get("status") or "",
+                ]
+                text = "  ".join(p for p in parts if p)
                 if e.get("pid"):
                     text += f"  pid={e['pid']}"
                 lines.append({"ts": e.get("ts"), "level": "info", "text": text.strip()})
