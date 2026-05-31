@@ -18,9 +18,11 @@ DASHBOARD = Path(__file__).parent
 app = FastAPI()
 
 _CLEAN_SYNC = {
-    "dirty": False,
-    "vs_origin_branch":         {"ahead_by": 0, "behind_by": 0},
-    "vs_origin_base":           {"ahead_by": 0, "behind_by": 0},
+    "dirty":                        False,
+    "has_remote":                   True,
+    "last_commit":                  None,
+    "vs_origin_branch":             {"ahead_by": 0, "behind_by": 0},
+    "vs_origin_base":               {"ahead_by": 0, "behind_by": 0},
     "origin_branch_vs_origin_base": {"ahead_by": 0, "behind_by": 0},
 }
 

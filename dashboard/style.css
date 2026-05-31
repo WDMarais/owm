@@ -481,6 +481,13 @@ body {
   font-size: 12px;
 }
 
+.repo-last-commit {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--c-stopped);
+  opacity: 0.7;
+}
+
 .sync-state.clean  { color: var(--c-running); }
 .sync-state.behind { color: var(--c-warn); }
 .sync-state.ahead  { color: #3b82f6; }

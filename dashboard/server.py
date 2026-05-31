@@ -244,7 +244,8 @@ def _repo_sync(worktree: Path, branch: str, base: str | None, shared: bool) -> d
     last_commit = None
     if lc.returncode == 0 and lc.stdout.strip():
         parts = lc.stdout.strip().split(" ", 1)
-        last_commit = {"hash": parts[0], "ts": parts[1] if len(parts) > 1 else None}
+        ts = parts[1] if len(parts) > 1 else None
+        last_commit = {"hash": parts[0], "ts": ts, "rel": _rel(ts)}
 
     vs_branch = _git_ahead_behind(worktree, f"origin/{branch}") if has_remote else _zero
     vs_base   = _git_ahead_behind(worktree, f"origin/{base}") if base and not shared else _zero

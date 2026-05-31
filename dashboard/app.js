@@ -400,6 +400,10 @@ function renderRepos(inst) {
             ? `<span class="sync-state ${primary.state}">${_esc(primary.label)}</span> · ${extra}`
             : `<span class="sync-state ${primary.state}">${_esc(primary.label)}</span>`;
         const canSync = issues.some(i => i.canSync);
+        const lc = repo.last_commit;
+        const commitHint = (!repo.has_remote && lc)
+            ? ` · <span class="repo-last-commit" title="${_esc(lc.ts ?? "")}">${_esc(lc.hash)}${lc.rel ? " · " + _esc(lc.rel) : ""}</span>`
+            : "";
         const el = document.createElement("div");
         el.className = "repo-row";
         el.innerHTML = `
@@ -407,7 +411,7 @@ function renderRepos(inst) {
               <span class="repo-name" title="${_esc(repo.branch ?? "")}">${_esc(repo.name)}</span>
               ${canSync ? `<button class="btn-sync" data-repo="${_esc(repo.name)}">Sync</button>` : ""}
             </div>
-            <div class="repo-sync-line">${syncLine}</div>`;
+            <div class="repo-sync-line">${syncLine}${commitHint}</div>`;
 
         if (canSync) {
             el.querySelector(".btn-sync").addEventListener("click", async e => {

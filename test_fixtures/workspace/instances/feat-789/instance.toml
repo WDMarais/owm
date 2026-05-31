@@ -2,6 +2,8 @@
 customer-config = "feat-789-dev:dev"
 enterprise      = "17.0:shared+readonly"
 odoo            = "17.0:shared+readonly"
+plugin-dev      = "feat-789-plugin:dev+exists"
+scratch         = "scratch-wip:dev"
 
 [database]
 name    = "feat_789"
