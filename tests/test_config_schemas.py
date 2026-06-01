@@ -345,6 +345,25 @@ gevent_port = 8150
 
 
 @pytest.mark.config_schemas
+def test_parse_instance_config_gevent_port_derived_when_absent():
+    """A toml with http_port but no gevent_port (e.g. an adopted owm instance) derives
+    gevent_port = http_port + 1 rather than defaulting to 0 or erroring."""
+    toml = """
+[repos]
+odoo = "19.0:shared"
+
+[database]
+name    = "odoo19_feat789"
+pg_port = 5432
+
+[server]
+http_port = 8142
+"""
+    config = parse_instance_config(toml)
+    assert config.server.gevent_port == 8143
+
+
+@pytest.mark.config_schemas
 def test_parse_instance_config_no_template_field():
     """template field in [database] is optional; absent means blank slate."""
     toml = """

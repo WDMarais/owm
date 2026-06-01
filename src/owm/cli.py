@@ -727,6 +727,8 @@ def cmd_env(ctx, name, fmt):
     env = resolve_env(
         instance=instance,
         workspace_root=workspace_root,
+        instance_db_name=conf.database.name,
+        instance_pg_port=conf.database.pg_port,
         instance_http_port=conf.server.http_port,
         instance_gevent_port=conf.server.gevent_port,
     )

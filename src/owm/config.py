@@ -70,9 +70,15 @@ class DatabaseSection:
 @dataclass
 class ServerSection:
     http_port: int
-    gevent_port: int
     workers: int = 2
     odoo_repo: str | None = None  # explicit Odoo source repo; falls back to the shared repo
+
+    @property
+    def gevent_port(self) -> int:
+        # Derived, not stored: the gevent/longpolling port is conventionally http_port + 1.
+        # Keeping it a property (rather than a field) makes the only invalid state —
+        # gevent != http+1 — unrepresentable, so there's nothing to drift or validate.
+        return self.http_port + 1 if self.http_port else 0
 
 
 @dataclass
@@ -248,14 +254,17 @@ def parse_instance_config(toml: str) -> InstanceConfig:
 
     srv = raw["server"]
     http_port = srv.get("http_port", 0)
-    gevent_port = srv.get("gevent_port", 0)
-    if http_port and gevent_port and gevent_port != http_port + 1:
+    # gevent_port is derived (http_port + 1), not stored — see ServerSection.gevent_port.
+    # An explicit gevent_port in the toml is only honoured if it matches; a mismatch is a
+    # hand-edit mistake and is rejected loudly rather than silently ignored.
+    explicit_gevent = srv.get("gevent_port")
+    if explicit_gevent is not None and http_port and explicit_gevent != http_port + 1:
         raise ValueError(
-            f"gevent_port must equal http_port + 1 (got http={http_port}, gevent={gevent_port})"
+            f"gevent_port is derived as http_port + 1 ({http_port + 1}); "
+            f"remove it from the toml or set it to {http_port + 1} (got {explicit_gevent})"
         )
     server = ServerSection(
         http_port=http_port,
-        gevent_port=gevent_port,
         workers=srv.get("workers", 2),
         odoo_repo=srv.get("odoo_repo"),
     )

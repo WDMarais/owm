@@ -42,6 +42,19 @@ def test_resolve_env_http_port_matches_instance_config():
     assert result["GEVENT_PORT"] == "8143" or result["GEVENT_PORT"] == 8143
 
 
+@pytest.mark.owm_env
+def test_resolve_env_db_name_and_port_from_config():
+    """DB_NAME/DB_PORT come from the parsed config, not re-derived from the instance name."""
+    result = resolve_env(
+        instance="feat-789",
+        workspace_root="/ws",
+        instance_db_name="odoo12_feat789",
+        instance_pg_port=5433,
+    )
+    assert result["DB_NAME"] == "odoo12_feat789"
+    assert result["DB_PORT"] == "5433"
+
+
 # ---------------------------------------------------------------------------
 # Output formats
 # ---------------------------------------------------------------------------
