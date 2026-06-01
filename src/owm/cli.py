@@ -32,7 +32,7 @@ from owm.oplog import workspace_log
 from owm.sync import (
     fetch_workspace, sync_instance, push_instance, reset_instance,
     git_fetch_bare, read_repo_state, git_fast_forward, git_rebase,
-    git_push, git_reset_hard,
+    git_push, git_reset_hard, pull_base_instance,
 )
 from owm.workspace import init_workspace
 from owm.worktrees import resolve_worktree_path
@@ -1241,3 +1241,46 @@ def cmd_reset(ctx, name, repo, force, all_repos):
             )
             git_reset_hard(wt.path)
         click.echo(f"  {rname}  {outcome['status']}")
+
+
+# ---------------------------------------------------------------------------
+# owm pull-base
+# ---------------------------------------------------------------------------
+
+@cli.command("pull-base")
+@click.argument("name", required=False)
+@click.option("--repo", default=None, help="Merge base into only this repo.")
+@click.pass_context
+def cmd_pull_base(ctx, name, repo):
+    """Merge origin/<base> into each feature repo's local worktree.
+
+    Requires all target repos to be clean. On conflict the merge is aborted
+    and the conflicting files are reported — resolve locally then run owm push.
+    """
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    try:
+        result = pull_base_instance(instance, workspace_root, repo=repo)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+
+    if result.get("note"):
+        click.echo(f"  {result['note']}")
+        return
+
+    any_conflict = False
+    for rname, outcome in result["results"].items():
+        status = outcome["status"]
+        if status == "merged":
+            click.echo(f"  {rname}  merged origin/{outcome['base']}")
+        elif status == "up_to_date":
+            click.echo(f"  {rname}  already up to date")
+        elif status == "conflict":
+            any_conflict = True
+            click.echo(f"  {rname}  conflict — merge aborted", err=True)
+            for f in outcome.get("conflicts", []):
+                click.echo(f"    {f}", err=True)
+
+    if any_conflict:
+        sys.exit(1)

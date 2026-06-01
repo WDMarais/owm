@@ -247,6 +247,54 @@ def push_instance(
     return {"status": "pushed", "repo": repo}
 
 
+def pull_base_instance(
+    instance: str,
+    workspace_root: str,
+    *,
+    repo: str | None = None,
+) -> dict:
+    """Merge origin/<base> into each feature repo's local worktree.
+
+    Pre-flight checks all targets are clean before touching anything.
+    On merge conflict: aborts cleanly and reports conflicting files.
+    """
+    from owm.config import parse_instance_config
+    from owm.worktrees import resolve_worktree_path
+
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+
+    targets = {
+        name: spec for name, spec in conf.repos.items()
+        if spec.base and not spec.shared and (repo is None or name == repo)
+    }
+
+    if not targets:
+        return {"results": {}, "note": "no feature repos with base configured"}
+
+    for name, spec in targets.items():
+        wt = resolve_worktree_path(name, spec.branch, False, workspace_root, instance)
+        r = git_run(["status", "--porcelain"], cwd=wt.path, check=False)
+        if r.returncode == 0 and r.stdout.strip():
+            raise OwmError(f"{name} has uncommitted changes — stash or commit first", code=DIRTY_WORKTREE)
+
+    results = {}
+    for name, spec in targets.items():
+        wt = resolve_worktree_path(name, spec.branch, False, workspace_root, instance)
+        r = git_run(["merge", "--no-edit", f"origin/{spec.base}"], cwd=wt.path, check=False)
+        if r.returncode == 0:
+            already = "Already up to date." in r.stdout
+            results[name] = {"status": "up_to_date" if already else "merged", "base": spec.base}
+        else:
+            cf = git_run(["diff", "--name-only", "--diff-filter=U"], cwd=wt.path, check=False)
+            conflicts = cf.stdout.strip().splitlines() if cf.returncode == 0 else []
+            git_run(["merge", "--abort"], cwd=wt.path, check=False)
+            results[name] = {"status": "conflict", "base": spec.base, "conflicts": conflicts}
+
+    return {"results": results}
+
+
 def reset_instance(
     instance: str,
     repo: str | None = None,
