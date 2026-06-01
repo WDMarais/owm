@@ -89,7 +89,10 @@ def git_rebase(worktree_path: str) -> None:
 
 
 def git_push(worktree_path: str) -> None:
-    git_run(["push", "origin", "HEAD", "--ff-only"], cwd=worktree_path)
+    # `git push` has no --ff-only flag (that's a pull/merge option); git rejects it with
+    # "unknown option". A plain push already refuses non-fast-forward updates by default
+    # unless --force is given, which is exactly the ff-only safety we want.
+    git_run(["push", "origin", "HEAD"], cwd=worktree_path)
 
 
 def branch_exists_on_origin(bare_path: str, branch: str) -> bool:
