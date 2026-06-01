@@ -329,6 +329,11 @@ def api_instance_sync(name: str, repo: str):
     return _owm(WORKSPACE, "sync", name, "--repo", repo)
 
 
+@app.post("/api/instance/{name}/push/{repo}")
+def api_instance_push(name: str, repo: str):
+    return _owm(WORKSPACE, "push", name, "--repo", repo)
+
+
 @app.get("/api/processes")
 def api_processes():
     managed     = []

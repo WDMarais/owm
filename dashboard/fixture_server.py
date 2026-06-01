@@ -254,6 +254,16 @@ def api_fetch():
     return {"ok": True}
 
 
+@app.post("/api/instance/{name}/sync/{repo}")
+def api_instance_sync(name: str, repo: str):
+    return {"ok": True}
+
+
+@app.post("/api/instance/{name}/push/{repo}")
+def api_instance_push(name: str, repo: str):
+    return {"ok": True}
+
+
 @app.get("/api/banner")
 def api_banner():
     return {"alerts": WORKSPACE_ALERTS}

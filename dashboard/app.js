@@ -383,7 +383,7 @@ function _syncSummary(repo) {
     if (behind > 0 && ahead > 0) issues.push({label: `${ahead} ahead, ${behind} behind ${ref}`, state: "err", canSync: false});
     else {
         if (behind > 0) issues.push({label: `${behind} behind ${ref}`,  state: "behind", canSync: true});
-        if (ahead  > 0) issues.push({label: `${ahead} unpushed`,        state: "ahead",  canSync: false});
+        if (ahead  > 0) issues.push({label: `${ahead} unpushed`,        state: "ahead",  canSync: false, canPush: true});
     }
     if (remoteBehindBase > 0) issues.push({label: `origin/${repo.branch} ${remoteBehindBase} behind ${repo.base ?? "base"}`, state: "behind", canSync: true});
     if (issues.length === 0) issues.push({label: "up to date", state: "clean", canSync: false});
@@ -396,6 +396,7 @@ function renderRepos(inst) {
     for (const repo of inst.repos) {
         const issues = _syncSummary(repo);
         const canSync = issues.some(i => i.canSync);
+        const canPush = issues.some(i => i.canPush);
         const lc = repo.last_commit;
         const commitLine = (!repo.has_remote && lc)
             ? `<div class="repo-commit-line" title="${_esc(lc.ts ?? "")}">${_esc(lc.hash)}${lc.rel ? " · " + _esc(lc.rel) : ""}</div>`
@@ -411,6 +412,7 @@ function renderRepos(inst) {
                 <span class="repo-name">${_esc(repo.name)}</span><span class="repo-branch" title="${_esc(repo.branch ?? "")}"> (${_esc(repo.branch ?? "")})</span>
               </span>
               ${canSync ? `<button class="btn-sync" data-repo="${_esc(repo.name)}">Sync</button>` : ""}
+              ${canPush ? `<button class="btn-push" data-repo="${_esc(repo.name)}">Push</button>` : ""}
             </div>
             ${syncLines}${commitLine}`;
 
@@ -420,6 +422,16 @@ function renderRepos(inst) {
                 btn.disabled = true;
                 btn.textContent = "Syncing…";
                 await fetch(`/api/instance/${_selectedInstance}/sync/${encodeURIComponent(repo.name)}`, { method: "POST" });
+                await selectInstance(_selectedInstance);
+            });
+        }
+
+        if (canPush) {
+            el.querySelector(".btn-push").addEventListener("click", async e => {
+                const btn = e.target;
+                btn.disabled = true;
+                btn.textContent = "Pushing…";
+                await fetch(`/api/instance/${_selectedInstance}/push/${encodeURIComponent(repo.name)}`, { method: "POST" });
                 await selectInstance(_selectedInstance);
             });
         }
