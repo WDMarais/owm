@@ -257,8 +257,9 @@ def test_rename_from_inside_instance_exits_nonzero(runner, tmp_workspace, monkey
 @pytest.mark.cli_integration
 def test_rename_stopped_exits_zero_with_output(runner, standard_instance_toml, tmp_workspace):
     with patch("owm.cli._is_running", return_value=False), \
-         patch("owm.operations.subprocess.run"), \
+         patch("owm.operations.subprocess.run") as mock_run, \
          patch("owm.operations.shutil.move"):
+        mock_run.return_value.returncode = 0
         result = runner.invoke(cli, [
             "--workspace", str(tmp_workspace),
             "rename", "feat-789", "pd-789",

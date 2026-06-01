@@ -87,8 +87,9 @@ def test_rename_running_instance_hard_error():
 
 @pytest.mark.cli_commands
 def test_rename_stopped_instance_updates_all_references(standard_instance_toml, tmp_workspace):
-    with patch("owm.operations.subprocess.run"), \
+    with patch("owm.operations.subprocess.run") as mock_run, \
          patch("owm.operations.shutil.move"):
+        mock_run.return_value.returncode = 0
         result = rename_instance(
             instance="feat-789",
             new_name="pd-789",
@@ -105,8 +106,9 @@ def test_rename_stopped_instance_updates_all_references(standard_instance_toml, 
 
 @pytest.mark.cli_commands
 def test_rename_updates_workspace_toml_compare_pairs(standard_instance_toml, tmp_workspace):
-    with patch("owm.operations.subprocess.run"), \
+    with patch("owm.operations.subprocess.run") as mock_run, \
          patch("owm.operations.shutil.move"):
+        mock_run.return_value.returncode = 0
         result = rename_instance(
             instance="feat-789",
             new_name="pd-789",
@@ -120,8 +122,9 @@ def test_rename_updates_workspace_toml_compare_pairs(standard_instance_toml, tmp
 
 @pytest.mark.cli_commands
 def test_rename_updates_proxy_subdomain(standard_instance_toml, tmp_workspace):
-    with patch("owm.operations.subprocess.run"), \
+    with patch("owm.operations.subprocess.run") as mock_run, \
          patch("owm.operations.shutil.move"):
+        mock_run.return_value.returncode = 0
         result = rename_instance(
             instance="feat-789",
             new_name="pd-789",

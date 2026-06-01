@@ -503,8 +503,9 @@ def test_owm_delete_running_error():
 
 @pytest.mark.mcp_surface
 def test_owm_rename_stopped_instance(standard_instance_toml, tmp_workspace):
-    with patch("owm.operations.subprocess.run"), \
+    with patch("owm.operations.subprocess.run") as mock_run, \
          patch("owm.operations.shutil.move"):
+        mock_run.return_value.returncode = 0
         result = owm_rename(
             instance="feat-789",
             new_name="pd-789",
