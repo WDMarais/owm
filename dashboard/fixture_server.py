@@ -1,11 +1,13 @@
 """
 Dashboard dev server — serves fixture workspace state against the dashboard UI.
-Run: uvicorn dashboard.dev_server:app --reload
+Run: uvicorn dashboard.fixture_server:app --reload
 """
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -285,3 +287,8 @@ def index():
     return FileResponse(DASHBOARD / "index.html")
 
 app.mount("/static", StaticFiles(directory=str(DASHBOARD)), name="static")
+
+
+def main():
+    port = int(os.environ.get("PORT", 8200))
+    uvicorn.run("dashboard.fixture_server:app", host="127.0.0.1", port=port)
