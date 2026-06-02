@@ -383,6 +383,18 @@ function renderScripts(inst) {
     }
 }
 
+// Maps a repo's git state to the sync "issues" shown per repo, each carrying the
+// action button it offers. Button contract (what the back-end endpoints expect):
+//   - dirty                         → "uncommitted changes", no button
+//   - no remote                     → "local only", no button
+//   - behind & ahead of origin      → "N ahead, M behind", no button (diverged: manual)
+//   - behind origin only            → "M behind", Sync button       (canSync)
+//   - ahead of origin only          → "N unpushed", Push button     (canPush, unless canPullBase)
+//   - origin branch behind its base → "origin/... behind base", Pull Base (canPullBase)
+//   - none of the above             → "up to date", no button
+// Push is suppressed when Pull Base applies (pull the base before pushing) — see
+// the `canPush && !canPullBase` guard at the render site. Covered server-side by
+// tests/test_dashboard_endpoints.py; the button logic itself awaits a JS harness.
 function _syncSummary(repo) {
     const issues = [];
     if (repo.dirty) issues.push({label: "uncommitted changes", state: "dirty", canSync: false});

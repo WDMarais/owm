@@ -13,6 +13,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "hatchling>=1.29.0",
+    "httpx>=0.28",
     "pytest>=9.0.3",
 ]
 
@@ -38,6 +39,7 @@ markers = [
     "cli_commands",
     "config_schemas",
     "cwd_inference",
+    "dashboard",
     "database_auth",
     "database_lifecycle",
     "error_taxonomy",
