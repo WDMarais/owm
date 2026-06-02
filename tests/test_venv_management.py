@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import patch
 
 from owm.venv import create_venv, sync_venv_if_needed, rebuild_venv
-from owm.venv import compute_stamp, stamp_changed
+from owm.venv import compute_stamp
 
 
 # ---------------------------------------------------------------------------

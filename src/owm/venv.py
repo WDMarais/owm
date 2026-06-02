@@ -71,10 +71,6 @@ def compute_stamp(requirements_files: list[str], patches: list[str]) -> str:
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
 
 
-def stamp_changed(current_stamp: str, recorded_stamp: str) -> bool:
-    return current_stamp != recorded_stamp
-
-
 def resolve_patches(odoo_version: str, patches: dict[str, list[str]]) -> list[str]:
     return patches.get(odoo_version, [])
 
