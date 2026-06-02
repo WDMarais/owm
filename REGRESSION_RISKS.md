@@ -47,9 +47,10 @@ reserved key; the error directs users to rename the repo.
 
 ## 4. `generate_instance_conf` returns a dict, not an ini string
 
-**Resolution (d0ec185):** Function moved to `instance.py` and carries a `# TODO`
-comment explicitly noting the real implementation must emit an ini-format string
-written to `instance.conf`. Deferred to I/O sweep.
+**Resolution (d0ec185 + I/O sweep):** Moved to `instance.py` and now emits an
+ini-format string (`[options]` + joined lines, `-> str`). The create path
+(`instance.py:453`) and `regen-conf` (`cli.py:1062`) render it and write it to
+`instance.conf`. No longer a dict; no longer deferred.
 
 ---
 
@@ -78,20 +79,24 @@ updated accordingly. `config.py` is now parsers-only.
 
 ## 8. `mcp.py` depends on `cli.py` — dependency direction is inverted
 
-**Resolution (23d7300):** `cli.py` renamed to `operations.py`. All import sites
-updated. CLI-specific dispatch will live in `cli.py` once wired during the I/O sweep;
-shared operation functions stay in `operations.py`.
+**Resolution (23d7300 + I/O sweep):** `cli.py` renamed to `operations.py`;
+shared operation functions live there and `mcp.py` imports from the domain
+modules / `operations`, not `cli` (verified: no `cli` import in `mcp.py`).
+`cli.py` is now the full Click command dispatch (~30 commands) over those
+operations — the "wired during the I/O sweep" step is done.
 
 ---
 
-## 9. `find_conflicting_process` and `get_eviction_log` are I/O stubs — deferred to I/O sweep
+## 9. `find_conflicting_process` and `get_eviction_log` were I/O stubs
 
-**Resolution:** These are pure I/O shims, not business-logic paths. Injection
-parameters would be removed when the real implementation lands, so adding them
-now is the wrong pattern. Their callers (`check_port_at_start` via `bound_by=`,
-`eviction_count_in_window` via `evictions=`) are already fully exercised by the
-test harness through their own injection parameters.
+**Resolution (dd263f5):** Both now do real I/O — `find_conflicting_process`
+uses `psutil.net_connections`; `get_eviction_log` reads the JSONL log file.
+Production start/status paths call `find_conflicting_process` directly
+(`instance.py:590`, `api.py:31`/`86`); no longer deferred (implemented after
+the original stub note `3b30616`).
 
-Both functions now carry comments naming the real I/O call (`psutil` /
-`ss -tlnp` for process lookup; file read for the eviction log). Full
-implementation is deferred to the I/O sweep.
+Residual (not a stub — a wiring gap): the port-conflict *resolution* layer
+(`check_port_at_start`, `evict_port`, `eviction_count_in_window`) is implemented
+and unit-tested via injection params (`bound_by=`, `evictions=`) but not wired
+into any `owm start` UX — start only *detects* a conflict, it doesn't offer the
+kill/reassign flow these decide. Wire it or mark the resolution UX as deferred.
