@@ -3,7 +3,9 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.errors import OwmError, DIVERGED, NOT_OWNED, SHARED_REPO, DIRTY_WORKTREE
+from owm.config import parse_instance_config
+from owm.errors import OwmError, DIVERGED, NOT_OWNED, SHARED_REPO, DIRTY_WORKTREE, FETCH_TIMEOUT
+from owm.worktrees import resolve_worktree_path
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +55,6 @@ def git_fetch_bare(bare_path: str, *, branches: list[str] | None = None, timeout
     stderr is not captured so git's progress output streams to the terminal.
     Raises OwmError(FETCH_TIMEOUT) if the fetch exceeds `timeout` seconds.
     """
-    from owm.errors import OwmError, FETCH_TIMEOUT
     if branches:
         refspecs = [f"+refs/heads/{b}:refs/heads/{b}" for b in branches]
         cmd = ["git", "fetch", "--update-head-ok", "--porcelain", "origin", *refspecs]
@@ -261,9 +262,6 @@ def pull_base_instance(
     Pre-flight checks all targets are clean before touching anything.
     On merge conflict: aborts cleanly and reports conflicting files.
     """
-    from owm.config import parse_instance_config
-    from owm.worktrees import resolve_worktree_path
-
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())

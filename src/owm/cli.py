@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import webbrowser
@@ -18,8 +19,9 @@ from owm.instance import (
     start_instance, stop_instance, kill_instance, health_check,
     generate_instance_conf, find_odoo_repo,
     _read_pid, _process_alive,
+    _append_modules_to_toml, _query_installed_modules,
 )
-from owm.archive import archive_instance
+from owm.archive import archive_instance, _strip_archived_sections
 from owm.env import resolve_env, format_env
 from owm.modules import upgrade_modules
 from owm.operations import (
@@ -283,7 +285,6 @@ def cmd_install(ctx, name, modules, timeout, no_save):
       owm install feat-789                 # install from toml manifest
       owm install feat-789 sale --no-save  # install without saving
     """
-    from owm.instance import _append_modules_to_toml, _query_installed_modules
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
@@ -778,8 +779,6 @@ def cmd_unarchive(ctx, name, discard):
 
     # Restore toml and materialise
     os.makedirs(instance_dir)
-    import shutil
-    from owm.archive import _strip_archived_sections
     dest_toml = os.path.join(instance_dir, "instance.toml")
     shutil.copy2(archived_toml, dest_toml)
     _strip_archived_sections(dest_toml)

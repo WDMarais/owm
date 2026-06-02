@@ -8,12 +8,14 @@ Run: OWM_WORKSPACE=~/tmp/owm-walkthrough uvicorn dashboard.server:app --reload
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
 import psutil
+import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -85,7 +87,6 @@ def _speculative_pr_url(worktree: Path, branch: str, base: str | None) -> str | 
     remote = result.stdout.strip()
     # SSH: git@bitbucket.org:workspace/repo.git
     # HTTPS: https://bitbucket.org/workspace/repo.git
-    import re
     m = re.match(r"(?:https?://|git@)([^/:]+)[/:](.+?)(?:\.git)?$", remote)
     if not m:
         return None
@@ -602,6 +603,5 @@ app.mount("/static", StaticFiles(directory=str(DASHBOARD)), name="static")
 
 
 def main():
-    import uvicorn
     port = int(os.environ.get("PORT", 8090))
     uvicorn.run("dashboard.server:app", host="127.0.0.1", port=port)

@@ -10,6 +10,7 @@ import os
 from owm.errors import (
     OwmError, format_error,
     START_TIMEOUT, STOP_TIMEOUT, NO_COMPARE_TARGET, BRANCH_NOT_FOUND, DIRTY_WORKTREE,
+    NOT_FOUND,
 )
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
@@ -459,7 +460,6 @@ def owm_compare(instance, base=None, workspace_root=None, **kwargs):
     )
 
     if result.status == "error":
-        from owm.errors import NOT_FOUND
         return format_error(result.error or "compare failed", NOT_FOUND,
                             instance=result.missing_instance)
 

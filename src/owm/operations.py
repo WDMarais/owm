@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from owm.config import parse_instance_config, parse_workspace_config
 from owm.errors import OwmError, INSTANCE_RUNNING, NOT_FOUND
 from owm.archive import _remove_proxy_block, _remove_worktrees, _dropdb_archive
+from owm.adoption import adopt_process
+from owm.proxy import get_proxy_backend
 
 
 @dataclass
@@ -193,7 +195,6 @@ def rename_instance(
     if os.path.exists(ws_toml_path):
         with open(ws_toml_path) as f:
             ws_conf = parse_workspace_config(f.read())
-        from owm.proxy import get_proxy_backend
         proxy = get_proxy_backend(ws_conf.proxy)
         if proxy:
             domain_suffix = ws_conf.proxy.domain_suffix if ws_conf.proxy else "localhost"
@@ -326,5 +327,4 @@ def infer_instance_from_cwd(
 
 
 def adopt_instance(instance: str, pid: int, **kwargs):
-    from owm.adoption import adopt_process
     return adopt_process(instance=instance, pid=pid, **kwargs)

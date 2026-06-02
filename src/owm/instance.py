@@ -4,7 +4,9 @@ import re
 import signal
 import socket
 import subprocess
+import sys
 import time
+import tomllib
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -164,7 +166,6 @@ def find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
         return shared[0]
 
     if "odoo" in conf.repos:
-        import sys
         print(
             "note: odoo_repo not set — assuming repo 'odoo'; "
             "set odoo_repo explicitly in [server] to suppress this",
@@ -274,7 +275,6 @@ def _append_modules_to_toml(toml_path: str, new_modules: list[str]) -> tuple[lis
 
     Returns (added, already_present) so the caller can report what changed.
     """
-    import tomllib
     with open(toml_path) as f:
         content = f.read()
     existing = tomllib.loads(content).get("install", {}).get("modules", [])

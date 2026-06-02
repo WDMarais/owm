@@ -4,6 +4,7 @@ Run: uvicorn dashboard.fixture_server:app --reload
 """
 import json
 import os
+import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -50,7 +51,6 @@ def _read_state(instance_dir: Path) -> dict:
     return {"status": "stopped"}
 
 def _read_toml(path: Path) -> dict:
-    import tomllib
     return tomllib.loads(path.read_text())
 
 def _instances() -> list[str]:
