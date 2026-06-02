@@ -178,6 +178,8 @@ function _scrollToSection(section) {
 function renderInstanceList(instances) {
     const section = document.querySelector(".nav-section-instances");
     section.innerHTML = '<div class="section-label">Instances</div>';
+    const scroll = document.createElement("div");
+    scroll.className = "instance-scroll";
     for (const inst of instances) {
         const el = document.createElement("div");
         el.className = "instance-item";
@@ -185,8 +187,9 @@ function renderInstanceList(instances) {
         el.innerHTML = `<span class="dot dot-${inst.status === "running" ? "running" : "stopped"}"></span>
                         <span class="instance-name">${_esc(inst.name)}</span>`;
         el.addEventListener("click", () => selectInstance(inst.name));
-        section.appendChild(el);
+        scroll.appendChild(el);
     }
+    section.appendChild(scroll);
 }
 
 function renderRepoList(repos) {

@@ -249,6 +249,22 @@ body {
 .instance-item.active { background: #eff6ff; border-left-color: #3b82f6; }
 .instance-item .instance-name { font-family: var(--mono); font-weight: 600; }
 
+/* Instances section fills available height and scrolls its list (mirrors the
+   notifications queue); without this the list overflows and clips the sections
+   below it once there are more instances than fit. */
+.nav-section-instances {
+  flex: 2;  /* primary nav — gets ~2/3 of leftover height vs the notifications queue's 1/3 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.nav-section-instances .section-label { flex-shrink: 0; }
+.nav-section-instances .instance-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 /* Status dots */
 .dot {
   width: 8px; height: 8px;
