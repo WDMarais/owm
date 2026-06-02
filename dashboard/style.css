@@ -270,7 +270,8 @@ body {
   padding: 0;
   border-bottom: none;
 }
-.nav-section-notifications .section-label {
+.nav-section-notifications .section-label,
+.nav-section-remotes .section-label {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -362,8 +363,6 @@ body {
 }
 .btn:hover { border-color: var(--muted); }
 
-.btn-fetch { font-size: 12px; padding: 4px 12px; flex-shrink: 0; }
-.btn-fetch:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Cards */
 .card {

@@ -75,14 +75,15 @@ async function loadStatus() {
 async function doFetch() {
     const btn = document.getElementById("fetch-btn");
     btn.disabled = true;
-    btn.textContent = "Fetching…";
+    const prev = btn.textContent;
+    btn.textContent = "⟳";
     try {
         await fetch("/api/fetch", { method: "POST" });
         const data = await api("/api/status");
         renderRepoList(data.repos);
         await loadNotifications();
     } catch (_) {}
-    btn.textContent = "Fetch";
+    btn.textContent = prev;
     btn.disabled = false;
 }
 
@@ -189,15 +190,15 @@ function renderInstanceList(instances) {
 }
 
 function renderRepoList(repos) {
-    const section = document.querySelector(".nav-section-remotes");
-    section.innerHTML = '<div class="section-label">Remotes</div>';
+    const container = document.querySelector(".remote-items");
+    container.innerHTML = "";
     for (const repo of repos) {
         const stale = repo.last_fetch && (repo.last_fetch.includes("h") || repo.last_fetch.includes("d"));
         const el = document.createElement("div");
         el.className = `repo-item${stale ? " stale" : ""}`;
         el.innerHTML = `<span class="repo-name">${_esc(repo.name)}</span>
                         <span class="repo-age">${_esc(repo.last_fetch ?? "—")}</span>`;
-        section.appendChild(el);
+        container.appendChild(el);
     }
 }
 
