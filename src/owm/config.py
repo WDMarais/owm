@@ -1,6 +1,8 @@
 import tomllib
 from dataclasses import dataclass, field
 
+from owm.errors import ConfigError
+
 
 @dataclass
 class RepoSpec:
@@ -166,12 +168,12 @@ def parse_workspace_config(toml: str) -> WorkspaceConfig:
     try:
         raw = tomllib.loads(toml)
     except tomllib.TOMLDecodeError as e:
-        raise ValueError(f"invalid TOML: {e}") from e
+        raise ConfigError(f"invalid workspace.toml: {e}") from e
 
     if "repos" not in raw:
-        raise ValueError("workspace.toml must have [repos]")
+        raise ConfigError("workspace.toml must have [repos]")
     if "clusters" not in raw:
-        raise ValueError("workspace.toml must have [clusters]")
+        raise ConfigError("workspace.toml must have [clusters]")
 
     repos_raw = dict(raw["repos"])
 
@@ -193,7 +195,7 @@ def parse_workspace_config(toml: str) -> WorkspaceConfig:
 
     dr = raw.get("defaults", {})
     if "http_port_range" in dr and not isinstance(dr["http_port_range"], list):
-        raise ValueError("http_port_range must be a list")
+        raise ConfigError("workspace.toml: http_port_range must be a list")
     defaults = WorkspaceDefaults(
         instances_dir=dr.get("instances_dir", "instances"),
         http_port_range=dr.get("http_port_range", [8100, 8299]),
@@ -236,21 +238,31 @@ def parse_instance_config(toml: str) -> InstanceConfig:
     try:
         raw = tomllib.loads(toml)
     except tomllib.TOMLDecodeError as e:
-        raise ValueError(f"invalid TOML: {e}") from e
+        raise ConfigError(f"invalid instance.toml: {e}") from e
 
     if "database" not in raw:
-        raise ValueError("instance.toml must have [database]")
+        raise ConfigError("instance.toml must have [database]")
     if "server" not in raw:
-        raise ValueError("instance.toml must have [server]")
+        raise ConfigError("instance.toml must have [server]")
 
-    repos = {name: parse_repo_spec(spec) for name, spec in raw.get("repos", {}).items()}
+    repos = {}
+    for name, spec in raw.get("repos", {}).items():
+        try:
+            repos[name] = parse_repo_spec(spec)
+        except (ValueError, TypeError) as e:
+            raise ConfigError(
+                f"instance.toml: invalid repo spec for {name!r} ({spec!r}): {e}"
+            ) from e
 
     db = raw["database"]
-    database = DatabaseSection(
-        name=db["name"],
-        pg_port=db["pg_port"],
-        template=db.get("template"),
-    )
+    try:
+        database = DatabaseSection(
+            name=db["name"],
+            pg_port=db["pg_port"],
+            template=db.get("template"),
+        )
+    except (KeyError, TypeError) as e:
+        raise ConfigError(f"instance.toml: [database] missing required key {e}") from e
 
     srv = raw["server"]
     http_port = srv.get("http_port", 0)
@@ -259,7 +271,7 @@ def parse_instance_config(toml: str) -> InstanceConfig:
     # hand-edit mistake and is rejected loudly rather than silently ignored.
     explicit_gevent = srv.get("gevent_port")
     if explicit_gevent is not None and http_port and explicit_gevent != http_port + 1:
-        raise ValueError(
+        raise ConfigError(
             f"gevent_port is derived as http_port + 1 ({http_port + 1}); "
             f"remove it from the toml or set it to {http_port + 1} (got {explicit_gevent})"
         )
@@ -280,11 +292,19 @@ def parse_instance_config(toml: str) -> InstanceConfig:
     scripts = None
     if "scripts" in raw:
         s = raw["scripts"]
-        runners = {
-            name: ScriptRunner(file=r["file"], type=r["type"])
-            for name, r in s.get("runners", {}).items()
-        }
-        compare = ScriptCompare(target=s["compare"]["target"]) if "compare" in s else None
+        runners = {}
+        for rname, r in s.get("runners", {}).items():
+            try:
+                runners[rname] = ScriptRunner(file=r["file"], type=r["type"])
+            except (KeyError, TypeError) as e:
+                raise ConfigError(
+                    f"instance.toml: [scripts.runners].{rname} must be a table with "
+                    f"'file' and 'type' keys (got {r!r})"
+                ) from e
+        try:
+            compare = ScriptCompare(target=s["compare"]["target"]) if "compare" in s else None
+        except (KeyError, TypeError) as e:
+            raise ConfigError(f"instance.toml: invalid [scripts.compare]: {e}") from e
         scripts = InstanceScripts(
             default=s.get("default"),
             scripts_dir=s.get("scripts_dir"),

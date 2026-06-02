@@ -23,6 +23,7 @@ class ErrorCode(StrEnum):
     CONFIRMATION_REQUIRED = "CONFIRMATION_REQUIRED"
     NO_ODOO_REPO        = "NO_ODOO_REPO"
     FETCH_TIMEOUT       = "FETCH_TIMEOUT"
+    CONFIG_INVALID      = "CONFIG_INVALID"
 
 
 NOT_FOUND           = ErrorCode.NOT_FOUND
@@ -46,6 +47,7 @@ ARCHIVE_CONFLICT      = ErrorCode.ARCHIVE_CONFLICT
 CONFIRMATION_REQUIRED = ErrorCode.CONFIRMATION_REQUIRED
 NO_ODOO_REPO          = ErrorCode.NO_ODOO_REPO
 FETCH_TIMEOUT         = ErrorCode.FETCH_TIMEOUT
+CONFIG_INVALID        = ErrorCode.CONFIG_INVALID
 
 
 class OwmError(Exception):
@@ -56,6 +58,17 @@ class OwmError(Exception):
 
     def __str__(self) -> str:
         return f"[{self.code}] {self.args[0]}"
+
+
+class ConfigError(OwmError):
+    """A workspace.toml / instance.toml that cannot be parsed into config.
+
+    Always carries CONFIG_INVALID. Callers (dashboard, api, CLI) catch this
+    specifically to distinguish a malformed config from operational errors
+    rather than swallowing every exception."""
+
+    def __init__(self, message: str, **extra):
+        super().__init__(message, CONFIG_INVALID, **extra)
 
 
 def format_error(message: str, code: ErrorCode | str, **extra) -> dict:

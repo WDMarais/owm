@@ -489,3 +489,57 @@ def test_resolve_patches_major_version_key_matches():
 #   does not specify what happens if a pair has >2 elements or only 1 element.
 # test_resolve_patches_version_string_normalisation: it is unclear whether "19.0" and "19"
 #   should match the same patch key; spec shows both forms in different examples.
+
+
+# ---------------------------------------------------------------------------
+# Structured config errors: parse failures raise ConfigError (CONFIG_INVALID)
+# with a message naming the offending field, not a leaked TypeError/KeyError.
+# ---------------------------------------------------------------------------
+
+from owm.errors import ConfigError, CONFIG_INVALID
+
+
+@pytest.mark.config_schemas
+def test_malformed_toml_raises_config_error():
+    with pytest.raises(ConfigError) as exc:
+        parse_instance_config("this is not = valid toml [[[")
+    assert exc.value.code == CONFIG_INVALID
+
+
+@pytest.mark.config_schemas
+def test_script_runner_string_shorthand_raises_named_config_error():
+    # owm writes runners as bare filename strings; re-owm requires {file, type}.
+    # The error must name the runner, not leak "string indices must be integers".
+    toml = """
+[database]
+name = "x"
+pg_port = 5432
+[server]
+http_port = 8100
+[scripts.runners]
+test = "run.py"
+"""
+    with pytest.raises(ConfigError) as exc:
+        parse_instance_config(toml)
+    assert exc.value.code == CONFIG_INVALID
+    assert "scripts.runners" in str(exc.value)
+    assert "test" in str(exc.value)
+
+
+@pytest.mark.config_schemas
+def test_colonless_repo_spec_raises_named_config_error():
+    # owm allows a bare branch string with no base; re-owm's DSL needs a colon.
+    # The error must name the repo, not leak "substring not found".
+    toml = """
+[repos]
+product-core = "some_branch_no_colon"
+[database]
+name = "x"
+pg_port = 5432
+[server]
+http_port = 8100
+"""
+    with pytest.raises(ConfigError) as exc:
+        parse_instance_config(toml)
+    assert exc.value.code == CONFIG_INVALID
+    assert "product-core" in str(exc.value)
