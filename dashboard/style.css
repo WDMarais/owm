@@ -541,6 +541,15 @@ body {
 }
 .btn-sync:hover { border-color: #3b82f6; color: #3b82f6; }
 
+.btn-push      { padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); background: none; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--muted); }
+.btn-push:hover { border-color: #3b82f6; color: #3b82f6; }
+
+.btn-pull-base      { padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); background: none; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--muted); }
+.btn-pull-base:hover { border-color: var(--c-warn); color: var(--c-warn); }
+
+.repo-pr-link { font-size: 13px; color: var(--muted); text-decoration: none; opacity: 0.6; }
+.repo-pr-link:hover { opacity: 1; color: #3b82f6; }
+
 /* Commands card — 2-line, whole row is click-to-copy */
 .cmd-list { padding: 4px 0; }
 .cmd-row {

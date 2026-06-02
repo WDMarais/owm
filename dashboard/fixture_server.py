@@ -93,10 +93,14 @@ def api_instance(name: str):
         "proxy":  {"ok": True, "value": proxy_host},
     }
 
+    FIXTURE_PR_URLS = {
+        "feat-789": {"customer-config": "https://bitbucket.org/acme/customer-config/pull-requests/new?source=feat-789-dev&dest=dev"},
+    }
     sync = INSTANCE_REPOS_SYNC.get(name, {})
     repos = [
         {"name": repo, "branch": parse_repo_spec(spec).branch,
          "base": parse_repo_spec(spec).base,
+         "pr_url": FIXTURE_PR_URLS.get(name, {}).get(repo),
          **sync.get(repo, _CLEAN_SYNC)}
         for repo, spec in cfg.get("repos", {}).items()
     ]
@@ -261,6 +265,11 @@ def api_instance_sync(name: str, repo: str):
 
 @app.post("/api/instance/{name}/push/{repo}")
 def api_instance_push(name: str, repo: str):
+    return {"ok": True}
+
+
+@app.post("/api/instance/{name}/pull-base/{repo}")
+def api_instance_pull_base(name: str, repo: str):
     return {"ok": True}
 
 

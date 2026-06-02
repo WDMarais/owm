@@ -385,7 +385,7 @@ function _syncSummary(repo) {
         if (behind > 0) issues.push({label: `${behind} behind ${ref}`,  state: "behind", canSync: true});
         if (ahead  > 0) issues.push({label: `${ahead} unpushed`,        state: "ahead",  canSync: false, canPush: true});
     }
-    if (remoteBehindBase > 0) issues.push({label: `origin/${repo.branch} ${remoteBehindBase} behind ${repo.base ?? "base"}`, state: "behind", canSync: true});
+    if (remoteBehindBase > 0) issues.push({label: `origin/${repo.branch} ${remoteBehindBase} behind ${repo.base ?? "base"}`, state: "behind", canSync: false, canPullBase: true});
     if (issues.length === 0) issues.push({label: "up to date", state: "clean", canSync: false});
     return issues;
 }
@@ -395,24 +395,30 @@ function renderRepos(inst) {
     list.innerHTML = "";
     for (const repo of inst.repos) {
         const issues = _syncSummary(repo);
-        const canSync = issues.some(i => i.canSync);
-        const canPush = issues.some(i => i.canPush);
+        const canSync     = issues.some(i => i.canSync);
+        const canPullBase = issues.some(i => i.canPullBase);
+        const canPush     = issues.some(i => i.canPush) && !canPullBase;
         const lc = repo.last_commit;
         const commitLine = (!repo.has_remote && lc)
             ? `<div class="repo-commit-line" title="${_esc(lc.ts ?? "")}">${_esc(lc.hash)}${lc.rel ? " · " + _esc(lc.rel) : ""}</div>`
             : "";
-        const syncLines = issues.map(i =>
-            `<div class="repo-sync-line"><span class="sync-state ${i.state}">${_esc(i.label)}</span></div>`
-        ).join("");
+        const syncLines = issues.map(i => {
+            const btn = (i.canSync                    ? `<button class="btn-sync"      data-repo="${_esc(repo.name)}">Sync</button>`      : "")
+                      + (i.canPush && !canPullBase    ? `<button class="btn-push"      data-repo="${_esc(repo.name)}">Push</button>`      : "")
+                      + (i.canPullBase                ? `<button class="btn-pull-base" data-repo="${_esc(repo.name)}">Pull Base</button>` : "");
+            return `<div class="repo-sync-line"><span class="sync-state ${i.state}">${_esc(i.label)}</span>${btn}</div>`;
+        }).join("");
         const el = document.createElement("div");
         el.className = "repo-row";
+        const prLink = repo.pr_url
+            ? `<a class="repo-pr-link" href="${_esc(repo.pr_url)}" target="_blank" title="Open PR">↗</a>`
+            : "";
         el.innerHTML = `
             <div class="repo-name-line">
               <span class="repo-name-group">
                 <span class="repo-name">${_esc(repo.name)}</span><span class="repo-branch" title="${_esc(repo.branch ?? "")}"> (${_esc(repo.branch ?? "")})</span>
               </span>
-              ${canSync ? `<button class="btn-sync" data-repo="${_esc(repo.name)}">Sync</button>` : ""}
-              ${canPush ? `<button class="btn-push" data-repo="${_esc(repo.name)}">Push</button>` : ""}
+              ${prLink}
             </div>
             ${syncLines}${commitLine}`;
 
@@ -432,6 +438,16 @@ function renderRepos(inst) {
                 btn.disabled = true;
                 btn.textContent = "Pushing…";
                 await fetch(`/api/instance/${_selectedInstance}/push/${encodeURIComponent(repo.name)}`, { method: "POST" });
+                await selectInstance(_selectedInstance);
+            });
+        }
+
+        if (canPullBase) {
+            el.querySelector(".btn-pull-base").addEventListener("click", async e => {
+                const btn = e.target;
+                btn.disabled = true;
+                btn.textContent = "Pulling…";
+                await fetch(`/api/instance/${_selectedInstance}/pull-base/${encodeURIComponent(repo.name)}`, { method: "POST" });
                 await selectInstance(_selectedInstance);
             });
         }

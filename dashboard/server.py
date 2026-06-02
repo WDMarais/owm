@@ -66,6 +66,37 @@ def _instance_status(instance: str) -> str:
         return "stopped"
 
 
+def _pr_url_override(instance_dir: Path, repo: str) -> str | None:
+    try:
+        return json.loads((instance_dir / "pr_urls.json").read_text()).get(repo)
+    except Exception:
+        return None
+
+
+def _speculative_pr_url(worktree: Path, branch: str, base: str | None) -> str | None:
+    if not base:
+        return None
+    result = subprocess.run(
+        ["git", "-C", str(worktree), "remote", "get-url", "origin"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None
+    remote = result.stdout.strip()
+    # SSH: git@bitbucket.org:workspace/repo.git
+    # HTTPS: https://bitbucket.org/workspace/repo.git
+    import re
+    m = re.match(r"(?:https?://|git@)([^/:]+)[/:](.+?)(?:\.git)?$", remote)
+    if not m:
+        return None
+    host, path = m.group(1), m.group(2)
+    if "bitbucket" in host:
+        return f"https://{host}/{path}/pull-requests/new?source={branch}&dest={base}"
+    if "github" in host:
+        return f"https://{host}/{path}/compare/{base}...{branch}"
+    return None
+
+
 def _fetch_timestamps() -> dict:
     try:
         return json.loads((WORKSPACE / "_fetch_timestamps.json").read_text())
@@ -169,8 +200,9 @@ def api_instance(name: str):
             wt = WORKSPACE / "_shared" / repo_name / spec.branch
         else:
             wt = WORKSPACE / "instances" / name / repo_name
-        sync = _repo_sync(wt, spec.branch, spec.base, spec.shared)
-        repos.append({"name": repo_name, "branch": spec.branch, "base": spec.base, **sync})
+        sync    = _repo_sync(wt, spec.branch, spec.base, spec.shared)
+        pr_url  = _pr_url_override(instance_dir, repo_name) or _speculative_pr_url(wt, spec.branch, spec.base)
+        repos.append({"name": repo_name, "branch": spec.branch, "base": spec.base, "pr_url": pr_url, **sync})
 
     runners = cfg.scripts.runners if cfg.scripts else {}
     scripts = [{"name": sname, "status": None, "last_run": None} for sname in runners]
@@ -332,6 +364,21 @@ def api_instance_sync(name: str, repo: str):
 @app.post("/api/instance/{name}/push/{repo}")
 def api_instance_push(name: str, repo: str):
     return _owm(WORKSPACE, "push", name, "--repo", repo)
+
+
+@app.post("/api/instance/{name}/pull-base/{repo}")
+def api_instance_pull_base(name: str, repo: str):
+    return _owm(WORKSPACE, "pull-base", name, "--repo", repo)
+
+
+@app.post("/api/instance/{name}/repo/{repo}/pr-url")
+def api_set_pr_url(name: str, repo: str, url: str):
+    instance_dir = WORKSPACE / "instances" / name
+    pr_file = instance_dir / "pr_urls.json"
+    data = json.loads(pr_file.read_text()) if pr_file.exists() else {}
+    data[repo] = url
+    pr_file.write_text(json.dumps(data, indent=2))
+    return {"ok": True}
 
 
 @app.get("/api/processes")
