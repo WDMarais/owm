@@ -13,6 +13,24 @@ const _esc = s => String(s)
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
+// ── Toast ──────────────────────────────────────────────────────────────────
+
+function showToast(msg, level = "error") {
+    const el = document.createElement("div");
+    el.className = `toast toast-${level}`;
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.classList.add("toast-visible"), 10);
+    setTimeout(() => {
+        el.classList.remove("toast-visible");
+        setTimeout(() => el.remove(), 300);
+    }, 5000);
+}
+
+function _firstLine(output) {
+    return (output || "").trim().split("\n").find(l => l.trim()) || "unknown error";
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -427,7 +445,9 @@ function renderRepos(inst) {
                 const btn = e.target;
                 btn.disabled = true;
                 btn.textContent = "Syncing…";
-                await fetch(`/api/instance/${_selectedInstance}/sync/${encodeURIComponent(repo.name)}`, { method: "POST" });
+                const res = await fetch(`/api/instance/${_selectedInstance}/sync/${encodeURIComponent(repo.name)}`, { method: "POST" });
+                const data = await res.json();
+                if (!data.ok) showToast(`sync ${repo.name}: ${_firstLine(data.output)}`);
                 await selectInstance(_selectedInstance);
             });
         }
@@ -437,7 +457,9 @@ function renderRepos(inst) {
                 const btn = e.target;
                 btn.disabled = true;
                 btn.textContent = "Pushing…";
-                await fetch(`/api/instance/${_selectedInstance}/push/${encodeURIComponent(repo.name)}`, { method: "POST" });
+                const res = await fetch(`/api/instance/${_selectedInstance}/push/${encodeURIComponent(repo.name)}`, { method: "POST" });
+                const data = await res.json();
+                if (!data.ok) showToast(`push ${repo.name}: ${_firstLine(data.output)}`);
                 await selectInstance(_selectedInstance);
             });
         }
@@ -447,7 +469,9 @@ function renderRepos(inst) {
                 const btn = e.target;
                 btn.disabled = true;
                 btn.textContent = "Pulling…";
-                await fetch(`/api/instance/${_selectedInstance}/pull-base/${encodeURIComponent(repo.name)}`, { method: "POST" });
+                const res = await fetch(`/api/instance/${_selectedInstance}/pull-base/${encodeURIComponent(repo.name)}`, { method: "POST" });
+                const data = await res.json();
+                if (!data.ok) showToast(`pull-base ${repo.name}: ${_firstLine(data.output)}`);
                 await selectInstance(_selectedInstance);
             });
         }

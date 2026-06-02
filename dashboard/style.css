@@ -816,3 +816,25 @@ body {
 /* ── Utilities ────────────────────────────────────────────────────────────── */
 
 .hidden { display: none; }
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  max-width: 360px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 1000;
+  pointer-events: none;
+}
+.toast-visible { opacity: 1; transform: translateY(0); }
+.toast-error   { background: #fef2f2; border: 1px solid #fca5a5; color: var(--c-err); }
+.toast-warn    { background: #fffbeb; border: 1px solid #fcd34d; color: var(--c-warn); }
+.toast-ok      { background: #f0fdf4; border: 1px solid #86efac; color: var(--c-running); }
