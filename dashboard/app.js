@@ -376,7 +376,35 @@ async function _instanceAction(name, action, btn) {
     } catch (_) {
         btn.textContent = prev;
         btn.disabled = false;
+        return;
     }
+    // start_instance returns before Odoo serves HTTP, so the first snapshot
+    // shows `starting`/red. Poll until it settles: start/restart wait out
+    // `starting` (→ running, or stopped if it crashed); stop/kill wait until
+    // it's actually down.
+    const transitional = (action === "start" || action === "restart")
+        ? ["starting"]
+        : ["running", "starting", "unhealthy"];
+    _pollInstanceStatus(name, transitional);
+}
+
+// Refresh only the status-sensitive UI (dock, health grid, list dot) on an
+// interval until the instance settles — deliberately NOT a full selectInstance,
+// so the open log stream survives each tick. Stops on settle, timeout, or if
+// the user selects another instance.
+function _pollInstanceStatus(name, transitional, attempts = 15) {
+    let n = 0;
+    const tick = async () => {
+        if (n++ >= attempts || _selectedInstance !== name) return;
+        let data;
+        try { data = await api(`/api/instance/${name}`); } catch (_) { return; }
+        if (data.error) return;
+        renderNavbar(data);
+        renderHealth(data);
+        _syncListDot(name, data.status);
+        if (transitional.includes(data.status)) setTimeout(tick, 2000);
+    };
+    setTimeout(tick, 2000);
 }
 
 function renderHealth(inst) {
