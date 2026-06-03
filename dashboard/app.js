@@ -463,7 +463,7 @@ function renderRepos(inst) {
                 btn.textContent = "Syncing…";
                 const res = await fetch(`/api/instance/${_selectedInstance}/sync/${encodeURIComponent(repo.name)}`, { method: "POST" });
                 const data = await res.json();
-                if (!data.ok) showToast(`sync ${repo.name}: ${_firstLine(data.output)}`);
+                if (data.error) showToast(`sync ${repo.name}: ${_firstLine(data.error)}`);
                 await selectInstance(_selectedInstance);
             });
         }
@@ -475,7 +475,7 @@ function renderRepos(inst) {
                 btn.textContent = "Pushing…";
                 const res = await fetch(`/api/instance/${_selectedInstance}/push/${encodeURIComponent(repo.name)}`, { method: "POST" });
                 const data = await res.json();
-                if (!data.ok) showToast(`push ${repo.name}: ${_firstLine(data.output)}`);
+                if (data.error) showToast(`push ${repo.name}: ${_firstLine(data.error)}`);
                 await selectInstance(_selectedInstance);
             });
         }
@@ -487,7 +487,8 @@ function renderRepos(inst) {
                 btn.textContent = "Pulling…";
                 const res = await fetch(`/api/instance/${_selectedInstance}/pull-base/${encodeURIComponent(repo.name)}`, { method: "POST" });
                 const data = await res.json();
-                if (!data.ok) showToast(`pull-base ${repo.name}: ${_firstLine(data.output)}`);
+                if (data.error) showToast(`pull-base ${repo.name}: ${_firstLine(data.error)}`);
+                else if (data.results?.[repo.name]?.status === "conflict") showToast(`pull-base ${repo.name}: merge conflict — resolve locally`);
                 await selectInstance(_selectedInstance);
             });
         }

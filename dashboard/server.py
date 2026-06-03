@@ -11,7 +11,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,7 +31,7 @@ from owm.instance import (
     stop_instance,
 )
 from owm.operations import delete_instance, rename_instance
-from owm.sync import fetch_active_branches, push_worktree, sync_worktrees
+from owm.sync import fetch_active_branches, pull_base_instance, push_worktree, sync_worktrees
 
 # Map the lib's health states to the small set the UI renders (dot colour + badge).
 _UI_STATUS = {
@@ -61,11 +60,6 @@ def _ui_status(name: str) -> str:
         return "error"
 
 DASHBOARD = Path(__file__).parent
-
-# The dashboard drives the re-owm CLI it ships with — NOT whatever `owm` resolves
-# to on PATH (that's the original owm tool). Resolve it next to the running
-# interpreter so the binary always matches this server's venv.
-_OWM_BIN = str(Path(sys.executable).parent / "owm")
 
 
 # ── Workspace ─────────────────────────────────────────────────────────────────
@@ -346,20 +340,6 @@ def _repo_sync(worktree: Path, branch: str, base: str | None, shared: bool) -> d
     }
 
 
-def _owm(workspace_root: Path, *args: str, timeout: int = 60) -> dict:
-    env = os.environ.copy()
-    env["OWM_WORKSPACE"] = str(workspace_root)
-    result = subprocess.run(
-        [_OWM_BIN, *args],
-        cwd=str(workspace_root),
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    return {"ok": result.returncode == 0, "output": result.stdout + result.stderr}
-
-
 def _running(name: str) -> bool:
     """Whether re-owm's managed process for `name` is alive (delete/archive/
     rename take `running` as a trust-the-caller guard arg)."""
@@ -450,7 +430,10 @@ def api_instance_push(name: str, repo: str):
 
 @app.post("/api/instance/{name}/pull-base/{repo}")
 def api_instance_pull_base(name: str, repo: str):
-    return _owm(WORKSPACE, "pull-base", name, "--repo", repo)
+    try:
+        return pull_base_instance(name, str(WORKSPACE), repo=repo)
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
 
 
 @app.post("/api/instance/{name}/repo/{repo}/pr-url")
