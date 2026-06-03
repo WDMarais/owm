@@ -22,7 +22,7 @@ from owm.config import parse_workspace_config, parse_instance_config, parse_repo
 from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
 from owm.database import reset_db
 from owm.sync import (
-    fetch_active_branches, sync_instance, push_instance, reset_instance,
+    fetch_active_branches, sync_worktrees, push_instance, reset_instance,
     read_repo_state, has_local_commits, branch_exists_on_origin,
     git_fast_forward, git_rebase, git_push, git_reset_hard,
 )
@@ -277,34 +277,7 @@ def owm_fetch(workspace_root=None, **kwargs):
 
 def owm_sync(instance, repo=None, rebase=False, workspace_root=None, **kwargs):
     workspace_root = workspace_root or default_workspace()
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    with open(toml_path) as f:
-        conf = parse_instance_config(f.read())
-
-    repo_states = {}
-    for name, spec in conf.repos.items():
-        if repo and name != repo:
-            continue
-        wt = resolve_worktree_path(name, spec.branch, spec.shared, workspace_root, instance)
-        repo_states[name] = (
-            {"status": "clean", "shared": True} if spec.shared
-            else read_repo_state(wt.path)
-        )
-
-    decisions = sync_instance(instance=instance, repo_states=repo_states,
-                               rebase=rebase, repo=repo)
-
-    for name, decision in decisions.items():
-        spec = conf.repos.get(name)
-        if not spec or spec.shared:
-            continue
-        wt = resolve_worktree_path(name, spec.branch, spec.shared, workspace_root, instance)
-        if decision["status"] == "fast-forwarded":
-            git_fast_forward(wt.path)
-        elif decision["status"] == "rebased":
-            git_rebase(wt.path)
-
-    return {"repos": decisions}
+    return sync_worktrees(instance, workspace_root, repo=repo, rebase=rebase)
 
 
 def owm_push(instance, repo, workspace_root=None, **kwargs):

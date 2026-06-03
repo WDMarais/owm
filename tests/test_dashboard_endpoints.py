@@ -20,6 +20,7 @@ covering it needs a JS test harness, which is a separate call.
 """
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -75,7 +76,6 @@ def client():
 
 # (url action segment, expected owm subcommand)
 ENDPOINTS = [
-    ("sync",      "sync"),
     ("push",      "push"),
     ("pull-base", "pull-base"),
 ]
@@ -84,11 +84,6 @@ _IDS = [subcommand for _, subcommand in ENDPOINTS]
 # Realistic git failure output per action — the stderr a failing `owm` would
 # surface, and what app.js renders the first line of into the error toast.
 GIT_ERRORS = {
-    "sync": (
-        "error: failed to push some refs to 'origin'\n"
-        "hint: Updates were rejected because the remote contains work that you do\n"
-        "hint: not have locally."
-    ),
     "push": (
         "To bitbucket.org:acme/customer-config.git\n"
         " ! [rejected]        feat-789-dev -> feat-789-dev (non-fast-forward)\n"
@@ -141,6 +136,30 @@ def test_endpoint_failure_is_http_200_with_ok_false(client, fake_owm, action, su
     assert body["output"] == stderr  # stdout ("") + stderr
     # app.js toasts _firstLine(output); a non-empty first line must exist.
     assert body["output"].splitlines()[0]
+
+
+def test_sync_calls_lib_in_process(client):
+    """Sync runs against the lib directly, not the owm subprocess."""
+    with patch("dashboard.server.sync_worktrees",
+               return_value={"repos": {"customer-config": {"status": "fast-forwarded"}}}) as mock_sync:
+        resp = client.post("/api/instance/feat-789/sync/customer-config")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"repos": {"customer-config": {"status": "fast-forwarded"}}}
+    mock_sync.assert_called_once_with("feat-789", str(server.WORKSPACE), repo="customer-config")
+
+
+def test_sync_owm_error_is_shaped(client):
+    """An OwmError from the lib becomes the dashboard's {error, code} body."""
+    from owm.errors import OwmError, DIRTY_WORKTREE
+    with patch("dashboard.server.sync_worktrees",
+               side_effect=OwmError("customer-config has uncommitted changes", code=DIRTY_WORKTREE)):
+        resp = client.post("/api/instance/feat-789/sync/customer-config")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["code"] == "DIRTY_WORKTREE"
+    assert "uncommitted changes" in body["error"]
 
 
 def test_endpoint_output_is_stdout_then_stderr(client, fake_owm):

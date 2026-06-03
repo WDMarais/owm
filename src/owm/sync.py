@@ -306,6 +306,44 @@ def sync_instance(
     return result
 
 
+def sync_worktrees(instance, workspace_root, *, repo=None, rebase=False) -> dict:
+    """Gather repo states, decide per-repo sync actions, and apply them.
+
+    The orchestrator shared by `owm sync` (via MCP) and the dashboard sync
+    button: read the instance config, build repo states, run the sync_instance
+    policy, then fast-forward or rebase each worktree the policy selected.
+    Returns {"repos": <decisions>}.
+    """
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+
+    repo_states = {}
+    for name, spec in conf.repos.items():
+        if repo and name != repo:
+            continue
+        wt = resolve_worktree_path(name, spec.branch, spec.shared, workspace_root, instance)
+        repo_states[name] = (
+            {"status": "clean", "shared": True} if spec.shared
+            else read_repo_state(wt.path)
+        )
+
+    decisions = sync_instance(instance=instance, repo_states=repo_states,
+                              rebase=rebase, repo=repo)
+
+    for name, decision in decisions.items():
+        spec = conf.repos.get(name)
+        if not spec or spec.shared:
+            continue
+        wt = resolve_worktree_path(name, spec.branch, spec.shared, workspace_root, instance)
+        if decision["status"] == "fast-forwarded":
+            git_fast_forward(wt.path)
+        elif decision["status"] == "rebased":
+            git_rebase(wt.path)
+
+    return {"repos": decisions}
+
+
 def push_instance(
     instance: str,
     *,

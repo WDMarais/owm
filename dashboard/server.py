@@ -32,7 +32,7 @@ from owm.instance import (
     stop_instance,
 )
 from owm.operations import delete_instance, rename_instance
-from owm.sync import fetch_active_branches
+from owm.sync import fetch_active_branches, sync_worktrees
 
 # Map the lib's health states to the small set the UI renders (dot colour + badge).
 _UI_STATUS = {
@@ -434,7 +434,10 @@ def api_instance_rename(name: str, new_name: str):
 
 @app.post("/api/instance/{name}/sync/{repo}")
 def api_instance_sync(name: str, repo: str):
-    return _owm(WORKSPACE, "sync", name, "--repo", repo)
+    try:
+        return sync_worktrees(name, str(WORKSPACE), repo=repo)
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
 
 
 @app.post("/api/instance/{name}/push/{repo}")

@@ -538,8 +538,8 @@ def test_owm_fetch_returns_repo_and_worktree_status(tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_sync_fast_forward(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.read_repo_state", return_value={"status": "behind", "behind_by": 3}), \
-         patch("owm.mcp.git_fast_forward"):
+    with patch("owm.sync.read_repo_state", return_value={"status": "behind", "behind_by": 3}), \
+         patch("owm.sync.git_fast_forward"):
         result = owm_sync(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["repos"]["product_core"]["status"] == "fast-forwarded"
     assert result["repos"]["odoo_like"]["status"] == "skipped"   # shared worktree
@@ -547,8 +547,8 @@ def test_owm_sync_fast_forward(standard_instance_toml, tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_sync_rebase(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.read_repo_state", return_value={"status": "diverged"}), \
-         patch("owm.mcp.git_rebase"):
+    with patch("owm.sync.read_repo_state", return_value={"status": "diverged"}), \
+         patch("owm.sync.git_rebase"):
         result = owm_sync(instance="feat-789", repo="product_core",
                           rebase=True, workspace_root=str(tmp_workspace))
     assert result["repos"]["product_core"]["status"] == "rebased"
@@ -556,7 +556,7 @@ def test_owm_sync_rebase(standard_instance_toml, tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_sync_dirty_skipped(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "dirty"}):
         result = owm_sync(instance="feat-789", repo="product_core",
                           workspace_root=str(tmp_workspace))
     assert result["repos"]["product_core"]["status"] == "skipped"
