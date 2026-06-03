@@ -6,6 +6,7 @@ def resolve_env(
     instance: str,
     workspace_root: str,
     *,
+    odoo_bin: str | None = None,
     instance_db_name: str | None = None,
     instance_pg_port: int | None = None,
     instance_http_port: int | None = None,
@@ -14,7 +15,7 @@ def resolve_env(
     instance_dir = os.path.join(workspace_root, "instances", instance)
     venv_dir = os.path.join(instance_dir, ".venv")
     return {
-        "ODOO_BIN":              os.path.join(venv_dir, "bin", "odoo-bin"),
+        "ODOO_BIN":              odoo_bin if odoo_bin is not None else os.path.join(venv_dir, "bin", "odoo-bin"),
         "VENV_PYTHON":           os.path.join(venv_dir, "bin", "python"),
         "PSQL":                  "psql",
         "DB_NAME":               instance_db_name if instance_db_name is not None else "",

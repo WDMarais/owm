@@ -15,7 +15,7 @@ from owm.errors import (
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
     kill_instance, restart_instance, list_running_instances,
-    find_odoo_repo,
+    odoo_bin_path,
 )
 from owm.archive import archive_instance
 from owm.config import parse_workspace_config, parse_instance_config, parse_repo_spec
@@ -96,15 +96,14 @@ def owm_env(instance, workspace_root=None, **kwargs):
         return format_error(str(e), "NOT_FOUND")
 
     try:
-        odoo_repo, odoo_spec = find_odoo_repo(conf)
+        odoo_bin = odoo_bin_path(conf, workspace_root, instance)
     except OwmError as e:
         return _e(e)
 
-    wt = resolve_worktree_path(odoo_repo, odoo_spec.branch, odoo_spec.shared, workspace_root, instance)
     inst_dir = os.path.join(workspace_root, "instances", instance)
 
     return {
-        "ODOO_BIN":              os.path.join(wt.path, "odoo-bin"),
+        "ODOO_BIN":              odoo_bin,
         "VENV_PYTHON":           os.path.join(inst_dir, ".venv", "bin", "python"),
         "PSQL":                  "psql",
         "DB_NAME":               conf.database.name,

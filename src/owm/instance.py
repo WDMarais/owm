@@ -181,14 +181,24 @@ def find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
     )
 
 
+def odoo_bin_path(conf: InstanceConfig, workspace_root: str, instance: str) -> str:
+    """Resolve the odoo-bin path for an instance, honoring the odoo repo's shared flag.
+
+    Single source of truth: a shared odoo repo lives in _shared/<repo>/<branch>, a
+    per-instance odoo repo under instances/<instance>/<repo>. Both the start command
+    and the env surfaces (CLI/MCP) must agree on this path.
+    """
+    odoo_repo, odoo_spec = find_odoo_repo(conf)
+    wt = resolve_worktree_path(odoo_repo, odoo_spec.branch, odoo_spec.shared, workspace_root, instance)
+    return os.path.join(wt.path, "odoo-bin")
+
+
 def _build_start_command(
     instance: str, workspace_root: str, conf: InstanceConfig,
     *, init_modules: list[str] | None = None,
 ) -> list[str]:
-    odoo_repo, odoo_spec = find_odoo_repo(conf)
-    wt = resolve_worktree_path(odoo_repo, odoo_spec.branch, True, workspace_root, instance)
     python = os.path.join(workspace_root, "instances", instance, ".venv", "bin", "python")
-    odoo_bin = os.path.join(wt.path, "odoo-bin")
+    odoo_bin = odoo_bin_path(conf, workspace_root, instance)
     conf_file = os.path.join(workspace_root, "instances", instance, "instance.conf")
     cmd = [python, odoo_bin, "--config", conf_file]
     if init_modules:
@@ -420,7 +430,7 @@ def create_instance(
     venv_dir = os.path.join(workspace_root, "instances", name, ".venv")
     if not os.path.exists(venv_dir):
         odoo_repo_name, odoo_spec = find_odoo_repo(conf)
-        odoo_wt = resolve_worktree_path(odoo_repo_name, odoo_spec.branch, True, workspace_root, name)
+        odoo_wt = resolve_worktree_path(odoo_repo_name, odoo_spec.branch, odoo_spec.shared, workspace_root, name)
         req_files = []
         default_req = os.path.join(odoo_wt.path, "requirements.txt")
         if os.path.exists(default_req):

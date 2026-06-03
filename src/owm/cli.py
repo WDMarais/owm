@@ -17,7 +17,7 @@ from owm.errors import OwmError
 from owm.instance import (
     new_instance, create_instance, list_running_instances,
     start_instance, stop_instance, kill_instance, health_check,
-    generate_instance_conf, find_odoo_repo,
+    generate_instance_conf, find_odoo_repo, odoo_bin_path,
     _read_pid, _process_alive,
     _append_modules_to_toml, _query_installed_modules,
 )
@@ -599,9 +599,7 @@ def cmd_shell(ctx, name, script, json_out):
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     conf = _read_instance_conf(instance, workspace_root)
-    odoo_repo_name, odoo_spec = find_odoo_repo(conf)
-    wt = resolve_worktree_path(odoo_repo_name, odoo_spec.branch, True, workspace_root, instance)
-    odoo_bin = os.path.join(wt.path, "odoo-bin")
+    odoo_bin = odoo_bin_path(conf, workspace_root, instance)
     venv = os.path.join(workspace_root, "instances", instance, ".venv")
     python = os.path.join(venv, "bin", "python")
     conf_path = os.path.join(workspace_root, "instances", instance, "instance.conf")
@@ -731,6 +729,7 @@ def cmd_env(ctx, name, fmt):
     env = resolve_env(
         instance=instance,
         workspace_root=workspace_root,
+        odoo_bin=odoo_bin_path(conf, workspace_root, instance),
         instance_db_name=conf.database.name,
         instance_pg_port=conf.database.pg_port,
         instance_http_port=conf.server.http_port,
