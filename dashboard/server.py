@@ -102,12 +102,15 @@ def _read_state(instance: str) -> dict:
 
 
 def _instance_status(instance: str) -> str:
-    state = _read_state(instance)
-    pid   = state.get("pid")
-    if not pid or pid == "UNSET":
-        return "stopped"
+    """Running iff re-owm's managed process is alive, derived from health_check
+    rather than a separate psutil/state.json check. Binary projection for the
+    processes page; the nav uses the richer _ui_status. (NB "running" here means
+    process-alive, spanning health_check's healthy/starting/unhealthy.)"""
     try:
-        return "running" if psutil.pid_exists(int(pid)) else "stopped"
+        return ("running"
+                if health_check(instance, str(WORKSPACE))["status"]
+                in ("healthy", "starting", "unhealthy")
+                else "stopped")
     except Exception:
         return "stopped"
 
