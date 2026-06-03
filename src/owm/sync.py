@@ -29,7 +29,16 @@ def read_repo_state(worktree_path: str) -> dict:
     lr = git_run(["rev-list", "--count", "--left-right", "HEAD...@{u}"],
                  cwd=worktree_path, check=False)
     if lr.returncode != 0:
-        return {"status": "clean"}
+        # No upstream tracking: owm worktrees set the branch but not its @{u},
+        # so @{u} fails to resolve. Fall back to origin/<branch> — the same ref
+        # the dashboard's display path uses. Without this a behind repo reads as
+        # "clean" and sync silently no-ops.
+        branch = git_run(["rev-parse", "--abbrev-ref", "HEAD"],
+                         cwd=worktree_path, check=False).stdout.strip()
+        lr = git_run(["rev-list", "--count", "--left-right", f"HEAD...origin/{branch}"],
+                     cwd=worktree_path, check=False) if branch else lr
+        if lr.returncode != 0:
+            return {"status": "clean"}
     parts = lr.stdout.strip().split()
     ahead  = int(parts[0]) if parts else 0
     behind = int(parts[1]) if len(parts) > 1 else 0
@@ -84,7 +93,10 @@ def git_current_hash(path: str) -> str:
 
 
 def git_fast_forward(worktree_path: str) -> None:
-    git_run(["pull", "--ff-only"], cwd=worktree_path)
+    # ff against the already-fetched origin/<branch> ref rather than `pull
+    # --ff-only`, which relies on @{u} tracking that owm worktrees don't set.
+    branch = git_run(["rev-parse", "--abbrev-ref", "HEAD"], cwd=worktree_path).stdout.strip()
+    git_run(["merge", "--ff-only", f"origin/{branch}"], cwd=worktree_path)
 
 
 def git_rebase(worktree_path: str) -> None:
