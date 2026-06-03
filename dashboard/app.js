@@ -219,8 +219,52 @@ async function selectInstance(name, scrollTo = null, restoreTab = null) {
     document.querySelector(".nav-item[data-page='processes']").classList.remove("active");
 
     const data = await api(`/api/instance/${name}`);
-    renderCentre(data, restoreTab);
+    if (data.error) {
+        renderCentreError(name, data);
+        _syncListDot(name, "error");
+    } else {
+        renderCentre(data, restoreTab);
+        _syncListDot(name, data.status);
+    }
     if (scrollTo) _scrollToSection(scrollTo);
+}
+
+// Keep the left-nav dot in step with the instance just rendered. Lifecycle
+// actions re-render only the centre pane via selectInstance; without this the
+// list dot stays stale (still green after a stop, grey after a start) because
+// renderInstanceList only runs on a full loadStatus.
+function _syncListDot(name, status) {
+    const item = document.querySelector(`.instance-item[data-instance="${CSS.escape(name)}"]`);
+    if (item) item.querySelector(".dot").className =
+        `dot dot-${status === "running" ? "running" : "stopped"}`;
+}
+
+// Degraded centre for an instance whose toml won't parse (or is missing): the
+// detail endpoint returns a bare {error, code} shape with no name/health/repos,
+// which would otherwise feed renderNavbar a `https://undefined.localhost` url
+// and crash the card renders. We still have `name` from the caller.
+function renderCentreError(name, data) {
+    const dock = document.getElementById("instance-dock");
+    dock.classList.remove("hidden");
+    document.getElementById("dock-name").textContent = name;
+
+    const statusEl = document.getElementById("dock-status");
+    statusEl.textContent = data.code === "NOT_FOUND" ? "not found" : "config error";
+    statusEl.className = "status-badge error";
+
+    const urlEl = document.getElementById("dock-url");
+    urlEl.textContent = "";
+    urlEl.removeAttribute("href");
+
+    document.getElementById("dock-meta").textContent = "";
+    document.getElementById("dock-actions").innerHTML = "";
+    document.getElementById("actions-menu").innerHTML = "";
+
+    document.querySelector(".cmd-list").innerHTML = "";
+    document.querySelector(".script-list").innerHTML = "";
+    document.querySelector(".repo-list").innerHTML = "";
+    document.querySelector(".health-grid").innerHTML =
+        `<div class="health-item health-error">${_esc(data.error || "unknown error")}</div>`;
 }
 
 // ── Centre pane ────────────────────────────────────────────────────────────

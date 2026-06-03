@@ -366,6 +366,16 @@ body {
 .status-badge.running  { background: var(--c-running-bg); color: #166534; }
 .status-badge.stopped  { background: var(--c-stopped-bg); color: #475569; border: 1px solid #cbd5e1; }
 .status-badge.degraded { background: var(--c-err-bg);     color: #991b1b; }
+.status-badge.error    { background: var(--c-err-bg);     color: #991b1b; }
+
+.health-item.health-error {
+  grid-column: 1 / -1;
+  color: var(--c-err);
+  font-family: var(--mono, monospace);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 .btn {
   padding: 5px 14px;
