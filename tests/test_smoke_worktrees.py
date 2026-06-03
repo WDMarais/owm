@@ -2,9 +2,11 @@
 Smoke tests for worktree creation — real git subprocesses, no mocks.
 Covers: Worktrees and branch ownership section.
 """
+import os
 import subprocess
 import pytest
 
+from owm.errors import OwmError, BRANCH_NOT_FOUND
 from owm.worktrees import create_worktree
 
 
@@ -139,3 +141,119 @@ def test_create_shared_worktree_idempotent_across_instances(tmp_path):
     )
     assert result1.path == result2.path
     assert result2.action == "linked"
+
+
+# ---------------------------------------------------------------------------
+# Seeding a per-instance worktree from origin (branch on origin, not yet local)
+# ---------------------------------------------------------------------------
+
+def _make_remote_with_branches(tmp_path, name, branches):
+    """A bare 'remote' repo with one commit pushed to each named branch."""
+    remote = tmp_path / "remotes" / f"{name}.git"
+    remote.mkdir(parents=True)
+    _git(["init", "--bare"], cwd=remote)
+    src = tmp_path / "remotes" / f"{name}-seed"
+    src.mkdir()
+    _git(["init"], cwd=src)
+    _git(["config", "user.email", "test@test.com"], cwd=src)
+    _git(["config", "user.name", "Test"], cwd=src)
+    (src / "README.md").write_text(f"# {name}\n")
+    _git(["add", "."], cwd=src)
+    _git(["commit", "-m", "init"], cwd=src)
+    _git(["remote", "add", "origin", str(remote)], cwd=src)
+    for b in branches:
+        _git(["push", "origin", f"HEAD:{b}"], cwd=src)
+    return remote
+
+
+def _setup_workspace_origin_tracking(tmp_path, repos):
+    """Set up _repos/<name>.git the way owm does in production: bare init +
+    origin remote + fetch, so branches land in refs/remotes/origin/* and the
+    bare repo has no refs/heads/* until a worktree is created. (The other
+    fixture's `clone --bare` puts everything in refs/heads, which doesn't
+    exercise the origin-seed path.)"""
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    repos_dir = ws / "_repos"
+    repos_dir.mkdir()
+    for name, remote in repos.items():
+        dest = repos_dir / f"{name}.git"
+        dest.mkdir()
+        _git(["init", "--bare"], cwd=dest)
+        _git(["remote", "add", "origin", str(remote)], cwd=dest)
+        _git(["fetch", "origin"], cwd=dest)
+    return str(ws)
+
+
+@pytest.mark.smoke
+def test_create_per_instance_worktree_seeds_from_origin_when_not_local(tmp_path):
+    """Branch exists on origin but was never checked out locally, and no base is
+    given — create_worktree seeds a local branch from origin/<branch> anyway."""
+    remote = _make_remote_with_branches(tmp_path, "product-core", ["main", "colleague-pr"])
+    ws = _setup_workspace_origin_tracking(tmp_path, {"product-core": remote})
+    bare = os.path.join(ws, "_repos", "product-core.git")
+
+    # Precondition: the branch is origin-only in the bare repo.
+    assert subprocess.run(["git", "rev-parse", "--verify", "refs/heads/colleague-pr"],
+                          cwd=bare, capture_output=True).returncode != 0
+    assert subprocess.run(["git", "rev-parse", "--verify", "refs/remotes/origin/colleague-pr"],
+                          cwd=bare, capture_output=True).returncode == 0
+
+    result = create_worktree(
+        repo="product-core", branch="colleague-pr", shared=False,
+        workspace_root=ws, instance_name="review-1",
+    )
+    assert result.action == "created"
+    assert os.path.isfile(os.path.join(result.path, "README.md"))
+    # A local branch now exists (seeded from origin).
+    assert subprocess.run(["git", "rev-parse", "--verify", "refs/heads/colleague-pr"],
+                          cwd=bare, capture_output=True).returncode == 0
+
+
+@pytest.mark.smoke
+def test_create_per_instance_worktree_raises_when_branch_absent_everywhere(tmp_path):
+    """No local branch, no origin branch, no base — clear BRANCH_NOT_FOUND that
+    names the branch and hints at +create."""
+    remote = _make_remote_with_branches(tmp_path, "product-core", ["main"])
+    ws = _setup_workspace_origin_tracking(tmp_path, {"product-core": remote})
+    with pytest.raises(OwmError) as exc:
+        create_worktree(
+            repo="product-core", branch="ghost-branch", shared=False,
+            workspace_root=ws, instance_name="review-1",
+        )
+    assert exc.value.code == BRANCH_NOT_FOUND
+    assert "ghost-branch" in str(exc.value)
+    assert "+create" in str(exc.value)
+
+
+@pytest.mark.smoke
+def test_create_per_instance_worktree_exists_flag_missing_raises(tmp_path):
+    """+exists on a branch absent both locally and on origin raises BRANCH_NOT_FOUND."""
+    remote = _make_remote_with_branches(tmp_path, "product-core", ["main"])
+    ws = _setup_workspace_origin_tracking(tmp_path, {"product-core": remote})
+    with pytest.raises(OwmError) as exc:
+        create_worktree(
+            repo="product-core", branch="ghost-branch", shared=False,
+            workspace_root=ws, instance_name="review-1",
+            assert_exists=True,
+        )
+    assert exc.value.code == BRANCH_NOT_FOUND
+
+
+@pytest.mark.smoke
+def test_create_per_instance_worktree_create_flag_seeds_from_base(tmp_path):
+    """+create with a base, branch absent locally and on origin — a new branch is
+    created from the base and checked out."""
+    remote = _make_remote_with_branches(tmp_path, "product-core", ["main"])
+    ws = _setup_workspace_origin_tracking(tmp_path, {"product-core": remote})
+    bare = os.path.join(ws, "_repos", "product-core.git")
+
+    result = create_worktree(
+        repo="product-core", branch="brand-new", shared=False,
+        workspace_root=ws, instance_name="review-1",
+        base="origin/main", create=True,
+    )
+    assert result.action == "created"
+    assert os.path.isfile(os.path.join(result.path, "README.md"))
+    assert subprocess.run(["git", "rev-parse", "--verify", "refs/heads/brand-new"],
+                          cwd=bare, capture_output=True).returncode == 0

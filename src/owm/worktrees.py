@@ -56,6 +56,14 @@ def _branch_exists(bare_repo: str, branch: str) -> bool:
     return r.returncode == 0
 
 
+def _origin_branch_exists(bare_repo: str, branch: str) -> bool:
+    r = subprocess.run(
+        ["git", "rev-parse", "--verify", f"refs/remotes/origin/{branch}"],
+        cwd=bare_repo, capture_output=True,
+    )
+    return r.returncode == 0
+
+
 def _git_worktree_add(bare_repo: str, path: str, branch: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     subprocess.run(
@@ -102,34 +110,38 @@ def create_worktree(
     if os.path.exists(cfg.path):
         return WorktreeResult(action="linked", path=cfg.path)
 
-    branch_present = _branch_exists(bare_repo, branch)
-
-    if create:
-        if branch_present:
-            _git_worktree_add(bare_repo, cfg.path, branch)
-        else:
-            if not base:
-                raise OwmError(
-                    f"repo {repo!r}: +create requires a base branch",
-                    code=BRANCH_NOT_FOUND,
-                )
-            _git_worktree_add_new(bare_repo, cfg.path, branch, base)
-    elif branch_present:
+    # A branch that already exists is checked out, not created — no base needed.
+    # Local takes precedence; otherwise seed a local branch from origin (the
+    # "check out a colleague's pushed branch" case). The base is only required
+    # to create a branch that exists in neither place.
+    if _branch_exists(bare_repo, branch):
         _git_worktree_add(bare_repo, cfg.path, branch)
-    elif assert_exists:
+        return WorktreeResult(action="created", path=cfg.path)
+    if _origin_branch_exists(bare_repo, branch):
+        _git_worktree_add_new(bare_repo, cfg.path, branch, f"origin/{branch}")
+        return WorktreeResult(action="created", path=cfg.path)
+
+    # Branch exists nowhere yet.
+    if create:
+        if not base:
+            raise OwmError(
+                f"repo {repo!r}: +create requires a base branch "
+                f"(branch {branch!r} not found locally or on origin)",
+                code=BRANCH_NOT_FOUND,
+            )
+        _git_worktree_add_new(bare_repo, cfg.path, branch, base)
+        return WorktreeResult(action="created", path=cfg.path)
+    if assert_exists:
         raise OwmError(
-            f"repo {repo!r}: +exists asserted but branch {branch!r} not found in bare repo "
+            f"repo {repo!r}: +exists asserted but branch {branch!r} not found locally or on origin "
             f"— check for a typo or push the branch first",
             code=BRANCH_NOT_FOUND,
         )
-    else:
-        raise OwmError(
-            f"repo {repo!r}: branch {branch!r} not found — "
-            f"add +exists if the branch must pre-exist, or +create to create it from base",
-            code=BRANCH_NOT_FOUND,
-        )
-
-    return WorktreeResult(action="created", path=cfg.path)
+    raise OwmError(
+        f"repo {repo!r}: branch {branch!r} not found locally or on origin — "
+        f"add +create to create it from base",
+        code=BRANCH_NOT_FOUND,
+    )
 
 
 def remove_worktree(bare_repo: str, worktree_path: str) -> None:

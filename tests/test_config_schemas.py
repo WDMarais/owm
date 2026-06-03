@@ -198,6 +198,27 @@ def test_repo_spec_exists_and_readonly():
     assert spec.readonly is True
 
 
+@pytest.mark.config_schemas
+def test_repo_spec_bare_branch_no_colon():
+    # No colon → no base, matching owm's tolerant form (e.g. odoo = "12.0")
+    spec = parse_repo_spec("12.0")
+    assert spec.branch == "12.0"
+    assert spec.base is None
+    assert spec.shared is False
+    assert spec.readonly is False
+    assert spec.assert_exists is False
+    assert spec.create is False
+
+
+@pytest.mark.config_schemas
+def test_repo_spec_bare_branch_with_flags_no_colon():
+    spec = parse_repo_spec("feature-x+readonly")
+    assert spec.branch == "feature-x"
+    assert spec.base is None
+    assert spec.shared is False
+    assert spec.readonly is True
+
+
 # ---------------------------------------------------------------------------
 # Repo spec inline-table parsing: {branch = "...", base = "...", flags...}
 # ---------------------------------------------------------------------------
@@ -527,9 +548,9 @@ test = "run.py"
 
 
 @pytest.mark.config_schemas
-def test_colonless_repo_spec_raises_named_config_error():
-    # owm allows a bare branch string with no base; re-owm's DSL needs a colon.
-    # The error must name the repo, not leak "substring not found".
+def test_colonless_repo_spec_parses_as_bare_branch():
+    # owm allows a bare branch string with no base; re-owm now accepts it too,
+    # treating the whole string as the branch with no base (no colon required).
     toml = """
 [repos]
 product-core = "some_branch_no_colon"
@@ -539,10 +560,11 @@ pg_port = 5432
 [server]
 http_port = 8100
 """
-    with pytest.raises(ConfigError) as exc:
-        parse_instance_config(toml)
-    assert exc.value.code == CONFIG_INVALID
-    assert "product-core" in str(exc.value)
+    cfg = parse_instance_config(toml)
+    spec = cfg.repos["product-core"]
+    assert spec.branch == "some_branch_no_colon"
+    assert spec.base is None
+    assert spec.shared is False
 
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,8 @@ CLI integration tests: invoke owm commands through Click's CliRunner.
 Exercises the full command → library → disk path with no mocks.
 All tests use tmp_workspace for isolation; no Postgres or git required.
 """
+import subprocess
+
 import pytest
 from unittest.mock import patch
 from click.testing import CliRunner
@@ -153,7 +155,15 @@ def test_create_writes_instance_conf_to_disk(runner, standard_instance_toml, tmp
 
 
 @pytest.mark.cli_integration
-def test_create_exists_flag_branch_not_found_exits_nonzero(runner, tmp_workspace):
+def test_create_exists_flag_branch_not_found_exits_nonzero(runner, tmp_workspace, make_upstream_repo):
+    # Real bare repo for product-core seeded with only 'main' — the requested
+    # feat-789-dev branch exists neither locally nor on origin, so +exists fails.
+    upstream = make_upstream_repo("product-core")
+    subprocess.run(
+        ["git", "clone", "--bare", str(upstream),
+         str(tmp_workspace / "_repos" / "product-core.git")],
+        check=True, capture_output=True,
+    )
     inst_dir = tmp_workspace / "instances" / "feat-789"
     inst_dir.mkdir(parents=True, exist_ok=True)
     (inst_dir / "instance.toml").write_text(
@@ -164,11 +174,10 @@ def test_create_exists_flag_branch_not_found_exits_nonzero(runner, tmp_workspace
         '\n'
         '[server]\nhttp_port = 8100\ngevent_port = 8101\nworkers = 2\n'
     )
-    with patch("owm.worktrees._branch_exists", return_value=False):
-        result = runner.invoke(cli, [
-            "--workspace", str(tmp_workspace),
-            "create", "feat-789",
-        ])
+    result = runner.invoke(cli, [
+        "--workspace", str(tmp_workspace),
+        "create", "feat-789",
+    ])
     assert result.exit_code != 0
     assert "BRANCH_NOT_FOUND" in result.output
 

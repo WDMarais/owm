@@ -146,6 +146,7 @@ def parse_repo_spec(spec: str | dict) -> RepoSpec:
     """Parse a repo spec from either string DSL or TOML inline-table form.
 
     String DSL:   "feat-789-dev:main+readonly+exists"
+    Bare branch:  "12.0"  (no colon → no base, matching owm's tolerant form)
     Inline table: {branch = "feat-789-dev", base = "main", readonly = true, exists = true}
     """
     if isinstance(spec, dict):
@@ -157,16 +158,22 @@ def parse_repo_spec(spec: str | dict) -> RepoSpec:
             assert_exists=spec.get("exists", False),
             create=spec.get("create", False),
         )
-    colon = spec.index(":")
-    branch = spec[:colon]
-    parts = spec[colon + 1:].split("+")
-    base_or_flag = parts[0]
-    flags = set(parts[1:])
-
-    if base_or_flag == "shared":
-        shared, base = True, None
+    # "branch[:base|shared][+flag...]" — the colon (base/shared) is optional;
+    # a bare "branch" means no base, so callers don't have to invent one.
+    if ":" in spec:
+        branch, _, rest = spec.partition(":")
+        parts = rest.split("+")
+        base_or_flag = parts[0]
+        flags = set(parts[1:])
+        if base_or_flag == "shared":
+            shared, base = True, None
+        else:
+            shared, base = False, base_or_flag
     else:
-        shared, base = False, base_or_flag
+        parts = spec.split("+")
+        branch = parts[0]
+        flags = set(parts[1:])
+        shared, base = False, None
 
     return RepoSpec(
         branch=branch,
