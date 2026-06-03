@@ -4,8 +4,8 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import parse_instance_config, parse_workspace_config
-from owm.errors import OwmError, DIVERGED, NOT_OWNED, NOT_FOUND, SHARED_REPO, DIRTY_WORKTREE, FETCH_TIMEOUT
+from owm.config import instance_config_path, parse_instance_config, parse_workspace_config
+from owm.errors import OwmError, DIVERGED, NOT_OWNED, SHARED_REPO, DIRTY_WORKTREE, FETCH_TIMEOUT
 from owm.oplog import workspace_log
 from owm.worktrees import resolve_worktree_path
 
@@ -304,18 +304,6 @@ def sync_instance(
         else:
             result[name] = {"status": "skipped", "reason": "nothing to do"}
     return result
-
-
-def instance_config_path(instance: str, workspace_root: str) -> str:
-    """Path to an instance's instance.toml, raising NOT_FOUND if it is absent.
-
-    Keeps the per-instance orchestrators from leaking a bare FileNotFoundError
-    (which adapters can't shape) when asked about an instance that doesn't exist.
-    """
-    path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    if not os.path.exists(path):
-        raise OwmError(f"instance {instance!r} not found", code=NOT_FOUND)
-    return path
 
 
 def sync_worktrees(instance, workspace_root, *, repo=None, rebase=False) -> dict:

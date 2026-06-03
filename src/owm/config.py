@@ -1,7 +1,21 @@
+import os
 import tomllib
 from dataclasses import dataclass, field
 
-from owm.errors import ConfigError
+from owm.errors import ConfigError, NOT_FOUND, OwmError
+
+
+def instance_config_path(instance: str, workspace_root: str) -> str:
+    """Path to an instance's instance.toml, raising NOT_FOUND if it is absent.
+
+    Centralizes the missing-instance guard so the lifecycle, operations, and
+    sync orchestrators raise a shapeable OwmError(NOT_FOUND) instead of leaking
+    a bare FileNotFoundError that adapters (CLI, MCP, dashboard) cannot shape.
+    """
+    path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    if not os.path.exists(path):
+        raise OwmError(f"instance {instance!r} not found", code=NOT_FOUND)
+    return path
 
 
 @dataclass
