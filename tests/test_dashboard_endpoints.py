@@ -115,3 +115,19 @@ def test_pull_base_owm_error_is_shaped(client):
     body = resp.json()
     assert body["code"] == "DIRTY_WORKTREE"
     assert "uncommitted changes" in body["error"]
+
+
+# ── missing instance ────────────────────────────────────────────────────────
+
+def test_action_on_missing_instance_is_not_found(client):
+    """A missing instance yields a shaped NOT_FOUND, not a 500.
+
+    Drives the real sync_worktrees (unmocked) against the fixture workspace,
+    where 'ghost-instance' does not exist — the lib raises NOT_FOUND rather than
+    leaking FileNotFoundError, and the endpoint shapes it.
+    """
+    resp = client.post("/api/instance/ghost-instance/sync/foo")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["code"] == "NOT_FOUND"

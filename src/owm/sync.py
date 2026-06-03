@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from owm.config import parse_instance_config, parse_workspace_config
-from owm.errors import OwmError, DIVERGED, NOT_OWNED, SHARED_REPO, DIRTY_WORKTREE, FETCH_TIMEOUT
+from owm.errors import OwmError, DIVERGED, NOT_OWNED, NOT_FOUND, SHARED_REPO, DIRTY_WORKTREE, FETCH_TIMEOUT
 from owm.oplog import workspace_log
 from owm.worktrees import resolve_worktree_path
 
@@ -306,6 +306,18 @@ def sync_instance(
     return result
 
 
+def instance_config_path(instance: str, workspace_root: str) -> str:
+    """Path to an instance's instance.toml, raising NOT_FOUND if it is absent.
+
+    Keeps the per-instance orchestrators from leaking a bare FileNotFoundError
+    (which adapters can't shape) when asked about an instance that doesn't exist.
+    """
+    path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    if not os.path.exists(path):
+        raise OwmError(f"instance {instance!r} not found", code=NOT_FOUND)
+    return path
+
+
 def sync_worktrees(instance, workspace_root, *, repo=None, rebase=False) -> dict:
     """Gather repo states, decide per-repo sync actions, and apply them.
 
@@ -314,7 +326,7 @@ def sync_worktrees(instance, workspace_root, *, repo=None, rebase=False) -> dict
     policy, then fast-forward or rebase each worktree the policy selected.
     Returns {"repos": <decisions>}.
     """
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    toml_path = instance_config_path(instance, workspace_root)
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
 
@@ -391,7 +403,7 @@ def push_worktree(instance, workspace_root, *, repo) -> dict:
     worktree. Returns the push result with the branch name; raises OwmError
     for the caller to shape.
     """
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    toml_path = instance_config_path(instance, workspace_root)
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
 
@@ -424,7 +436,7 @@ def pull_base_instance(
     Pre-flight checks all targets are clean before touching anything.
     On merge conflict: aborts cleanly and reports conflicting files.
     """
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    toml_path = instance_config_path(instance, workspace_root)
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
 
