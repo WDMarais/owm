@@ -26,22 +26,15 @@ def read_repo_state(worktree_path: str) -> dict:
         return {"status": "clean"}
     if r.stdout.strip():
         return {"status": "dirty"}
-    lr = git_run(["rev-list", "--count", "--left-right", "HEAD...@{u}"],
-                 cwd=worktree_path, check=False)
-    if lr.returncode != 0:
-        # No upstream tracking: owm worktrees set the branch but not its @{u},
-        # so @{u} fails to resolve. Fall back to origin/<branch> — the same ref
-        # the dashboard's display path uses. Without this a behind repo reads as
-        # "clean" and sync silently no-ops.
-        branch = git_run(["rev-parse", "--abbrev-ref", "HEAD"],
-                         cwd=worktree_path, check=False).stdout.strip()
-        lr = git_run(["rev-list", "--count", "--left-right", f"HEAD...origin/{branch}"],
-                     cwd=worktree_path, check=False) if branch else lr
-        if lr.returncode != 0:
-            return {"status": "clean"}
-    parts = lr.stdout.strip().split()
-    ahead  = int(parts[0]) if parts else 0
-    behind = int(parts[1]) if len(parts) > 1 else 0
+    # Count against origin/<branch> via the shared primitive. owm worktrees set
+    # the branch but not its @{u}, and this is the same ref the status display
+    # uses, so the sync action and the display read identical numbers.
+    branch = git_run(["rev-parse", "--abbrev-ref", "HEAD"],
+                     cwd=worktree_path, check=False).stdout.strip()
+    if not branch:
+        return {"status": "clean"}
+    c = _ahead_behind(worktree_path, "HEAD", f"origin/{branch}")
+    ahead, behind = c["ahead_by"], c["behind_by"]
     if ahead and behind:
         return {"status": "diverged", "ahead_by": ahead, "behind_by": behind}
     if behind:
