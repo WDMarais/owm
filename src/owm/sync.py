@@ -382,6 +382,37 @@ def push_instance(
     return {"status": "pushed", "repo": repo}
 
 
+def push_worktree(instance, workspace_root, *, repo) -> dict:
+    """Push one repo's branch to origin (ff-only).
+
+    The orchestrator shared by `owm push` (via MCP) and the dashboard push
+    button: read the instance config and repo state, run the push_instance
+    policy (which raises OwmError on shared/unowned/diverged), then push the
+    worktree. Returns the push result with the branch name; raises OwmError
+    for the caller to shape.
+    """
+    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+
+    spec = conf.repos[repo]
+    wt = resolve_worktree_path(repo, spec.branch, spec.shared, workspace_root, instance)
+    state = read_repo_state(wt.path)
+    branch_status = state["status"] if state["status"] in ("diverged", "ahead") else None
+
+    result = push_instance(
+        instance,
+        repo=repo,
+        shared=spec.shared,
+        owned=not spec.readonly,
+        branch_status=branch_status,
+    )
+
+    git_push(wt.path)
+    result["branch"] = spec.branch
+    return result
+
+
 def pull_base_instance(
     instance: str,
     workspace_root: str,

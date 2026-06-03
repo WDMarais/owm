@@ -22,9 +22,9 @@ from owm.config import parse_workspace_config, parse_instance_config, parse_repo
 from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
 from owm.database import reset_db
 from owm.sync import (
-    fetch_active_branches, sync_worktrees, push_instance, reset_instance,
+    fetch_active_branches, sync_worktrees, push_worktree, reset_instance,
     read_repo_state, has_local_commits, branch_exists_on_origin,
-    git_fast_forward, git_rebase, git_push, git_reset_hard,
+    git_reset_hard,
 )
 from owm.api import default_workspace, health_check, instance_status, workspace_status
 from owm.worktrees import resolve_worktree_path
@@ -282,32 +282,13 @@ def owm_sync(instance, repo=None, rebase=False, workspace_root=None, **kwargs):
 
 def owm_push(instance, repo, workspace_root=None, **kwargs):
     workspace_root = workspace_root or default_workspace()
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    with open(toml_path) as f:
-        conf = parse_instance_config(f.read())
-
-    spec = conf.repos[repo]
-    wt = resolve_worktree_path(repo, spec.branch, spec.shared, workspace_root, instance)
-    state = read_repo_state(wt.path)
-    branch_status = state["status"] if state["status"] in ("diverged", "ahead") else None
-
     try:
-        result = push_instance(
-            instance,
-            repo=repo,
-            shared=spec.shared,
-            owned=not spec.readonly,
-            branch_status=branch_status,
-        )
+        return push_worktree(instance, workspace_root, repo=repo)
     except OwmError as e:
         err = _e(e)
         if e.code == "SHARED_REPO":
             err["hint"] = f"git -C _shared/{repo}/... push origin HEAD"
         return err
-
-    git_push(wt.path)
-    result["branch"] = spec.branch
-    return result
 
 
 def owm_reset(instance, repo, force=False, workspace_root=None, **kwargs):

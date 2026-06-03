@@ -171,7 +171,7 @@ def test_not_owned_on_push_readonly(tmp_workspace):
         '[database]\nname = "test"\npg_port = 5432\n\n'
         '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
     )
-    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
         result = owm_push(instance="review-101", repo="product_core",
                           workspace_root=str(tmp_workspace))
     assert result["code"] == NOT_OWNED
@@ -179,7 +179,7 @@ def test_not_owned_on_push_readonly(tmp_workspace):
 
 @pytest.mark.error_taxonomy
 def test_shared_repo_on_push_shared(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
         result = owm_push(instance="feat-789", repo="odoo_like",
                           workspace_root=str(tmp_workspace))
     assert result["code"] == SHARED_REPO
@@ -188,7 +188,7 @@ def test_shared_repo_on_push_shared(standard_instance_toml, tmp_workspace):
 @pytest.mark.error_taxonomy
 def test_shared_repo_error_includes_hint(standard_instance_toml, tmp_workspace):
     """SHARED_REPO errors must include a raw git command hint."""
-    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
         result = owm_push(instance="feat-789", repo="odoo_like",
                           workspace_root=str(tmp_workspace))
     assert result["code"] == SHARED_REPO
@@ -198,7 +198,7 @@ def test_shared_repo_error_includes_hint(standard_instance_toml, tmp_workspace):
 
 @pytest.mark.error_taxonomy
 def test_diverged_on_push_diverged_branch(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.read_repo_state", return_value={"status": "diverged"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "diverged"}):
         result = owm_push(instance="feat-789", repo="product_core",
                           workspace_root=str(tmp_workspace))
     assert result["code"] == DIVERGED

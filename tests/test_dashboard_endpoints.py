@@ -76,7 +76,6 @@ def client():
 
 # (url action segment, expected owm subcommand)
 ENDPOINTS = [
-    ("push",      "push"),
     ("pull-base", "pull-base"),
 ]
 _IDS = [subcommand for _, subcommand in ENDPOINTS]
@@ -84,11 +83,6 @@ _IDS = [subcommand for _, subcommand in ENDPOINTS]
 # Realistic git failure output per action — the stderr a failing `owm` would
 # surface, and what app.js renders the first line of into the error toast.
 GIT_ERRORS = {
-    "push": (
-        "To bitbucket.org:acme/customer-config.git\n"
-        " ! [rejected]        feat-789-dev -> feat-789-dev (non-fast-forward)\n"
-        "error: failed to push some refs to 'origin'"
-    ),
     "pull-base": (
         "fatal: Not possible to fast-forward, aborting.\n"
         "hint: diverged from origin/dev; resolve manually."
@@ -162,13 +156,37 @@ def test_sync_owm_error_is_shaped(client):
     assert "uncommitted changes" in body["error"]
 
 
+def test_push_calls_lib_in_process(client):
+    """Push runs against the lib directly, not the owm subprocess."""
+    with patch("dashboard.server.push_worktree",
+               return_value={"status": "pushed", "repo": "customer-config", "branch": "feat-789-dev"}) as mock_push:
+        resp = client.post("/api/instance/feat-789/push/customer-config")
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "pushed"
+    mock_push.assert_called_once_with("feat-789", str(server.WORKSPACE), repo="customer-config")
+
+
+def test_push_owm_error_is_shaped(client):
+    """An OwmError from the lib (e.g. a shared repo) becomes {error, code}."""
+    from owm.errors import OwmError, SHARED_REPO
+    with patch("dashboard.server.push_worktree",
+               side_effect=OwmError("odoo_like is a shared repo", code=SHARED_REPO)):
+        resp = client.post("/api/instance/feat-789/push/odoo_like")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["code"] == "SHARED_REPO"
+    assert "shared repo" in body["error"]
+
+
 def test_endpoint_output_is_stdout_then_stderr(client, fake_owm):
     """The combined-stream contract: stdout precedes stderr in `output`."""
-    fake_owm.result = _FakeCompleted(1, stdout="pushing...\n", stderr="rejected\n")
+    fake_owm.result = _FakeCompleted(1, stdout="merging...\n", stderr="conflict\n")
 
-    resp = _post(client, "push")
+    resp = _post(client, "pull-base")
 
-    assert resp.json()["output"] == "pushing...\nrejected\n"
+    assert resp.json()["output"] == "merging...\nconflict\n"
 
 
 def test_owm_passes_workspace_as_cwd_and_env(fake_owm):

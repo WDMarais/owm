@@ -565,8 +565,8 @@ def test_owm_sync_dirty_skipped(standard_instance_toml, tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_push_owned_branch(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead", "ahead_by": 1}), \
-         patch("owm.mcp.git_push"):
+    with patch("owm.sync.read_repo_state", return_value={"status": "ahead", "ahead_by": 1}), \
+         patch("owm.sync.git_push"):
         result = owm_push(instance="feat-789", repo="product_core",
                           workspace_root=str(tmp_workspace))
     assert result["status"] == "pushed"
@@ -576,7 +576,7 @@ def test_owm_push_owned_branch(standard_instance_toml, tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_push_diverged_error(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.read_repo_state", return_value={"status": "diverged"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "diverged"}):
         result = owm_push(instance="feat-789", repo="product_core",
                           workspace_root=str(tmp_workspace))
     assert result["code"] == "DIVERGED"
@@ -585,7 +585,7 @@ def test_owm_push_diverged_error(standard_instance_toml, tmp_workspace):
 @pytest.mark.mcp_surface
 def test_owm_push_shared_error_with_hint(standard_instance_toml, tmp_workspace):
     # odoo_like is declared shared in standard_instance_toml
-    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
         result = owm_push(instance="feat-789", repo="odoo_like",
                           workspace_root=str(tmp_workspace))
     assert result["code"] == "SHARED_REPO"
@@ -601,7 +601,7 @@ def test_owm_push_not_owned_error(tmp_workspace):
         '[database]\nname = "test"\npg_port = 5432\n\n'
         '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
     )
-    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
         result = owm_push(instance="review-101", repo="product_core",
                           workspace_root=str(tmp_workspace))
     assert result["code"] == "NOT_OWNED"
@@ -929,7 +929,7 @@ def test_owm_agent_context_no_instance_notes_not_an_error():
 @pytest.mark.mcp_surface
 @pytest.mark.safety_invariants
 def test_push_always_refuses_shared_repo(standard_instance_toml, tmp_workspace):
-    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
         result = owm_push(instance="feat-789", repo="odoo_like",
                           workspace_root=str(tmp_workspace))
     assert result["code"] == "SHARED_REPO"
@@ -945,7 +945,7 @@ def test_push_always_refuses_unowned_branch(tmp_workspace):
         '[database]\nname = "test"\npg_port = 5432\n\n'
         '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
     )
-    with patch("owm.mcp.read_repo_state", return_value={"status": "ahead"}):
+    with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
         result = owm_push(instance="review-101", repo="product_core",
                           workspace_root=str(tmp_workspace))
     assert result["code"] == "NOT_OWNED"
