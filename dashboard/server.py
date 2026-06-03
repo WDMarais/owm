@@ -184,17 +184,10 @@ def api_banner():
 
 @app.post("/api/fetch")
 def api_fetch():
-    env = os.environ.copy()
-    env["OWM_WORKSPACE"] = str(WORKSPACE)
-    result = subprocess.run(
-        ["owm", "fetch"],
-        cwd=str(WORKSPACE),
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    return {"ok": result.returncode == 0, "output": result.stdout}
+    try:
+        return fetch_active_branches(str(WORKSPACE))
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
 
 
 @app.get("/api/status")

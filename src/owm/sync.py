@@ -1,10 +1,12 @@
+import json
 import os
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import parse_instance_config
+from owm.config import parse_instance_config, parse_workspace_config
 from owm.errors import OwmError, DIVERGED, NOT_OWNED, SHARED_REPO, DIRTY_WORKTREE, FETCH_TIMEOUT
+from owm.oplog import workspace_log
 from owm.worktrees import resolve_worktree_path
 
 
@@ -179,6 +181,97 @@ def fetch_workspace(
         blocked_worktrees=blocked,
         db_snapshots_taken=db_snapshots,
     )
+
+
+def _collect_active_branches(workspace_root: str) -> dict:
+    """Return {repo_name: {branch, ...}} by scanning all instance tomls."""
+    active: dict = {}
+    instances_dir = os.path.join(workspace_root, "instances")
+    if not os.path.isdir(instances_dir):
+        return active
+    for entry in os.scandir(instances_dir):
+        if not entry.is_dir():
+            continue
+        toml_path = os.path.join(entry.path, "instance.toml")
+        if not os.path.exists(toml_path):
+            continue
+        try:
+            with open(toml_path) as f:
+                conf = parse_instance_config(f.read())
+            for repo_name, spec in conf.repos.items():
+                active.setdefault(repo_name, set()).add(spec.branch)
+        except Exception:
+            pass
+    return active
+
+
+def fetch_active_branches(workspace_root: str) -> dict:
+    """Fetch each repo's bare clone, limited to branches active in instances.
+
+    The single orchestrator shared by the CLI, MCP, and dashboard: reads the
+    workspace config, fetches only the active branches per repo (skipping repos
+    with no bare clone), records fetch timestamps + audit log, and returns
+    per-repo outcomes plus the workspace-level fetch policy result. Adapters
+    render `repos`/`configured`; they no longer own the fetch loop.
+    """
+    toml_path = os.path.join(workspace_root, "workspace.toml")
+    with open(toml_path) as f:
+        ws_conf = parse_workspace_config(f.read())
+    repos = list(ws_conf.repos.keys())
+    active = _collect_active_branches(workspace_root)
+
+    records = []
+    repos_with_updates = []
+    unreachable = []
+    for name in repos:
+        bare_path = os.path.join(workspace_root, "_repos", f"{name}.git")
+        if not os.path.isdir(bare_path):
+            continue
+        branches = sorted(active.get(name, []))
+        try:
+            updated = git_fetch_bare(bare_path, branches=branches or None)
+        except OwmError as e:
+            unreachable.append(name)
+            records.append({"name": name, "branches": branches,
+                            "status": "unreachable", "error": e.args[0], "code": e.code})
+            continue
+        records.append({"name": name, "branches": branches,
+                        "status": "updated" if updated else "up_to_date"})
+        if updated:
+            repos_with_updates.append(name)
+
+    result = fetch_workspace(repos=repos, repos_with_updates=repos_with_updates,
+                             unreachable_repos=unreachable)
+
+    fetched = [r for r in repos if r not in unreachable]
+    if fetched:
+        ts_path = os.path.join(workspace_root, "_fetch_timestamps.json")
+        existing = {}
+        if os.path.exists(ts_path):
+            try:
+                with open(ts_path) as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
+        now = datetime.now(timezone.utc).isoformat()
+        existing.update({r: now for r in fetched})
+        with open(ts_path, "w") as f:
+            json.dump(existing, f, indent=2)
+
+    for name in repos:
+        if name in unreachable:
+            workspace_log(workspace_root, "fetch", repo=name, status="unreachable")
+        elif name in repos_with_updates:
+            workspace_log(workspace_root, "fetch", repo=name, status="updated")
+        else:
+            workspace_log(workspace_root, "fetch", repo=name, status="up_to_date")
+
+    return {
+        "configured": repos,
+        "repos": records,
+        "events": result.events_emitted,
+        "warnings": result.warnings,
+    }
 
 
 def sync_instance(

@@ -560,7 +560,7 @@ def test_fetch_no_repos_exits_zero(runner, tmp_workspace):
 def test_fetch_repo_with_update_printed(runner, tmp_workspace):
     (tmp_workspace / "workspace.toml").write_text('[repos]\nodoo = "git@example.com:odoo.git"\n[clusters]\n')
     (tmp_workspace / "_repos" / "odoo.git").mkdir(parents=True, exist_ok=True)
-    with patch("owm.cli.git_fetch_bare", return_value=True):
+    with patch("owm.sync.git_fetch_bare", return_value=True):
         result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "fetch"])
     assert result.exit_code == 0
     assert "odoo" in result.output
@@ -572,7 +572,7 @@ def test_fetch_repo_timeout_prints_warning(runner, tmp_workspace):
     (tmp_workspace / "workspace.toml").write_text('[repos]\nodoo = "git@example.com:odoo.git"\n[clusters]\n')
     (tmp_workspace / "_repos" / "odoo.git").mkdir(parents=True, exist_ok=True)
     from owm.errors import OwmError, FETCH_TIMEOUT
-    with patch("owm.cli.git_fetch_bare", side_effect=OwmError("fetch timed out after 30s", code=FETCH_TIMEOUT)):
+    with patch("owm.sync.git_fetch_bare", side_effect=OwmError("fetch timed out after 30s", code=FETCH_TIMEOUT)):
         result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "fetch"])
     assert result.exit_code == 0
     assert "warning" in result.output
@@ -583,7 +583,7 @@ def test_fetch_repo_timeout_prints_warning(runner, tmp_workspace):
 def test_fetch_repo_no_update_says_up_to_date(runner, tmp_workspace):
     (tmp_workspace / "workspace.toml").write_text('[repos]\nodoo = "git@example.com:odoo.git"\n[clusters]\n')
     (tmp_workspace / "_repos" / "odoo.git").mkdir(parents=True, exist_ok=True)
-    with patch("owm.cli.git_fetch_bare", return_value=False):
+    with patch("owm.sync.git_fetch_bare", return_value=False):
         result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "fetch"])
     assert result.exit_code == 0
     assert "up to date" in result.output

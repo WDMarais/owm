@@ -32,8 +32,8 @@ from owm.operations import (
 from owm.database import reset_db
 from owm.oplog import workspace_log
 from owm.sync import (
-    fetch_workspace, sync_instance, push_instance, reset_instance,
-    git_fetch_bare, read_repo_state, git_fast_forward, git_rebase,
+    fetch_active_branches, sync_instance, push_instance, reset_instance,
+    read_repo_state, git_fast_forward, git_rebase,
     git_push, git_reset_hard, pull_base_instance,
 )
 from owm.workspace import init_workspace
@@ -970,28 +970,6 @@ def _gather_repo_states(instance: str, workspace_root: str) -> dict:
 # owm fetch
 # ---------------------------------------------------------------------------
 
-def _collect_active_branches(workspace_root: str) -> dict[str, set[str]]:
-    """Return {repo_name: {branch, ...}} by scanning all instance tomls."""
-    active: dict[str, set[str]] = {}
-    instances_dir = os.path.join(workspace_root, "instances")
-    if not os.path.isdir(instances_dir):
-        return active
-    for entry in os.scandir(instances_dir):
-        if not entry.is_dir():
-            continue
-        toml_path = os.path.join(entry.path, "instance.toml")
-        if not os.path.exists(toml_path):
-            continue
-        try:
-            with open(toml_path) as f:
-                conf = parse_instance_config(f.read())
-            for repo_name, spec in conf.repos.items():
-                active.setdefault(repo_name, set()).add(spec.branch)
-        except Exception:
-            pass
-    return active
-
-
 @cli.command("branches")
 @click.argument("repo", required=False)
 @click.pass_context
@@ -1068,56 +1046,18 @@ def cmd_regen_conf(ctx, name):
 def cmd_fetch(ctx):
     """Fetch only branches active in instances (fast); skips unused remote branches."""
     workspace_root = _resolve_workspace(ctx)
-    toml_path = os.path.join(workspace_root, "workspace.toml")
-    with open(toml_path) as f:
-        ws_conf = parse_workspace_config(f.read())
-    repos = list(ws_conf.repos.keys())
-    active_branches = _collect_active_branches(workspace_root)
-    repos_with_updates = []
-    unreachable = []
-    for name in repos:
-        bare_path = os.path.join(workspace_root, "_repos", f"{name}.git")
-        if not os.path.isdir(bare_path):
-            continue
-        branches = sorted(active_branches.get(name, []))
-        branch_hint = f" ({', '.join(branches)})" if branches else ""
-        click.echo(f"  fetching {name}{branch_hint}...")
-        try:
-            updated = git_fetch_bare(bare_path, branches=branches or None)
-        except OwmError as e:
-            click.echo(f"  {name}: warning: {e.args[0]} [{e.code}]")
-            unreachable.append(name)
-            continue
-        click.echo(f"  {name}: updated" if updated else f"  {name}: up to date")
-        if updated:
-            repos_with_updates.append(name)
-    result = fetch_workspace(
-        repos=repos, repos_with_updates=repos_with_updates,
-        unreachable_repos=unreachable,
-    )
-    if not repos:
+    run = fetch_active_branches(workspace_root)
+    if not run["configured"]:
         click.echo("no repos configured")
-
-    fetched = [r for r in repos if r not in unreachable]
-    if fetched:
-        now = datetime.now(timezone.utc).isoformat()
-        ts_path = Path(workspace_root) / "_fetch_timestamps.json"
-        existing = {}
-        if ts_path.exists():
-            try:
-                existing = json.loads(ts_path.read_text())
-            except Exception:
-                pass
-        existing.update({r: now for r in fetched})
-        ts_path.write_text(json.dumps(existing, indent=2))
-
-    for repo in repos:
-        if repo in unreachable:
-            workspace_log(workspace_root, "fetch", repo=repo, status="unreachable")
-        elif repo in repos_with_updates:
-            workspace_log(workspace_root, "fetch", repo=repo, status="updated")
+    for rec in run["repos"]:
+        hint = f" ({', '.join(rec['branches'])})" if rec["branches"] else ""
+        click.echo(f"  fetching {rec['name']}{hint}...")
+        if rec["status"] == "unreachable":
+            click.echo(f"  {rec['name']}: warning: {rec['error']} [{rec['code']}]")
+        elif rec["status"] == "updated":
+            click.echo(f"  {rec['name']}: updated")
         else:
-            workspace_log(workspace_root, "fetch", repo=repo, status="up_to_date")
+            click.echo(f"  {rec['name']}: up to date")
 
 
 # ---------------------------------------------------------------------------

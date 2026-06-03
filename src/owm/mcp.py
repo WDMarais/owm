@@ -22,9 +22,9 @@ from owm.config import parse_workspace_config, parse_instance_config, parse_repo
 from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
 from owm.database import reset_db
 from owm.sync import (
-    fetch_workspace, sync_instance, push_instance, reset_instance,
+    fetch_active_branches, sync_instance, push_instance, reset_instance,
     read_repo_state, has_local_commits, branch_exists_on_origin,
-    git_fetch_bare, git_fast_forward, git_rebase, git_push, git_reset_hard,
+    git_fast_forward, git_rebase, git_push, git_reset_hard,
 )
 from owm.api import default_workspace, health_check, instance_status, workspace_status
 from owm.worktrees import resolve_worktree_path
@@ -260,29 +260,18 @@ def owm_rename(instance, new_name, running=False, workspace_root=None, **kwargs)
 
 def owm_fetch(workspace_root=None, **kwargs):
     workspace_root = workspace_root or default_workspace()
-    toml_path = os.path.join(workspace_root, "workspace.toml")
-    with open(toml_path) as f:
-        ws = parse_workspace_config(f.read())
-
-    updated, unreachable = [], []
-    for name in ws.repos:
-        bare = os.path.join(workspace_root, "_repos", f"{name}.git")
-        try:
-            if git_fetch_bare(bare):
-                updated.append(name)
-        except Exception:
-            unreachable.append(name)
-
-    result = fetch_workspace(
-        repos=list(ws.repos),
-        repos_with_updates=updated,
-        unreachable_repos=unreachable,
-    )
+    run = fetch_active_branches(workspace_root)
+    repos = {}
+    for rec in run["repos"]:
+        if rec["status"] == "updated":
+            repos[rec["name"]] = "updated"
+        elif rec["status"] == "up_to_date":
+            repos[rec["name"]] = "skipped"
     return {
-        "repos": {r: "updated" for r in result.fetched} | {r: "skipped" for r in result.skipped},
+        "repos": repos,
         "shared_worktrees": {},
-        "events": result.events_emitted,
-        "warnings": result.warnings,
+        "events": run["events"],
+        "warnings": run["warnings"],
     }
 
 
