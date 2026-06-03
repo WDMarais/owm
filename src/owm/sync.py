@@ -370,7 +370,7 @@ def push_instance(
 
     if shared:
         raise OwmError(
-            f"[SHARED_REPO] {repo or branch!r} is a shared branch; "
+            f"{repo or branch!r} is a shared branch; "
             f"run: git -C _shared/{repo}/... push origin {branch or 'HEAD'}",
             code=SHARED_REPO,
         )
