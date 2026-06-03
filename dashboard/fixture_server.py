@@ -290,5 +290,5 @@ app.mount("/static", StaticFiles(directory=str(DASHBOARD)), name="static")
 
 
 def main():
-    port = int(os.environ.get("PORT", 8200))
+    port = int(os.environ.get("OWM_DASHBOARD_DEMO_PORT", 8200))
     uvicorn.run("dashboard.fixture_server:app", host="127.0.0.1", port=port)
