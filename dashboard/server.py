@@ -21,6 +21,34 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from owm.config import parse_workspace_config, parse_instance_config
+from owm.errors import ConfigError
+from owm.instance import health_check
+
+# Map the lib's health states to the small set the UI renders (dot colour + badge).
+_UI_STATUS = {
+    "healthy":   "running",
+    "starting":  "starting",
+    "unhealthy": "unhealthy",
+    "unmanaged": "unmanaged",
+    "stopped":   "stopped",
+}
+
+
+def _ui_status(name: str) -> str:
+    """UI status for an instance, delegating to the lib's health_check.
+
+    `error` means instance.toml didn't parse (surfaced in the nav so it can be
+    fixed); `unmanaged` means a process is on the instance's port but re-owm
+    didn't start it (e.g. an instance still running under owm)."""
+    try:
+        return _UI_STATUS.get(health_check(name, str(WORKSPACE))["status"], "stopped")
+    except Exception:
+        # Fault-isolation boundary: this runs once per instance in the status
+        # list, and health_check is NOT exception-bounded — a malformed
+        # instance.toml (ConfigError), a missing one (OSError), or a corrupt
+        # state.json (KeyError, by design in _read_pid) all surface here. One
+        # broken instance must not 500 the whole nav, so any failure → "error".
+        return "error"
 
 DASHBOARD = Path(__file__).parent
 
@@ -157,7 +185,7 @@ def api_fetch():
 @app.get("/api/status")
 def api_status():
     instances = [
-        {"name": name, "status": _instance_status(name)}
+        {"name": name, "status": _ui_status(name)}
         for name in _instances()
     ]
 
@@ -179,12 +207,14 @@ def api_instance(name: str):
 
     try:
         cfg = parse_instance_config((instance_dir / "instance.toml").read_text())
-    except Exception as e:
-        return {"error": f"instance.toml unreadable: {e}", "code": "CONFIG_ERROR"}
+    except ConfigError as e:
+        return {"error": str(e), "code": e.code}
+    except OSError as e:
+        return {"error": f"instance.toml unreadable: {e}", "code": "CONFIG_INVALID"}
 
     state  = _read_state(name)
     pid    = state.get("pid")
-    status = _instance_status(name)
+    status = _ui_status(name)
     live   = status == "running"
 
     health = {
