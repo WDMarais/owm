@@ -51,6 +51,61 @@ def read_repo_state(worktree_path: str) -> dict:
     return {"status": "clean"}
 
 
+def remote_branch_exists(worktree_path: str, branch: str) -> bool:
+    """Whether origin/<branch> is present in the worktree's fetched refs."""
+    return git_run(["rev-parse", "--verify", f"origin/{branch}"],
+                   cwd=worktree_path, check=False).returncode == 0
+
+
+def _ahead_behind(worktree_path: str, left: str, right: str) -> dict:
+    r = git_run(["rev-list", "--count", "--left-right", f"{left}...{right}"],
+                cwd=worktree_path, check=False)
+    parts = r.stdout.strip().split() if r.returncode == 0 else []
+    if len(parts) != 2:
+        return {"ahead_by": 0, "behind_by": 0}
+    try:
+        return {"ahead_by": int(parts[0]), "behind_by": int(parts[1])}
+    except ValueError:
+        return {"ahead_by": 0, "behind_by": 0}
+
+
+def repo_sync_status(worktree_path: str, branch: str, base: str | None = None,
+                     shared: bool = False) -> dict:
+    """Full git state for status display: dirty flag, remote presence, last
+    commit (hash + iso ts), and ahead/behind counts vs origin/<branch>,
+    origin/<base>, and origin/<branch>...origin/<base>.
+
+    The single reader for the git state the dashboard shows. Counts are taken
+    against explicit origin/<...> refs (owm worktrees don't set upstream
+    tracking, so @{u} can't be relied on). Presentation (relative times) is
+    the caller's concern; this returns raw data only.
+    """
+    zero = {"ahead_by": 0, "behind_by": 0}
+    if not os.path.isdir(worktree_path):
+        return {"dirty": False, "has_remote": False, "last_commit": None,
+                "vs_origin_branch": zero, "vs_origin_base": zero,
+                "origin_branch_vs_origin_base": zero}
+
+    dr = git_run(["status", "--porcelain"], cwd=worktree_path, check=False)
+    dirty = bool(dr.stdout.strip()) if dr.returncode == 0 else False
+
+    has_remote = remote_branch_exists(worktree_path, branch)
+
+    lc = git_run(["log", "-1", "--format=%h %aI"], cwd=worktree_path, check=False)
+    last_commit = None
+    if lc.returncode == 0 and lc.stdout.strip():
+        parts = lc.stdout.strip().split(" ", 1)
+        last_commit = {"hash": parts[0], "ts": parts[1] if len(parts) > 1 else None}
+
+    vs_branch = _ahead_behind(worktree_path, "HEAD", f"origin/{branch}") if has_remote else zero
+    vs_base   = _ahead_behind(worktree_path, "HEAD", f"origin/{base}") if base and not shared else zero
+    ob_vs_ob  = _ahead_behind(worktree_path, f"origin/{branch}", f"origin/{base}") if base and not shared else zero
+
+    return {"dirty": dirty, "has_remote": has_remote, "last_commit": last_commit,
+            "vs_origin_branch": vs_branch, "vs_origin_base": vs_base,
+            "origin_branch_vs_origin_base": ob_vs_ob}
+
+
 def has_local_commits(worktree_path: str) -> bool:
     r = git_run(["rev-list", "--count", "@{u}..HEAD"], cwd=worktree_path, check=False)
     return r.returncode == 0 and int(r.stdout.strip() or "0") > 0
