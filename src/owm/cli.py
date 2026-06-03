@@ -469,6 +469,9 @@ def cmd_status(ctx, name):
             click.echo(f"  warning: {w['type']}  {w.get('path', '')}", err=True)
         for a in r.get("port_alerts", []):
             click.echo(f"  alert: port conflict on {a['instance']}:{a['http_port']}  ({a['classification']})", err=True)
+        for a in r.get("repo_alerts", []):
+            extra = f" ({a['behind_by']} behind)" if a.get("behind_by") else ""
+            click.echo(f"  alert: {a['instance']}/{a['repo']} {a['issue']}{extra}", err=True)
 
 
 @cli.command("delete")

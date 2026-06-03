@@ -8,6 +8,8 @@ from owm.config import parse_instance_config
 from owm.errors import format_error
 from owm.instance import health_check
 from owm.ports import find_conflicting_process
+from owm.sync import repo_sync_status
+from owm.worktrees import resolve_worktree_path
 
 
 def default_workspace() -> str:
@@ -48,9 +50,35 @@ def instance_status(instance: str, workspace_root: str) -> dict:
     }
 
 
+def _repo_alerts(instance: str, conf, workspace_root: str) -> list:
+    """Per-repo states worth flagging in workspace status, via the shared git
+    reader. Shared repos are read-only by convention (surfaced through fetch,
+    not here); ahead-only is normal feature work, not an alert."""
+    alerts = []
+    for repo, spec in conf.repos.items():
+        if spec.shared:
+            continue
+        wt = resolve_worktree_path(repo, spec.branch, spec.shared, workspace_root, instance).path
+        s = repo_sync_status(wt, spec.branch, spec.base, spec.shared)
+        vob = s["vs_origin_branch"]
+        if s["dirty"]:
+            alerts.append({"instance": instance, "repo": repo, "issue": "dirty"})
+        if vob["behind_by"] and vob["ahead_by"]:
+            alerts.append({"instance": instance, "repo": repo, "issue": "diverged",
+                           "ahead_by": vob["ahead_by"], "behind_by": vob["behind_by"]})
+        elif vob["behind_by"]:
+            alerts.append({"instance": instance, "repo": repo, "issue": "behind",
+                           "behind_by": vob["behind_by"]})
+        if s["origin_branch_vs_origin_base"]["behind_by"]:
+            alerts.append({"instance": instance, "repo": repo, "issue": "base_behind",
+                           "behind_by": s["origin_branch_vs_origin_base"]["behind_by"]})
+    return alerts
+
+
 def workspace_status(workspace_root: str) -> dict:
     instances_dir = os.path.join(workspace_root, "instances")
     instances = {}
+    repo_alerts = []
     port_alerts = []
     workspace_warnings = []
 
@@ -81,6 +109,7 @@ def workspace_status(workspace_root: str) -> dict:
             inst["url"] = h["url"]
         inst["local_url"] = f"http://localhost:{conf.server.http_port}"
         instances[entry.name] = inst
+        repo_alerts.extend(_repo_alerts(entry.name, conf, workspace_root))
 
         if h["status"] == "unmanaged":
             proc = find_conflicting_process(conf.server.http_port)
@@ -93,7 +122,7 @@ def workspace_status(workspace_root: str) -> dict:
 
     return {
         "instances": instances,
-        "repo_alerts": [],
+        "repo_alerts": repo_alerts,
         "port_alerts": port_alerts,
         "unmanaged_odoo": [],
         "workspace_warnings": workspace_warnings,
