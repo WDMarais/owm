@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 import psutil
 
 from owm.addons import resolve_addons_path
-from owm.config import parse_instance_config, parse_workspace_config, InstanceConfig
+from owm.config import instance_config_path, parse_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO, PORT_CONTESTED
 from owm.oplog import workspace_log, instance_separator
 from owm.ports import assign_port, find_conflicting_process
@@ -480,7 +480,7 @@ def start_instance(
         )
 
     instance_dir = os.path.join(workspace_root, "instances", instance)
-    with open(os.path.join(instance_dir, "instance.toml")) as f:
+    with open(instance_config_path(instance, workspace_root)) as f:
         conf = parse_instance_config(f.read())
 
     for port in (conf.server.http_port, conf.server.gevent_port):
@@ -580,8 +580,7 @@ def health_check(
     wait: bool = False,
     timeout_seconds: int = 30,
 ) -> dict:
-    instance_dir = os.path.join(workspace_root, "instances", instance)
-    with open(os.path.join(instance_dir, "instance.toml")) as f:
+    with open(instance_config_path(instance, workspace_root)) as f:
         conf = parse_instance_config(f.read())
     port = conf.server.http_port
 

@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import parse_instance_config, parse_workspace_config
+from owm.config import instance_config_path, parse_instance_config, parse_workspace_config
 from owm.errors import OwmError, INSTANCE_RUNNING, NOT_FOUND
 from owm.archive import _remove_proxy_block, _remove_worktrees, _dropdb_archive
 from owm.adoption import adopt_process
@@ -93,7 +93,7 @@ def delete_instance(
         return DeleteResult(status="pending_confirmation", checklist=checklist)
 
     instance_dir = os.path.join(workspace_root, "instances", instance)
-    toml_path = os.path.join(instance_dir, "instance.toml")
+    toml_path = instance_config_path(instance, workspace_root)
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
 
@@ -134,7 +134,7 @@ def rename_instance(
 
     old_dir = os.path.join(workspace_root, "instances", instance)
     new_dir = os.path.join(workspace_root, "instances", new_name)
-    toml_path = os.path.join(old_dir, "instance.toml")
+    toml_path = instance_config_path(instance, workspace_root)
     conf_path = os.path.join(old_dir, "instance.conf")
 
     with open(toml_path) as f:

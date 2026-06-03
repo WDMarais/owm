@@ -5,7 +5,7 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import parse_instance_config, parse_workspace_config, InstanceConfig
+from owm.config import instance_config_path, parse_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import OwmError, INSTANCE_RUNNING, ARCHIVE_CONFLICT, CONFIRMATION_REQUIRED
 from owm.proxy import get_proxy_backend
 from owm.worktrees import resolve_worktree_path, remove_worktree
@@ -59,7 +59,7 @@ class ConflictResult:
 # ---------------------------------------------------------------------------
 
 def _read_instance_conf(instance: str, workspace_root: str) -> InstanceConfig:
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    toml_path = instance_config_path(instance, workspace_root)
     with open(toml_path) as f:
         return parse_instance_config(f.read())
 

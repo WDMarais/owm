@@ -543,3 +543,25 @@ http_port = 8100
         parse_instance_config(toml)
     assert exc.value.code == CONFIG_INVALID
     assert "product-core" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# instance_config_path — missing-instance guard
+# ---------------------------------------------------------------------------
+
+@pytest.mark.config_schemas
+def test_instance_config_path_returns_path_for_existing_instance(tmp_path):
+    from owm.config import instance_config_path
+    inst = tmp_path / "instances" / "feat-1"
+    inst.mkdir(parents=True)
+    (inst / "instance.toml").write_text("")
+    assert instance_config_path("feat-1", str(tmp_path)) == str(inst / "instance.toml")
+
+
+@pytest.mark.config_schemas
+def test_instance_config_path_raises_not_found_for_missing_instance(tmp_path):
+    from owm.config import instance_config_path
+    from owm.errors import OwmError
+    with pytest.raises(OwmError) as exc:
+        instance_config_path("ghost", str(tmp_path))
+    assert exc.value.code == "NOT_FOUND"
