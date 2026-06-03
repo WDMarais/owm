@@ -507,7 +507,17 @@ function renderRepos(inst) {
                 btn.textContent = "Syncing…";
                 const res = await fetch(`/api/instance/${_selectedInstance}/sync/${encodeURIComponent(repo.name)}`, { method: "POST" });
                 const data = await res.json();
-                if (data.error) showToast(`sync ${repo.name}: ${_firstLine(data.error)}`);
+                if (data.error) {
+                    showToast(`sync ${repo.name}: ${_firstLine(data.error)}`);
+                } else {
+                    // A sync that the policy declined (dirty/diverged/nothing to do)
+                    // returns a decision, not an error — surface it so the button
+                    // isn't silent. Only ff/rebase actually change anything.
+                    const d = data.repos?.[repo.name];
+                    if (d && d.status !== "fast-forwarded" && d.status !== "rebased")
+                        showToast(`sync ${repo.name}: ${d.reason || d.hint || d.status}`,
+                                  d.status === "diverged" ? "warn" : "ok");
+                }
                 await selectInstance(_selectedInstance);
             });
         }
