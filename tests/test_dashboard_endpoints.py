@@ -111,7 +111,7 @@ def test_endpoint_routes_to_correct_owm_subcommand(client, fake_owm, action, sub
 
     assert len(fake_owm.calls) == 1
     argv = fake_owm.last_argv
-    assert argv[0] == "owm"
+    assert argv[0] == server._OWM_BIN
     assert argv[1] == subcommand
     assert "feat-789" in argv
     assert argv[-2:] == ["--repo", "customer-config"]

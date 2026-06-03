@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,9 +21,18 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from owm.archive import archive_instance
 from owm.config import parse_workspace_config, parse_instance_config
-from owm.errors import ConfigError
-from owm.instance import health_check
+from owm.errors import ConfigError, OwmError
+from owm.instance import (
+    health_check,
+    kill_instance,
+    restart_instance,
+    start_instance,
+    stop_instance,
+)
+from owm.operations import delete_instance, rename_instance
+from owm.sync import fetch_active_branches
 
 # Map the lib's health states to the small set the UI renders (dot colour + badge).
 _UI_STATUS = {
@@ -51,6 +61,11 @@ def _ui_status(name: str) -> str:
         return "error"
 
 DASHBOARD = Path(__file__).parent
+
+# The dashboard drives the re-owm CLI it ships with — NOT whatever `owm` resolves
+# to on PATH (that's the original owm tool). Resolve it next to the running
+# interpreter so the binary always matches this server's venv.
+_OWM_BIN = str(Path(sys.executable).parent / "owm")
 
 
 # ── Workspace ─────────────────────────────────────────────────────────────────
@@ -342,7 +357,7 @@ def _owm(workspace_root: Path, *args: str, timeout: int = 60) -> dict:
     env = os.environ.copy()
     env["OWM_WORKSPACE"] = str(workspace_root)
     result = subprocess.run(
-        ["owm", *args],
+        [_OWM_BIN, *args],
         cwd=str(workspace_root),
         env=env,
         capture_output=True,
@@ -352,39 +367,76 @@ def _owm(workspace_root: Path, *args: str, timeout: int = 60) -> dict:
     return {"ok": result.returncode == 0, "output": result.stdout + result.stderr}
 
 
+def _running(name: str) -> bool:
+    """Whether re-owm's managed process for `name` is alive (delete/archive/
+    rename take `running` as a trust-the-caller guard arg)."""
+    try:
+        return health_check(name, str(WORKSPACE))["status"] in ("healthy", "starting", "unhealthy")
+    except Exception:
+        return False
+
+
 @app.post("/api/instance/{name}/start")
 def api_instance_start(name: str):
-    return _owm(WORKSPACE, "start", name)
+    try:
+        r = start_instance(name, str(WORKSPACE))
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
+    return {"status": r.status, "pid": r.pid}
 
 
 @app.post("/api/instance/{name}/stop")
 def api_instance_stop(name: str):
-    return _owm(WORKSPACE, "stop", name)
+    try:
+        r = stop_instance(name, str(WORKSPACE))
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
+    return {"status": r.status, "pid": r.pid}
 
 
 @app.post("/api/instance/{name}/restart")
 def api_instance_restart(name: str):
-    return _owm(WORKSPACE, "restart", name, timeout=120)
+    try:
+        r = restart_instance(name, str(WORKSPACE))
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
+    return {"status": r.status, "pid": r.pid}
 
 
 @app.post("/api/instance/{name}/kill")
 def api_instance_kill(name: str):
-    return _owm(WORKSPACE, "kill", name)
+    try:
+        r = kill_instance(name, str(WORKSPACE))
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
+    return {"status": r.status, "pid": r.pid}
 
 
 @app.post("/api/instance/{name}/archive")
 def api_instance_archive(name: str):
-    return _owm(WORKSPACE, "archive", name)
+    try:
+        archive_instance(instance=name, workspace_root=str(WORKSPACE), running=_running(name))
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
+    return {"status": "archived"}
 
 
 @app.post("/api/instance/{name}/delete")
 def api_instance_delete(name: str):
-    return _owm(WORKSPACE, "delete", name, "--force")
+    try:
+        delete_instance(instance=name, running=_running(name), force=True, workspace_root=str(WORKSPACE))
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
+    return {"status": "deleted"}
 
 
 @app.post("/api/instance/{name}/rename")
 def api_instance_rename(name: str, new_name: str):
-    return _owm(WORKSPACE, "rename", name, new_name)
+    try:
+        rename_instance(instance=name, new_name=new_name, running=_running(name), workspace_root=str(WORKSPACE))
+    except OwmError as e:
+        return {"error": str(e), "code": e.code}
+    return {"status": "renamed", "old": name, "new": new_name}
 
 
 @app.post("/api/instance/{name}/sync/{repo}")
