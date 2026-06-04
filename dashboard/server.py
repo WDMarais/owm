@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from owm.archive import archive_instance
 from owm.config import parse_workspace_config, parse_instance_config
 from owm.errors import ConfigError, OwmError
+from owm.worktrees import resolve_worktree_path
 from owm.instance import (
     health_check,
     kill_instance,
@@ -239,10 +240,8 @@ def api_instance(name: str):
 
     repos = []
     for repo_name, spec in cfg.repos.items():
-        if spec.shared:
-            wt = WORKSPACE / "_shared" / repo_name / spec.branch
-        else:
-            wt = WORKSPACE / "instances" / name / repo_name
+        worktree = resolve_worktree_path(repo_name, spec.branch, spec.shared, str(WORKSPACE), name)
+        wt = Path(worktree.path)
         sync    = _repo_sync(wt, spec.branch, spec.base, spec.shared)
         pr_url  = _pr_url_override(instance_dir, repo_name) or _speculative_pr_url(wt, spec.branch, spec.base)
         repos.append({"name": repo_name, "branch": spec.branch, "base": spec.base, "pr_url": pr_url, **sync})
@@ -512,8 +511,8 @@ def api_notifications():
         for repo_name, spec in cfg.repos.items():
             if not spec.assert_exists:
                 continue
-            wt = WORKSPACE / "_shared" / repo_name / spec.branch if spec.shared else WORKSPACE / "instances" / name / repo_name
-            if not remote_branch_exists(str(wt), spec.branch):
+            worktree = resolve_worktree_path(repo_name, spec.branch, spec.shared, str(WORKSPACE), name)
+            if not remote_branch_exists(worktree.path, spec.branch):
                 notifications.append({
                     "tier": "warn", "instance": name,
                     "msg": f"{repo_name}: branch '{spec.branch}' marked +exists but not found in fetched refs — run owm fetch, or check if branch was deleted upstream",

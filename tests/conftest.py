@@ -188,17 +188,18 @@ def make_instance_worktrees():
     """
     import tomllib
 
+    from owm.worktrees import resolve_worktree_path
+
     def _make(workspace_root: Path, instance: str) -> None:
         toml_path = workspace_root / "instances" / instance / "instance.toml"
         with open(toml_path, "rb") as f:
             data = tomllib.load(f)
         for repo_name, spec in data["repos"].items():
-            branch = spec["branch"]
-            if spec.get("shared", False):
-                path = workspace_root / "_shared" / repo_name / branch
-            else:
-                path = workspace_root / "instances" / instance / repo_name
-            path.mkdir(parents=True, exist_ok=True)
+            worktree = resolve_worktree_path(
+                repo_name, spec["branch"], spec.get("shared", False),
+                str(workspace_root), instance,
+            )
+            Path(worktree.path).mkdir(parents=True, exist_ok=True)
 
     return _make
 
