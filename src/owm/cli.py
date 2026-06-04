@@ -10,10 +10,10 @@ from pathlib import Path
 import click
 
 from owm.api import instance_status, workspace_status
-from owm.config import parse_instance_config, parse_workspace_config
+from owm.config import load_instance_config, parse_workspace_config
 from owm.addons import resolve_addons_path
 from owm.database import check_pg_reachability
-from owm.errors import OwmError
+from owm.errors import OwmError, NOT_FOUND
 from owm.instance import (
     new_instance, create_instance, list_running_instances,
     start_instance, stop_instance, kill_instance, health_check,
@@ -78,12 +78,6 @@ def _resolve_instance(ctx, name: str | None) -> str:
 def _is_running(instance: str, workspace_root: str) -> bool:
     pid = _read_pid(instance, workspace_root)
     return pid is not None and _process_alive(pid)
-
-
-def _read_instance_conf(instance: str, workspace_root: str):
-    path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    with open(path) as f:
-        return parse_instance_config(f.read())
 
 
 def _workspace_compare_pairs(workspace_root: str) -> list:
@@ -287,13 +281,11 @@ def cmd_install(ctx, name, modules, timeout, no_save):
     """
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
 
     try:
-        with open(toml_path) as f:
-            conf = parse_instance_config(f.read())
-    except Exception as e:
-        click.echo(f"error: {e}", err=True)
+        conf = load_instance_config(instance, workspace_root)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]}", err=True)
         sys.exit(1)
 
     if modules:
@@ -598,7 +590,7 @@ def cmd_shell(ctx, name, script, json_out):
     """Open an interactive Odoo shell, or pipe a script through it non-interactively."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     odoo_bin = odoo_bin_path(conf, workspace_root, instance)
     venv = os.path.join(workspace_root, "instances", instance, ".venv")
     python = os.path.join(venv, "bin", "python")
@@ -643,7 +635,7 @@ def cmd_db_dump(ctx, name, out):
     """Dump an instance database to a file."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     try:
         result = db_dump(
             instance=instance,
@@ -666,7 +658,7 @@ def cmd_db_restore(ctx, name, path_arg):
     """Restore an instance database from a dump file. Requires the instance to be stopped."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     running = _is_running(instance, workspace_root)
     try:
         result = db_restore(
@@ -690,7 +682,7 @@ def cmd_db_reset(ctx, name):
     """Reset instance database to its template. Requires the instance to be stopped."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     if conf.database.template is None:
         click.echo("error: no template configured for this instance", err=True)
         sys.exit(1)
@@ -725,7 +717,7 @@ def cmd_env(ctx, name, fmt):
     """Print environment variables for an instance."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     env = resolve_env(
         instance=instance,
         workspace_root=workspace_root,
@@ -797,7 +789,7 @@ def cmd_unarchive(ctx, name, discard):
 
     # Restore database
     if os.path.exists(archived_dump):
-        conf = _read_instance_conf(name, workspace_root)
+        conf = load_instance_config(name, workspace_root)
         try:
             db_restore(
                 instance=name, path=archived_dump, workspace_root=workspace_root,
@@ -854,15 +846,13 @@ def cmd_validate(ctx, name, live):
     warnings = []
 
     # --- Tier 1: static ---
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     try:
-        with open(toml_path) as f:
-            conf = parse_instance_config(f.read())
-    except FileNotFoundError:
-        click.echo(f"error: instance.toml not found — run owm create --toml-only first", err=True)
-        sys.exit(1)
-    except Exception as e:
-        click.echo(f"error: instance.toml: {e}", err=True)
+        conf = load_instance_config(instance, workspace_root)
+    except OwmError as e:
+        if e.code == NOT_FOUND:
+            click.echo("error: instance.toml not found — run owm create --toml-only first", err=True)
+        else:
+            click.echo(f"error: instance.toml: {e.args[0]}", err=True)
         sys.exit(1)
 
     ws_toml_path = os.path.join(workspace_root, "workspace.toml")
@@ -959,7 +949,7 @@ def cmd_validate(ctx, name, live):
 
 
 def _gather_repo_states(instance: str, workspace_root: str) -> dict:
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     states = {}
     for name, rspec in conf.repos.items():
         wt = resolve_worktree_path(
@@ -1010,7 +1000,7 @@ def cmd_regen_conf(ctx, name):
     """Regenerate instance.conf from current toml and workspace config."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     ws_toml_path = os.path.join(workspace_root, "workspace.toml")
     with open(ws_toml_path) as f:
         ws_conf = parse_workspace_config(f.read())
@@ -1081,7 +1071,7 @@ def cmd_sync(ctx, name, repo, rebase):
     workspace_root = _resolve_workspace(ctx)
     repo_states = _gather_repo_states(instance, workspace_root)
     results = sync_instance(instance, repo_states, rebase=rebase, repo=repo)
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     for rname, outcome in results.items():
         status = outcome["status"]
         if status == "fast-forwarded":
@@ -1127,7 +1117,7 @@ def cmd_push(ctx, name, repo, all_repos):
             results = push_instance(
                 instance, repo=repo, branch_status=branch_status,
                 shared=repo_states[repo].get("shared", False),
-                owned=not _read_instance_conf(instance, workspace_root).repos[repo].readonly,
+                owned=not load_instance_config(instance, workspace_root).repos[repo].readonly,
             )
         except OwmError as e:
             click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
@@ -1141,7 +1131,7 @@ def cmd_push(ctx, name, repo, all_repos):
             click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
             sys.exit(1)
 
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     for rname, outcome in results.items():
         if outcome["status"] == "pushed":
             rspec = conf.repos[rname]
@@ -1178,7 +1168,7 @@ def cmd_reset(ctx, name, repo, force, all_repos):
     except OwmError as e:
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     for rname, outcome in results.items():
         if outcome["status"] == "reset":
             rspec = conf.repos[rname]
