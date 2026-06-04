@@ -20,6 +20,22 @@ def empty_addons_path_message(instance_name: str) -> str:
     )
 
 
+def module_names(worktree_root: str, addons_paths: list[str]) -> set[str]:
+    """Odoo module names (directories holding an __manifest__.py) found under a
+    worktree's configured addons paths. Used to compare a feature-branch worktree
+    against its base so staleness (modules present on base, absent on the branch)
+    can be surfaced."""
+    names: set[str] = set()
+    for ap in addons_paths:
+        root = worktree_root if ap == "." else os.path.join(worktree_root, ap)
+        if not os.path.isdir(root):
+            continue
+        for d in os.listdir(root):
+            if os.path.isfile(os.path.join(root, d, "__manifest__.py")):
+                names.add(d)
+    return names
+
+
 def resolve_addons_path(
     workspace_repos: dict,
     instance_repos: dict,

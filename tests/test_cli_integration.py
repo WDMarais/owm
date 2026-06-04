@@ -4,6 +4,7 @@ Exercises the full command → library → disk path with no mocks.
 All tests use tmp_workspace for isolation; no Postgres or git required.
 """
 import subprocess
+from pathlib import Path
 
 import pytest
 from unittest.mock import patch
@@ -805,3 +806,37 @@ def test_regen_conf_honors_repo_priority(runner, standard_instance_toml, tmp_wor
     addons_line = next(l for l in conf.splitlines() if l.startswith("addons_path ="))
     # priority order wins over the odoo-first declaration order
     assert addons_line.index("customer_config") < addons_line.index("product_core") < addons_line.index("odoo_like")
+
+
+def _make_module(worktree: Path, name: str):
+    mod = worktree / name
+    mod.mkdir(parents=True, exist_ok=True)
+    (mod / "__manifest__.py").write_text("{'name': '%s'}\n" % name)
+
+
+@pytest.mark.cli_integration
+def test_validate_warns_when_feature_branch_lags_base(runner, standard_instance_toml, tmp_workspace):
+    """A per-instance feature repo (base set) whose base worktree carries modules the
+    branch lacks gets a lag warning naming them — staleness surfaced, not silently
+    topped up from base the way owm did."""
+    # product_core is "feat-789-dev:main" → non-shared, base=main
+    feat = tmp_workspace / "instances" / "feat-789" / "product_core"
+    base = tmp_workspace / "_shared" / "product_core" / "main"
+    _make_module(feat, "alpha")
+    _make_module(base, "alpha")
+    _make_module(base, "beta")   # on base only — the lag
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789"])
+    out = result.output + (result.stderr or "")
+    assert "product_core: base 'main' has 1 module(s) not on this feature branch (beta)" in out
+
+
+@pytest.mark.cli_integration
+def test_validate_no_lag_warning_when_branch_current(runner, standard_instance_toml, tmp_workspace):
+    """No lag warning when the feature worktree already has every module its base has."""
+    feat = tmp_workspace / "instances" / "feat-789" / "product_core"
+    base = tmp_workspace / "_shared" / "product_core" / "main"
+    _make_module(feat, "alpha")
+    _make_module(base, "alpha")
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789"])
+    out = result.output + (result.stderr or "")
+    assert "not on this feature branch" not in out

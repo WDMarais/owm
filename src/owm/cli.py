@@ -11,7 +11,7 @@ import click
 
 from owm.api import instance_status, workspace_status
 from owm.config import ConfOwnership, load_instance_config, parse_workspace_config
-from owm.addons import empty_addons_path_message, resolve_addons_path
+from owm.addons import empty_addons_path_message, module_names, resolve_addons_path
 from owm.database import check_pg_reachability
 from owm.errors import OwmError, NOT_FOUND
 from owm.instance import (
@@ -905,6 +905,26 @@ def cmd_validate(ctx, name, live):
             # hidden consequence of repo_priority / declaration order
             rel = [os.path.relpath(p, workspace_root) for p in addons_paths]
             notes.append("addons import order (first path wins): " + ", ".join(rel))
+
+        # Lag check: a per-instance feature branch can fall behind its base, so the
+        # base carries modules the branch doesn't. owm silently topped these up from
+        # the base worktree; re-owm gives the instance exactly its branch, so surface
+        # the gap rather than hide it — the dev sees the staleness, not a missing module.
+        for repo_name, rspec in conf.repos.items():
+            wrepo = ws_conf.repos.get(repo_name)
+            if rspec.shared or not rspec.base or not wrepo or not wrepo.has_addons:
+                continue
+            feat = resolve_worktree_path(repo_name, rspec.branch, False, workspace_root, instance).path
+            base = resolve_worktree_path(repo_name, rspec.base, True, workspace_root, instance).path
+            if not (os.path.isdir(feat) and os.path.isdir(base)):
+                continue
+            missing = module_names(base, wrepo.addons_paths) - module_names(feat, wrepo.addons_paths)
+            if missing:
+                warnings.append(
+                    f"{repo_name}: base {rspec.base!r} has {len(missing)} module(s) not on this "
+                    f"feature branch ({', '.join(sorted(missing))}) — they won't be in addons_path; "
+                    f"merge/rebase {rspec.base} if the instance needs them"
+                )
     else:
         addons_paths = None
 
