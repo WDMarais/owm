@@ -17,7 +17,7 @@ from owm.errors import (
     DB_UNAVAILABLE, UPGRADE_FAILED, XMLRPC_UNAVAILABLE,
     NO_WORKERS, PORT_RANGE_EXHAUSTED, PORT_CONTESTED,
 )
-from owm.errors import OwmError, format_error
+from owm.errors import OwmError, format_error, Severity, Finding, NO_ODOO_REPO
 from owm.mcp import (
     owm_status, owm_new, owm_delete, owm_archive, owm_rename,
     owm_db_restore, owm_create, owm_reset, owm_push, owm_compare,
@@ -263,6 +263,63 @@ def test_port_contested_when_running_instance_holds_pinned_port():
             existing_instances=[{"instance": "review-101", "running": True, "http_port": 8143}],
         )
     assert PORT_CONTESTED in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# Severity scale + Finding — the non-fatal return-value twin of OwmError.
+# A code is the *what*; severity is the *how-bad*. Findings carry both home
+# without the lib ever printing; surfaces render them.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.error_taxonomy
+def test_severity_scale_is_ordered():
+    assert (Severity.BLOCKING.rank > Severity.ATTENTION.rank
+            > Severity.WARN.rank > Severity.INFO.rank)
+
+
+@pytest.mark.error_taxonomy
+def test_severity_serialises_as_plain_string():
+    assert Severity.WARN == "warn"
+    import json
+    assert json.dumps({"s": Severity.WARN}) == '{"s": "warn"}'
+
+
+@pytest.mark.error_taxonomy
+def test_codes_carry_a_default_severity():
+    # Codes default to BLOCKING (their raised form); StrEnum identity preserved.
+    assert NO_ODOO_REPO.default_severity == Severity.BLOCKING
+    assert str(NO_ODOO_REPO) == "NO_ODOO_REPO"
+
+
+@pytest.mark.error_taxonomy
+def test_finding_defaults_severity_from_code():
+    f = Finding(NO_ODOO_REPO, "assumed odoo")
+    assert f.severity == Severity.BLOCKING
+
+
+@pytest.mark.error_taxonomy
+def test_finding_severity_override():
+    """Same code, softer context: a BLOCKING-default code rides home as INFO."""
+    f = Finding(NO_ODOO_REPO, "assumed odoo", severity=Severity.INFO)
+    assert f.severity == Severity.INFO
+
+
+@pytest.mark.error_taxonomy
+def test_finding_to_dict_shape_is_agent_parseable():
+    f = Finding(NO_ODOO_REPO, "assumed odoo", severity=Severity.INFO,
+                subject="odoo", extra={"repo": "odoo"})
+    import json
+    parsed = json.loads(json.dumps(f.to_dict()))
+    assert parsed == {
+        "severity": "info", "code": "NO_ODOO_REPO",
+        "message": "assumed odoo", "subject": "odoo", "repo": "odoo",
+    }
+
+
+@pytest.mark.error_taxonomy
+def test_finding_omits_subject_when_absent():
+    f = Finding(NO_ODOO_REPO, "x")
+    assert "subject" not in f.to_dict()
 
 
 # === SPEC GAPS ===

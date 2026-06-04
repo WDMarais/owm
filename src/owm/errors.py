@@ -1,4 +1,30 @@
+from dataclasses import dataclass, field
 from enum import StrEnum
+
+
+class Severity(StrEnum):
+    """Ordered severity scale shared by errors and findings.
+
+    blocking > attention > warn > info. Use `.rank` for threshold comparisons
+    (`severity.rank >= Severity.ATTENTION.rank`); equality/serialisation stay
+    plain strings ("blocking", ...) so the wire contract is agent-parseable.
+    """
+    BLOCKING  = "blocking"
+    ATTENTION = "attention"
+    WARN      = "warn"
+    INFO      = "info"
+
+    @property
+    def rank(self) -> int:
+        return _SEVERITY_RANK[self]
+
+
+_SEVERITY_RANK = {
+    Severity.BLOCKING:  3,
+    Severity.ATTENTION: 2,
+    Severity.WARN:      1,
+    Severity.INFO:      0,
+}
 
 
 class ErrorCode(StrEnum):
@@ -24,6 +50,17 @@ class ErrorCode(StrEnum):
     NO_ODOO_REPO        = "NO_ODOO_REPO"
     FETCH_TIMEOUT       = "FETCH_TIMEOUT"
     CONFIG_INVALID      = "CONFIG_INVALID"
+
+    def __new__(cls, value, default_severity=Severity.BLOCKING):
+        # Codes default to BLOCKING (raised as OwmError). A code emitted as a
+        # non-fatal Finding carries its own severity at construction; a member
+        # may also override this finding-context default via ("VALUE", Severity.X).
+        # The code is the *what*; severity is the *how-bad* — kept separate so a
+        # future ErrorCode/FindingCode split stays a mechanical partition.
+        obj = str.__new__(cls, value)
+        obj._value_ = value
+        obj.default_severity = default_severity
+        return obj
 
 
 NOT_FOUND           = ErrorCode.NOT_FOUND
@@ -73,3 +110,39 @@ class ConfigError(OwmError):
 
 def format_error(message: str, code: ErrorCode | str, **extra) -> dict:
     return {"error": message, "code": code, **extra}
+
+
+@dataclass
+class Finding:
+    """A non-fatal result/warning/note from a lib operation.
+
+    The return-value twin of OwmError: same vocabulary (code, message, extra),
+    different carrier. Hard failures `raise OwmError`; soft outcomes ride home
+    in the return value as Finding(s). The raise-vs-return choice is made at the
+    callsite by which carrier is constructed — never by inspecting the code — so
+    the two stay untangled.
+
+    severity defaults to the code's default_severity and may be overridden, so a
+    code whose fatal form raises BLOCKING can also surface as an INFO note.
+    """
+    code: ErrorCode | str
+    message: str
+    severity: Severity | None = None
+    subject: str | None = None
+    extra: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.severity is None:
+            self.severity = getattr(self.code, "default_severity", Severity.BLOCKING)
+
+    def to_dict(self) -> dict:
+        """Agent-parseable shape: {severity, code, message, [subject], **extra}.
+
+        Mirrors format_error's {error, code, **extra}; Severity/ErrorCode are
+        StrEnums so they serialise as plain strings.
+        """
+        d = {"severity": self.severity, "code": self.code, "message": self.message}
+        if self.subject is not None:
+            d["subject"] = self.subject
+        d.update(self.extra)
+        return d
