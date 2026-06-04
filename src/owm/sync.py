@@ -50,6 +50,15 @@ def remote_branch_exists(worktree_path: str, branch: str) -> bool:
                    cwd=worktree_path, check=False).returncode == 0
 
 
+def read_remote_url(worktree_path: str) -> str | None:
+    """origin's URL for a worktree, or None if unset/unreadable. The lib reader
+    behind the dashboard's speculative PR-url construction."""
+    r = git_run(["remote", "get-url", "origin"], cwd=worktree_path, check=False)
+    if r.returncode != 0:
+        return None
+    return r.stdout.strip() or None
+
+
 def _ahead_behind(worktree_path: str, left: str, right: str) -> dict:
     r = git_run(["rev-list", "--count", "--left-right", f"{left}...{right}"],
                 cwd=worktree_path, check=False)
@@ -163,6 +172,14 @@ def branch_exists_on_origin(bare_path: str, branch: str) -> bool:
     r = git_run(["rev-parse", "--verify", f"refs/heads/{branch}"],
                 cwd=bare_path, check=False)
     return r.returncode == 0
+
+
+def list_bare_branches(bare_path: str) -> list[str]:
+    """Sorted branch names in a bare repo. The lib reader behind `owm branches`."""
+    r = git_run(["branch", "--format=%(refname:short)"], cwd=bare_path, check=False)
+    if r.returncode != 0:
+        return []
+    return sorted(r.stdout.splitlines())
 
 
 def git_reset_hard(worktree_path: str) -> None:

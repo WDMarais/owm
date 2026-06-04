@@ -36,6 +36,7 @@ from owm.sync import (
     fetch_active_branches,
     pull_base_instance,
     push_worktree,
+    read_remote_url,
     remote_branch_exists,
     repo_sync_status,
     sync_worktrees,
@@ -126,13 +127,9 @@ def _pr_url_override(instance_dir: Path, repo: str) -> str | None:
 def _speculative_pr_url(worktree: Path, branch: str, base: str | None) -> str | None:
     if not base:
         return None
-    result = subprocess.run(
-        ["git", "-C", str(worktree), "remote", "get-url", "origin"],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
+    remote = read_remote_url(str(worktree))
+    if not remote:
         return None
-    remote = result.stdout.strip()
     # SSH: git@bitbucket.org:workspace/repo.git
     # HTTPS: https://bitbucket.org/workspace/repo.git
     m = re.match(r"(?:https?://|git@)([^/:]+)[/:](.+?)(?:\.git)?$", remote)

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from owm.config import load_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import OwmError, INSTANCE_RUNNING, ARCHIVE_CONFLICT, CONFIRMATION_REQUIRED
 from owm.proxy import get_proxy_backend
+from owm.sync import git_run
 from owm.worktrees import resolve_worktree_path, remove_worktree
 
 
@@ -65,10 +66,7 @@ def _capture_head_shas(conf: InstanceConfig, instance: str, workspace_root: str)
             continue
         wt = resolve_worktree_path(name, spec.branch, False, workspace_root, instance)
         if os.path.isdir(wt.path):
-            result = subprocess.run(
-                ["git", "-C", wt.path, "rev-parse", "HEAD"],
-                capture_output=True, text=True,
-            )
+            result = git_run(["rev-parse", "HEAD"], cwd=wt.path, check=False)
             if result.returncode == 0:
                 shas[name] = result.stdout.strip()
     return shas

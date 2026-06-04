@@ -34,7 +34,7 @@ from owm.oplog import workspace_log
 from owm.sync import (
     fetch_active_branches, sync_instance, push_instance, reset_instance,
     read_repo_state, git_fast_forward, git_rebase,
-    git_push, git_reset_hard, pull_base_instance,
+    git_push, git_reset_hard, pull_base_instance, list_bare_branches,
 )
 from owm.workspace import init_workspace
 from owm.worktrees import resolve_worktree_path
@@ -983,11 +983,7 @@ def cmd_branches(ctx, repo):
     )
     for name in names:
         bare = os.path.join(repos_dir, f"{name}.git")
-        result = subprocess.run(
-            ["git", "-C", bare, "branch", "--format=%(refname:short)"],
-            capture_output=True, text=True,
-        )
-        branches = sorted(result.stdout.splitlines())
+        branches = list_bare_branches(bare)
         click.echo(f"{name}:")
         for b in branches:
             click.echo(f"  {b}")

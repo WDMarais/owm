@@ -34,6 +34,7 @@ testpaths = ["tests"]
 markers = [
     "addons_resolution",
     "adoption",
+    "architecture",
     "archive",
     "audit_log",
     "cli_commands",
