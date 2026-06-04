@@ -782,3 +782,26 @@ def test_validate_reports_empty_addons_path(runner, standard_instance_toml, tmp_
     out = result.output + (result.stderr or "")
     assert "load no modules" in out
     assert "out of sync" not in out  # not the misleading regen-conf nudge
+
+
+@pytest.mark.cli_integration
+def test_regen_conf_honors_repo_priority(runner, standard_instance_toml, tmp_workspace):
+    """[defaults] repo_priority overrides [repos] declaration order in the generated
+    addons_path. Guards the wiring from workspace config through to resolve_addons_path:
+    module precedence is stated explicitly, not inferred from how repos happen to be listed."""
+    # Declared odoo-first, but priority puts the override repos ahead of the base.
+    (tmp_workspace / "workspace.toml").write_text(
+        "[repos]\n"
+        'odoo_like = {path = "/dev/null", has_addons = true}\n'
+        'product_core = {path = "/dev/null", has_addons = true}\n'
+        'customer_config = {path = "/dev/null", has_addons = true}\n'
+        "[clusters]\n"
+        "[defaults]\n"
+        'repo_priority = ["customer_config", "product_core", "odoo_like"]\n'
+    )
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "regen-conf", "feat-789"])
+    assert result.exit_code == 0
+    conf = (tmp_workspace / "instances" / "feat-789" / "instance.conf").read_text()
+    addons_line = next(l for l in conf.splitlines() if l.startswith("addons_path ="))
+    # priority order wins over the odoo-first declaration order
+    assert addons_line.index("customer_config") < addons_line.index("product_core") < addons_line.index("odoo_like")

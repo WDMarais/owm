@@ -441,6 +441,7 @@ def create_instance(
         instance_repos=instance_repos_dict,
         workspace_root=workspace_root,
         instance_name=name,
+        repo_priority=ws_conf.defaults.repo_priority,
     )
     if not addons_paths:
         raise OwmError(empty_addons_path_message(name), code=ODOO_CONFIG_NO_ADDONS)

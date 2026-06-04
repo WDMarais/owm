@@ -887,6 +887,7 @@ def cmd_validate(ctx, name, live):
             instance_repos=instance_repos_dict,
             workspace_root=workspace_root,
             instance_name=instance,
+            repo_priority=ws_conf.defaults.repo_priority,
         )
         for ap in (addons_paths or []):
             if not os.path.isdir(ap):
@@ -1043,6 +1044,7 @@ def cmd_regen_conf(ctx, name, force):
         instance_repos=instance_repos_dict,
         workspace_root=workspace_root,
         instance_name=instance,
+        repo_priority=ws_conf.defaults.repo_priority,
     )
     if not addons_paths:
         click.echo(f"error: {empty_addons_path_message(instance)}", err=True)
