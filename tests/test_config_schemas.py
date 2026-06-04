@@ -4,9 +4,10 @@ Covers: Config schemas, Requirements patching sections.
 """
 import pytest
 
-from owm.config import parse_workspace_config, parse_instance_config
+from owm.config import parse_workspace_config, parse_instance_config, load_instance_config
 from owm.config import WorkspaceConfig, InstanceConfig, RepoSpec, ClusterConfig
 from owm.config import WorkspaceDefaults, WorkspaceRepo
+from owm.errors import OwmError, ConfigError, NOT_FOUND
 
 # ---------------------------------------------------------------------------
 # Workspace.toml — integration: parse full valid config
@@ -435,6 +436,51 @@ gevent_port = 8143
     with pytest.raises(Exception) as exc_info:
         parse_instance_config(toml)
     assert not isinstance(exc_info.value, NotImplementedError), "stub not wired up"
+
+
+# ---------------------------------------------------------------------------
+# load_instance_config — the by-name loader (path guard + open + parse)
+# ---------------------------------------------------------------------------
+
+_VALID_INSTANCE_TOML = """
+[repos]
+odoo = "19.0:shared"
+
+[database]
+name    = "feat_789"
+pg_port = 5432
+
+[server]
+http_port = 8142
+"""
+
+
+def _write_instance(workspace_root, instance, toml):
+    inst_dir = workspace_root / "instances" / instance
+    inst_dir.mkdir(parents=True)
+    (inst_dir / "instance.toml").write_text(toml)
+
+
+@pytest.mark.config_schemas
+def test_load_instance_config_reads_and_parses(tmp_path):
+    _write_instance(tmp_path, "feat-789", _VALID_INSTANCE_TOML)
+    conf = load_instance_config("feat-789", str(tmp_path))
+    assert conf.database.name == "feat_789"
+    assert conf.server.gevent_port == 8143
+
+
+@pytest.mark.config_schemas
+def test_load_instance_config_missing_instance_raises_not_found(tmp_path):
+    with pytest.raises(OwmError) as exc_info:
+        load_instance_config("ghost", str(tmp_path))
+    assert exc_info.value.code == NOT_FOUND
+
+
+@pytest.mark.config_schemas
+def test_load_instance_config_malformed_raises_config_error(tmp_path):
+    _write_instance(tmp_path, "broken", "this is = not [valid toml")
+    with pytest.raises(ConfigError):
+        load_instance_config("broken", str(tmp_path))
 
 
 @pytest.mark.config_schemas

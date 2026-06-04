@@ -346,3 +346,22 @@ def parse_instance_config(toml: str) -> InstanceConfig:
         scripts=scripts,
         template=template,
     )
+
+
+def load_instance_config(instance: str, workspace_root: str) -> InstanceConfig:
+    """Read and parse an instance's instance.toml, by name, in one step.
+
+    The single by-name loader: pairs the missing-instance guard
+    (`instance_config_path` -> OwmError NOT_FOUND) with the open+read+parse
+    (`parse_instance_config` -> ConfigError on malformed toml) that the
+    lifecycle, operations and sync paths otherwise repeat inline. Adapters
+    shape the two failure modes by catching OwmError (NOT_FOUND) and
+    ConfigError (CONFIG_INVALID).
+
+    Directory-enumeration callers that already hold a path from a workspace
+    scan keep calling `parse_instance_config` directly — they reach the toml
+    by listing, not by name, so the path guard would only re-derive what they
+    already have.
+    """
+    with open(instance_config_path(instance, workspace_root)) as f:
+        return parse_instance_config(f.read())

@@ -4,7 +4,7 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import instance_config_path, parse_instance_config, parse_workspace_config
+from owm.config import load_instance_config, parse_instance_config, parse_workspace_config
 from owm.errors import OwmError, DIVERGED, NOT_OWNED, SHARED_REPO, DIRTY_WORKTREE, FETCH_TIMEOUT
 from owm.oplog import workspace_log
 from owm.worktrees import resolve_worktree_path
@@ -374,9 +374,7 @@ def sync_worktrees(instance, workspace_root, *, repo=None, rebase=False) -> dict
     policy, then fast-forward or rebase each worktree the policy selected.
     Returns {"repos": <decisions>}.
     """
-    toml_path = instance_config_path(instance, workspace_root)
-    with open(toml_path) as f:
-        conf = parse_instance_config(f.read())
+    conf = load_instance_config(instance, workspace_root)
 
     repo_states = {}
     for name, spec in conf.repos.items():
@@ -451,9 +449,7 @@ def push_worktree(instance, workspace_root, *, repo) -> dict:
     worktree. Returns the push result with the branch name; raises OwmError
     for the caller to shape.
     """
-    toml_path = instance_config_path(instance, workspace_root)
-    with open(toml_path) as f:
-        conf = parse_instance_config(f.read())
+    conf = load_instance_config(instance, workspace_root)
 
     spec = conf.repos[repo]
     wt = resolve_worktree_path(repo, spec.branch, spec.shared, workspace_root, instance)
@@ -484,9 +480,7 @@ def pull_base_instance(
     Pre-flight checks all targets are clean before touching anything.
     On merge conflict: aborts cleanly and reports conflicting files.
     """
-    toml_path = instance_config_path(instance, workspace_root)
-    with open(toml_path) as f:
-        conf = parse_instance_config(f.read())
+    conf = load_instance_config(instance, workspace_root)
 
     targets = {
         name: spec for name, spec in conf.repos.items()

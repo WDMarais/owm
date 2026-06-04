@@ -5,7 +5,7 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import instance_config_path, parse_instance_config, parse_workspace_config, InstanceConfig
+from owm.config import load_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import OwmError, INSTANCE_RUNNING, ARCHIVE_CONFLICT, CONFIRMATION_REQUIRED
 from owm.proxy import get_proxy_backend
 from owm.worktrees import resolve_worktree_path, remove_worktree
@@ -57,12 +57,6 @@ class ConflictResult:
 # ---------------------------------------------------------------------------
 # I/O helpers — patched in unit tests
 # ---------------------------------------------------------------------------
-
-def _read_instance_conf(instance: str, workspace_root: str) -> InstanceConfig:
-    toml_path = instance_config_path(instance, workspace_root)
-    with open(toml_path) as f:
-        return parse_instance_config(f.read())
-
 
 def _capture_head_shas(conf: InstanceConfig, instance: str, workspace_root: str) -> dict[str, str]:
     shas = {}
@@ -195,7 +189,7 @@ def archive_instance(
             code=ARCHIVE_CONFLICT,
         )
 
-    conf = _read_instance_conf(instance, workspace_root)
+    conf = load_instance_config(instance, workspace_root)
     shas = _capture_head_shas(conf, instance, workspace_root)
 
     # DB operations first — fail fast before any destructive steps

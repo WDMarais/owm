@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import psutil
 
 from owm.addons import resolve_addons_path
-from owm.config import instance_config_path, parse_instance_config, parse_workspace_config, InstanceConfig
+from owm.config import load_instance_config, parse_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import OwmError, Finding, Severity, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO, PORT_CONTESTED
 from owm.oplog import workspace_log, instance_separator
 from owm.ports import assign_port, find_conflicting_process
@@ -505,8 +505,7 @@ def start_instance(
         )
 
     instance_dir = os.path.join(workspace_root, "instances", instance)
-    with open(instance_config_path(instance, workspace_root)) as f:
-        conf = parse_instance_config(f.read())
+    conf = load_instance_config(instance, workspace_root)
 
     for port in (conf.server.http_port, conf.server.gevent_port):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -605,8 +604,7 @@ def health_check(
     wait: bool = False,
     timeout_seconds: int = 30,
 ) -> dict:
-    with open(instance_config_path(instance, workspace_root)) as f:
-        conf = parse_instance_config(f.read())
+    conf = load_instance_config(instance, workspace_root)
     port = conf.server.http_port
 
     pid = _read_pid(instance, workspace_root)
