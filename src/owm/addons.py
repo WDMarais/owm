@@ -1,12 +1,13 @@
 import os
 
+from owm.worktrees import resolve_worktree_path
+
 
 def resolve_addons_path(
     workspace_repos: dict,
     instance_repos: dict,
     workspace_root: str,
     instance_name: str,
-    instances_dir: str,
     repo_priority: list[str] | None = None,
 ) -> list[str]:
     # Declaration order is priority order: first = highest priority.
@@ -28,10 +29,7 @@ def resolve_addons_path(
         branch = inst_repo.get("branch", "")
         addons_paths = meta.get("addons_paths", ["."])
 
-        if shared:
-            base = os.path.join(workspace_root, "_shared", repo_name, branch)
-        else:
-            base = os.path.join(workspace_root, instances_dir, instance_name, repo_name)
+        base = resolve_worktree_path(repo_name, branch, shared, workspace_root, instance_name).path
 
         for ap in addons_paths:
             if ap == ".":

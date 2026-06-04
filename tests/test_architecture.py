@@ -24,6 +24,14 @@ _GIT_OWNING = {"sync.py", "worktrees.py", "workspace.py"}
 # The production surface the rules apply to.
 _MODULES = [*sorted(_SRC.glob("*.py")), _DASHBOARD / "server.py"]
 
+# worktrees.resolve_worktree_path is the one place that knows the on-disk
+# layout (_shared/<repo>/<branch> vs instances/<inst>/<repo>). The conftest
+# fixture is scanned too: its worktree layout was tied to the resolver
+# deliberately, and re-drifting it would silently desync test setup from
+# production.
+_WORKTREE_RESOLVER = "worktrees.py"
+_WORKTREE_SCAN = [*_MODULES, _REPO / "tests" / "conftest.py"]
+
 
 def _git_subprocess_lines(source: str) -> list[int]:
     """Line numbers of subprocess.<fn>([...]) calls whose command is a literal
@@ -47,6 +55,38 @@ def _git_subprocess_lines(source: str) -> list[int]:
     return hits
 
 
+def _is_os_path_join(func: ast.expr) -> bool:
+    """True for an `os.path.join` attribute access."""
+    return (isinstance(func, ast.Attribute) and func.attr == "join"
+            and isinstance(func.value, ast.Attribute) and func.value.attr == "path"
+            and isinstance(func.value.value, ast.Name) and func.value.value.id == "os")
+
+
+def _inline_shared_worktree_lines(source: str) -> list[int]:
+    """Line numbers that build a path with a literal "_shared" segment, i.e.
+    reconstruct the shared-worktree layout instead of calling
+    resolve_worktree_path. Matches os.path.join(..., "_shared", ...) and pathlib
+    `x / "_shared"`. An exact "_shared" constant only — substrings inside f-string
+    hints like "git -C _shared/..." are advisory text, not path construction.
+
+    Scope note: only the shared form is checked. The per-instance form
+    (instances/<inst>/<repo>) shares its "instances" segment with the plain
+    instance directory, so it can't be told apart from a non-worktree path
+    statically — it isn't fenced here.
+    """
+    hits = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and _is_os_path_join(node.func):
+            for arg in node.args:
+                if isinstance(arg, ast.Constant) and arg.value == "_shared":
+                    hits.add(node.lineno)
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+            for side in (node.left, node.right):
+                if isinstance(side, ast.Constant) and side.value == "_shared":
+                    hits.add(node.lineno)
+    return sorted(hits)
+
+
 @pytest.mark.architecture
 @pytest.mark.parametrize("module", _MODULES, ids=lambda p: p.name)
 def test_git_invoked_only_in_lib_primitives(module):
@@ -61,4 +101,18 @@ def test_git_invoked_only_in_lib_primitives(module):
     assert not hits, (
         f"{module.name} invokes git directly at line(s) {hits}; route through an "
         f"owm.sync primitive (git_run / a reader) instead of subprocess(['git', ...])."
+    )
+
+
+@pytest.mark.architecture
+@pytest.mark.parametrize("module", _WORKTREE_SCAN, ids=lambda p: p.name)
+def test_shared_worktree_path_built_only_via_resolver(module):
+    """No module outside worktrees.py may reconstruct the _shared/<repo>/<branch>
+    worktree path inline. Call resolve_worktree_path so the layout has one owner."""
+    if module.name == _WORKTREE_RESOLVER:
+        return
+    hits = _inline_shared_worktree_lines(module.read_text())
+    assert not hits, (
+        f"{module.name} builds a _shared worktree path inline at line(s) {hits}; "
+        f"call worktrees.resolve_worktree_path instead."
     )

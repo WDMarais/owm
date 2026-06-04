@@ -438,7 +438,6 @@ def create_instance(
         instance_repos=instance_repos_dict,
         workspace_root=workspace_root,
         instance_name=name,
-        instances_dir=ws_conf.defaults.instances_dir,
     )
 
     # Venv

@@ -886,7 +886,6 @@ def cmd_validate(ctx, name, live):
             instance_repos=instance_repos_dict,
             workspace_root=workspace_root,
             instance_name=instance,
-            instances_dir=ws_conf.defaults.instances_dir,
         )
         for ap in (addons_paths or []):
             if not os.path.isdir(ap):
@@ -1013,7 +1012,6 @@ def cmd_regen_conf(ctx, name):
         instance_repos=instance_repos_dict,
         workspace_root=workspace_root,
         instance_name=instance,
-        instances_dir=ws_conf.defaults.instances_dir,
     )
     log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
     content = generate_instance_conf(
