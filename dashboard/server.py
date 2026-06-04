@@ -21,8 +21,8 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from owm.archive import archive_instance
-from owm.config import parse_workspace_config, parse_instance_config
-from owm.errors import ConfigError, OwmError
+from owm.config import parse_workspace_config, parse_instance_config, load_instance_config
+from owm.errors import OwmError
 from owm.worktrees import resolve_worktree_path
 from owm.instance import (
     health_check,
@@ -215,13 +215,10 @@ def api_status():
 @app.get("/api/instance/{name}")
 def api_instance(name: str):
     instance_dir = WORKSPACE / "instances" / name
-    if not instance_dir.exists():
-        return {"error": "not found", "code": "NOT_FOUND"}
-
     try:
-        cfg = parse_instance_config((instance_dir / "instance.toml").read_text())
-    except ConfigError as e:
-        return {"error": str(e), "code": e.code}
+        cfg = load_instance_config(name, str(WORKSPACE))
+    except OwmError as e:
+        return {"error": str(e.args[0]), "code": str(e.code)}
     except OSError as e:
         return {"error": f"instance.toml unreadable: {e}", "code": "CONFIG_INVALID"}
 
