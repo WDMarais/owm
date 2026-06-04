@@ -15,7 +15,7 @@ from owm.errors import (
 from owm.instance import (
     new_instance, create_instance, start_instance, stop_instance,
     kill_instance, restart_instance, list_running_instances,
-    odoo_bin_path,
+    odoo_bin_path, find_odoo_repo,
 )
 from owm.archive import archive_instance
 from owm.config import parse_workspace_config, parse_instance_config, parse_repo_spec
@@ -100,9 +100,12 @@ def owm_env(instance, workspace_root=None, **kwargs):
     except OwmError as e:
         return _e(e)
 
+    # odoo_bin_path resolves the odoo repo for the path; re-resolve (cheap, pure)
+    # for any non-fatal findings so the surface can carry them to the agent.
+    findings = find_odoo_repo(conf).findings
     inst_dir = os.path.join(workspace_root, "instances", instance)
 
-    return {
+    env = {
         "ODOO_BIN":              odoo_bin,
         "VENV_PYTHON":           os.path.join(inst_dir, ".venv", "bin", "python"),
         "PSQL":                  "psql",
@@ -117,6 +120,9 @@ def owm_env(instance, workspace_root=None, **kwargs):
         "SCRIPTS_DIR":           os.path.join(inst_dir, "scripts"),
         "WORKSPACE_SCRIPTS_DIR": os.path.join(workspace_root, "scripts", "workspace"),
     }
+    # env is self-contained under its own key so an agent can consume it
+    # wholesale; findings ride alongside, never mixed into the var namespace.
+    return {"env": env, "findings": [f.to_dict() for f in findings]}
 
 
 def owm_audit_log(n=50, level=None, since=None):

@@ -735,7 +735,11 @@ def cmd_env(ctx, name, fmt):
         instance_http_port=conf.server.http_port,
         instance_gevent_port=conf.server.gevent_port,
     )
+    # stdout stays pure env (sourceable / parseable in every format); findings
+    # are diagnostics and go to stderr — the CLI's finding-rendering boundary.
     click.echo(format_env(env, fmt))
+    for f in find_odoo_repo(conf).findings:
+        click.echo(f"note: {f.message} [{f.code}]", err=True)
 
 
 @cli.command("archive")

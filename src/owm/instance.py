@@ -4,7 +4,6 @@ import re
 import signal
 import socket
 import subprocess
-import sys
 import time
 import tomllib
 import urllib.error
@@ -15,7 +14,7 @@ import psutil
 
 from owm.addons import resolve_addons_path
 from owm.config import instance_config_path, parse_instance_config, parse_workspace_config, InstanceConfig
-from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO, PORT_CONTESTED
+from owm.errors import OwmError, Finding, Severity, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO, PORT_CONTESTED
 from owm.oplog import workspace_log, instance_separator
 from owm.ports import assign_port, find_conflicting_process
 from owm.proxy import get_proxy_backend
@@ -144,13 +143,26 @@ def _probe_http(port: int, timeout: float = 2.0) -> bool:
         return False
 
 
-def find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
-    """Return (repo_name, spec) for the repo that contains odoo-bin.
+@dataclass
+class OdooRepoResult:
+    """The repo that contains odoo-bin, plus any non-fatal resolution notes.
+
+    findings carries Finding(s) such as the 'assuming repo odoo' fallback;
+    surfaces render them. The lib resolves and reports — it never prints.
+    """
+    name: str
+    spec: object
+    findings: list = field(default_factory=list)
+
+
+def find_odoo_repo(conf: InstanceConfig) -> OdooRepoResult:
+    """Resolve the repo that contains odoo-bin.
 
     Resolution order:
       1. server.odoo_repo — explicit; works for any topology including per-instance checkouts
       2. the single shared repo — covers the common shared-Odoo setup with no extra config
-      3. error with a hint to set odoo_repo explicitly
+      3. a repo literally named 'odoo' — assumed, with an INFO finding
+      4. error with a hint to set odoo_repo explicitly
     """
     if conf.server.odoo_repo:
         name = conf.server.odoo_repo
@@ -159,19 +171,22 @@ def find_odoo_repo(conf: InstanceConfig) -> tuple[str, object]:
                 f"odoo_repo = {name!r} not found in [repos]; check instance.toml",
                 code=NO_ODOO_REPO,
             )
-        return name, conf.repos[name]
+        return OdooRepoResult(name, conf.repos[name])
 
     shared = [(name, spec) for name, spec in conf.repos.items() if spec.shared]
     if len(shared) == 1:
-        return shared[0]
+        return OdooRepoResult(shared[0][0], shared[0][1])
 
     if "odoo" in conf.repos:
-        print(
-            "note: odoo_repo not set — assuming repo 'odoo'; "
-            "set odoo_repo explicitly in [server] to suppress this",
-            file=sys.stderr,
+        return OdooRepoResult(
+            "odoo", conf.repos["odoo"],
+            findings=[Finding(
+                NO_ODOO_REPO,
+                "odoo_repo not set — assuming repo 'odoo'; "
+                "set odoo_repo explicitly in [server] to suppress",
+                severity=Severity.INFO,
+            )],
         )
-        return "odoo", conf.repos["odoo"]
 
     raise OwmError(
         "cannot locate odoo-bin: "
@@ -188,8 +203,8 @@ def odoo_bin_path(conf: InstanceConfig, workspace_root: str, instance: str) -> s
     per-instance odoo repo under instances/<instance>/<repo>. Both the start command
     and the env surfaces (CLI/MCP) must agree on this path.
     """
-    odoo_repo, odoo_spec = find_odoo_repo(conf)
-    wt = resolve_worktree_path(odoo_repo, odoo_spec.branch, odoo_spec.shared, workspace_root, instance)
+    r = find_odoo_repo(conf)
+    wt = resolve_worktree_path(r.name, r.spec.branch, r.spec.shared, workspace_root, instance)
     return os.path.join(wt.path, "odoo-bin")
 
 
@@ -429,8 +444,8 @@ def create_instance(
     python_version = conf.python.version if conf.python else "3.12"
     venv_dir = os.path.join(workspace_root, "instances", name, ".venv")
     if not os.path.exists(venv_dir):
-        odoo_repo_name, odoo_spec = find_odoo_repo(conf)
-        odoo_wt = resolve_worktree_path(odoo_repo_name, odoo_spec.branch, odoo_spec.shared, workspace_root, name)
+        r = find_odoo_repo(conf)
+        odoo_wt = resolve_worktree_path(r.name, r.spec.branch, r.spec.shared, workspace_root, name)
         req_files = []
         default_req = os.path.join(odoo_wt.path, "requirements.txt")
         if os.path.exists(default_req):

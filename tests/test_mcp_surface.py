@@ -215,7 +215,9 @@ def test_owm_env_returns_all_required_keys(standard_instance_toml, tmp_workspace
         "INSTANCE_DIR", "LOG_FILE", "HTTP_PORT", "GEVENT_PORT",
         "ODOO_CONF", "WORKSPACE_DIR", "SCRIPTS_DIR", "WORKSPACE_SCRIPTS_DIR",
     }
-    assert expected_keys.issubset(set(result.keys()))
+    # env is self-contained under "env"; findings ride alongside, not mixed in.
+    assert expected_keys.issubset(set(result["env"].keys()))
+    assert "findings" not in result["env"]
 
 
 # ---------------------------------------------------------------------------
@@ -1007,4 +1009,4 @@ def test_owm_workspace_env_var_overrides_dot_default(monkeypatch, tmp_workspace,
     monkeypatch.setenv("OWM_WORKSPACE", str(tmp_workspace))
     result = owm_env(instance="feat-789")
     assert "error" not in result
-    assert str(tmp_workspace) in result["WORKSPACE_DIR"]
+    assert str(tmp_workspace) in result["env"]["WORKSPACE_DIR"]
