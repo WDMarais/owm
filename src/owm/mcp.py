@@ -18,7 +18,7 @@ from owm.instance import (
     odoo_bin_path, find_odoo_repo,
 )
 from owm.archive import archive_instance
-from owm.config import parse_workspace_config, parse_instance_config, parse_repo_spec
+from owm.config import parse_workspace_config, parse_instance_config, parse_repo_spec, load_instance_config
 from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
 from owm.database import reset_db
 from owm.sync import (
@@ -61,14 +61,10 @@ def owm_validate(instance, live=False, workspace_root=None, **kwargs):
     errors = []
     warnings = []
 
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    if not os.path.exists(toml_path):
-        return {"valid": False, "errors": [f"instance.toml not found for {instance!r}"], "warnings": [], "live_checks_run": False}
     try:
-        with open(toml_path) as f:
-            conf = parse_instance_config(f.read())
-    except Exception as e:
-        return {"valid": False, "errors": [f"instance.toml parse error: {e}"], "warnings": [], "live_checks_run": False}
+        conf = load_instance_config(instance, workspace_root)
+    except OwmError as e:
+        return {"valid": False, "errors": [str(e.args[0])], "warnings": [], "live_checks_run": False}
 
     inst_dir = os.path.join(workspace_root, "instances", instance)
     venv_dir = os.path.join(inst_dir, ".venv")
@@ -88,12 +84,10 @@ def owm_validate(instance, live=False, workspace_root=None, **kwargs):
 
 def owm_env(instance, workspace_root=None, **kwargs):
     workspace_root = workspace_root or default_workspace()
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     try:
-        with open(toml_path) as f:
-            conf = parse_instance_config(f.read())
-    except (OSError, ValueError) as e:
-        return format_error(str(e), "NOT_FOUND")
+        conf = load_instance_config(instance, workspace_root)
+    except OwmError as e:
+        return _e(e)
 
     try:
         odoo_bin = odoo_bin_path(conf, workspace_root, instance)
@@ -155,9 +149,7 @@ def owm_create(instance, toml=None, repos=None, workspace_root=None, **kwargs):
     elif repos:
         specs = {name: parse_repo_spec(spec) for name, spec in repos.items()}
     else:
-        toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-        with open(toml_path) as f:
-            conf = parse_instance_config(f.read())
+        conf = load_instance_config(instance, workspace_root)
         specs = conf.repos
 
     for name, spec in specs.items():
@@ -298,9 +290,7 @@ def owm_push(instance, repo, workspace_root=None, **kwargs):
 
 def owm_reset(instance, repo, force=False, workspace_root=None, **kwargs):
     workspace_root = workspace_root or default_workspace()
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    with open(toml_path) as f:
-        conf = parse_instance_config(f.read())
+    conf = load_instance_config(instance, workspace_root)
 
     spec = conf.repos[repo]
     wt = resolve_worktree_path(repo, spec.branch, spec.shared, workspace_root, instance)
@@ -443,12 +433,10 @@ def owm_upgrade(instance, modules, in_place=False, workers=2, simulate_failure=F
 
 def owm_db_reset(instance, workspace_root=None, **kwargs):
     workspace_root = workspace_root or default_workspace()
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     try:
-        with open(toml_path) as f:
-            conf = parse_instance_config(f.read())
-    except (OSError, ValueError) as e:
-        return format_error(str(e), "NOT_FOUND")
+        conf = load_instance_config(instance, workspace_root)
+    except OwmError as e:
+        return _e(e)
 
     if conf.database.template is None:
         return format_error("no template configured for this instance", "NO_TEMPLATE")
@@ -475,9 +463,7 @@ def owm_db_reset(instance, workspace_root=None, **kwargs):
 
 def owm_db_dump(instance, out=None, workspace_root=None, **kwargs):
     workspace_root = workspace_root or default_workspace()
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    with open(toml_path) as f:
-        conf = parse_instance_config(f.read())
+    conf = load_instance_config(instance, workspace_root)
     result = db_dump(
         instance=instance, out=out, workspace_root=workspace_root,
         db_name=conf.database.name, pg_port=conf.database.pg_port,
@@ -489,9 +475,7 @@ def owm_db_restore(instance, path, running=False, workspace_root=None, **kwargs)
     workspace_root = workspace_root or default_workspace()
     if running:
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
-    with open(toml_path) as f:
-        conf = parse_instance_config(f.read())
+    conf = load_instance_config(instance, workspace_root)
     try:
         db_restore(
             instance=instance, path=path, workspace_root=workspace_root,

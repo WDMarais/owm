@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import psutil
 
 from owm.addons import resolve_addons_path
-from owm.config import load_instance_config, parse_instance_config, parse_workspace_config, InstanceConfig
+from owm.config import instance_config_path, load_instance_config, parse_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import OwmError, Finding, Severity, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT, NO_ODOO_REPO, PORT_CONTESTED
 from owm.oplog import workspace_log, instance_separator
 from owm.ports import assign_port, find_conflicting_process
@@ -398,8 +398,9 @@ def create_instance(
             branches_deleted=[],
         )
 
-    # Fresh materialisation: read toml, create all resources
-    toml_path = os.path.join(workspace_root, "instances", name, "instance.toml")
+    # Fresh materialisation: read toml, create all resources. Holds the path
+    # explicitly — the assigned port is rewritten back into it below.
+    toml_path = instance_config_path(name, workspace_root)
     with open(toml_path) as f:
         conf = parse_instance_config(f.read())
 

@@ -4,8 +4,8 @@ Consumed by owm.mcp (MCP tool surface) and owm.cli (--json flag, and prose forma
 """
 import os
 
-from owm.config import parse_instance_config
-from owm.errors import format_error
+from owm.config import parse_instance_config, load_instance_config
+from owm.errors import OwmError, format_error
 from owm.instance import health_check
 from owm.ports import find_conflicting_process
 from owm.sync import repo_sync_status
@@ -18,12 +18,10 @@ def default_workspace() -> str:
 
 
 def instance_status(instance: str, workspace_root: str) -> dict:
-    toml_path = os.path.join(workspace_root, "instances", instance, "instance.toml")
     try:
-        with open(toml_path) as f:
-            conf = parse_instance_config(f.read())
-    except OSError:
-        return format_error(f"instance {instance!r} not found", "NOT_FOUND")
+        conf = load_instance_config(instance, workspace_root)
+    except OwmError as e:
+        return format_error(str(e.args[0]), str(e.code))
 
     h = health_check(instance, workspace_root)
     http_port = conf.server.http_port
