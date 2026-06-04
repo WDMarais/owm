@@ -273,6 +273,8 @@ repo_priority = ["customer-config", "product-core"]   # odoo (unlisted) falls in
 
 Only repos explicitly listed in `instance.toml` contribute to addons_path — no implicit fallback to shared for absent repos. If product-core is not in the instance, it is not in addons_path. Silent exclusion, no warnings.
 
+A per-instance repo on a feature branch contributes **only its own worktree** — no fallback to the base branch's worktree. (owm appended `_shared/<repo>/<base>` after the per-instance worktree so a branch behind its base still reached base-only modules.) That top-up is deliberately omitted: it splices a second checkout of the same repo into `addons_path` (the branch's versions of what it touched, plus base's versions of everything else), can resurrect a module the branch deleted, and masks branch staleness. An instance's needs are met by its branch + the shared product worktree + odoo base, all already in the path; the modules the fallback added are precisely the ones the instance neither carries nor installs. Where a branch *has* fallen behind, `owm validate` warns and names the base-only modules, so the staleness is visible rather than silently filled.
+
 For repos present in instance but via shared worktree: each configured addons_path entry resolves under `_shared/<repo>/<branch>/`.
 
 ```
