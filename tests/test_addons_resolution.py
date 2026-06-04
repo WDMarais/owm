@@ -292,6 +292,38 @@ def test_addons_path_repo_priority_overrides_declaration_order():
 
 
 @pytest.mark.addons_resolution
+def test_addons_path_partial_repo_priority_appends_unlisted_in_declaration_order():
+    """A partial repo_priority ranks the named repos first, then appends every other
+    has_addons repo in declaration order. Omitting a repo must never silently drop it
+    from addons_path — it just ranks below the named ones."""
+    workspace_repos = {
+        "odoo":            {"has_addons": True, "addons_paths": ["addons"], "url": "..."},
+        "product-core":    {"has_addons": True, "addons_paths": ["addons"], "url": "..."},
+        "customer-config": {"has_addons": True, "addons_paths": ["addons"], "url": "..."},
+    }
+    instance_repos = {
+        "odoo":            {"branch": "19.0",         "shared": True},
+        "product-core":    {"branch": "feat-789-dev", "shared": False},
+        "customer-config": {"branch": "feat-789-dev", "shared": False},
+    }
+    # Only the precedence that matters is stated: customer-config must win. odoo and
+    # product-core are unlisted and must still appear, after the named repo.
+    paths = resolve_addons_path(
+        workspace_repos=workspace_repos,
+        instance_repos=instance_repos,
+        workspace_root="/ws",
+        instance_name="feat-789",
+        repo_priority=["customer-config"],
+    )
+    customer_idx = next(i for i, p in enumerate(paths) if "customer-config" in p)
+    product_idx  = next(i for i, p in enumerate(paths) if "product-core" in p)
+    odoo_idx     = next(i for i, p in enumerate(paths) if "_shared/odoo" in p)
+    assert customer_idx == 0                      # named repo ranks first
+    assert odoo_idx < product_idx                 # unlisted repos keep declaration order (odoo declared first)
+    assert {customer_idx, product_idx, odoo_idx} == {0, 1, 2}  # none dropped
+
+
+@pytest.mark.addons_resolution
 def test_addons_path_declaration_order_is_load_bearing():
     """parse_workspace_config must preserve TOML key insertion order.
     Declaration order = priority order, so a dict that re-sorts keys would silently

@@ -28,9 +28,14 @@ def resolve_addons_path(
     repo_priority: list[str] | None = None,
 ) -> list[str]:
     # Declaration order is priority order: first = highest priority.
-    # repo_priority overrides declaration order when present; otherwise TOML key order is used.
-    # Within a repo's addons_paths, same rule applies.
-    order = repo_priority if repo_priority else list(workspace_repos.keys())
+    # repo_priority states the precedence that matters; any has_addons repo it does
+    # not name falls in afterwards in declaration order — so omitting a repo can never
+    # silently drop it from addons_path, it only ranks it below the named ones.
+    # Within a repo's addons_paths, the same first-wins rule applies.
+    if repo_priority:
+        order = repo_priority + [r for r in workspace_repos if r not in repo_priority]
+    else:
+        order = list(workspace_repos.keys())
     result = []
     for repo_name in order:
         if repo_name not in workspace_repos:
