@@ -11,7 +11,7 @@ import click
 
 from owm.api import instance_status, workspace_status
 from owm.config import ConfOwnership, load_instance_config, parse_workspace_config
-from owm.addons import resolve_addons_path
+from owm.addons import empty_addons_path_message, resolve_addons_path
 from owm.database import check_pg_reachability
 from owm.errors import OwmError, NOT_FOUND
 from owm.instance import (
@@ -897,6 +897,8 @@ def cmd_validate(ctx, name, live):
                 if os.path.isdir(os.path.join(ap, d))
             ):
                 warnings.append(f"addon path has no modules: {ap}")
+        if not addons_paths:
+            errors.append(empty_addons_path_message(instance))
     else:
         addons_paths = None
 
@@ -907,7 +909,10 @@ def cmd_validate(ctx, name, live):
         # manually owned: intentionally divergent from instance.toml, so surface that
         # the sync check was skipped rather than silently passing it off as "ok".
         notes.append(f"instance.conf is manually owned ({ConfOwnership.MANUAL}) — not checked against instance.toml")
-    else:
+    elif addons_paths:
+        # Sync-checkable only with a complete expected conf: workspace.toml readable
+        # (addons_paths is None otherwise) and addons resolved non-empty (already
+        # errored above otherwise — no point re-flagging it as a regen-conf nudge).
         log_path = os.path.join(instance_dir, "instance.log")
         expected_conf = generate_instance_conf(
             instance,
@@ -1039,6 +1044,9 @@ def cmd_regen_conf(ctx, name, force):
         workspace_root=workspace_root,
         instance_name=instance,
     )
+    if not addons_paths:
+        click.echo(f"error: {empty_addons_path_message(instance)}", err=True)
+        sys.exit(1)
     log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
     content = generate_instance_conf(
         instance,

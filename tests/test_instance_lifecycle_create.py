@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 from owm.instance import new_instance, create_instance
 from owm.workspace import init_workspace
 from owm.config import ConfOwnership
-from owm.errors import OwmError, ODOO_CONFIG_UNMARKED
+from owm.errors import OwmError, ODOO_CONFIG_UNMARKED, ODOO_CONFIG_NO_ADDONS
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +149,27 @@ def test_create_instance_refuses_unmarked_conf(standard_instance_toml, tmp_works
             create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=True)
     assert exc.value.code == ODOO_CONFIG_UNMARKED
     assert conf_path.read_text() == original  # left untouched
+
+
+@pytest.mark.instance_lifecycle_create
+def test_create_instance_refuses_empty_addons_path(standard_instance_toml, tmp_workspace):
+    """A workspace.toml that declares no has_addons repos (e.g. owm's legacy flat
+    `name = "url"` form) resolves to an empty addons_path. create refuses
+    (ODOO_CONFIG_NO_ADDONS) rather than writing an Odoo conf that loads no modules."""
+    (tmp_workspace / "workspace.toml").write_text(
+        "[repos]\n"
+        'odoo_like = "/dev/null"\n'
+        'product_core = "/dev/null"\n'
+        'customer_config = "/dev/null"\n'
+        "[clusters]\n"
+    )
+    conf_path = tmp_workspace / "instances" / "feat-789" / "instance.conf"
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance._create_instance_db"):
+        with pytest.raises(OwmError) as exc:
+            create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=False)
+    assert exc.value.code == ODOO_CONFIG_NO_ADDONS
+    assert not conf_path.exists()  # no module-less conf written
 
 
 @pytest.mark.instance_lifecycle_create

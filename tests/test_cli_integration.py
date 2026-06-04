@@ -185,7 +185,13 @@ def test_create_exists_flag_branch_not_found_exits_nonzero(runner, tmp_workspace
 @pytest.mark.cli_integration
 def test_create_infers_instance_from_cwd(runner, standard_instance_toml, tmp_workspace, monkeypatch):
     monkeypatch.delenv("OWM_WORKSPACE", raising=False)
-    (tmp_workspace / "workspace.toml").write_text("[repos]\n[clusters]\n")
+    # Minimal proxy-less workspace, but with one has_addons repo the instance uses:
+    # create refuses an instance whose addons_path resolves to empty.
+    (tmp_workspace / "workspace.toml").write_text(
+        "[repos]\n"
+        'odoo_like = {path = "/dev/null", has_addons = true}\n'
+        "[clusters]\n"
+    )
     monkeypatch.chdir(tmp_workspace / "instances" / "feat-789")
     with patch("owm.instance.create_worktree"), patch("owm.instance._create_instance_db"):
         result = runner.invoke(cli, ["create"])
@@ -740,3 +746,39 @@ def test_regen_conf_refuses_unmarked_conf(runner, tmp_workspace):
     assert result.exit_code == 1
     assert "no ownership marker" in result.output + (result.stderr or "")
     assert conf.read_text() == original
+
+
+@pytest.mark.cli_integration
+def test_regen_conf_refuses_empty_addons_path(runner, standard_instance_toml, tmp_workspace):
+    """regen-conf refuses (exit 1) when addons_path resolves to empty — writing a
+    module-less Odoo conf would be worse than not regenerating."""
+    (tmp_workspace / "workspace.toml").write_text(
+        "[repos]\n"
+        'odoo_like = "/dev/null"\n'
+        'product_core = "/dev/null"\n'
+        'customer_config = "/dev/null"\n'
+        "[clusters]\n"
+    )
+    conf = tmp_workspace / "instances" / "feat-789" / "instance.conf"
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "regen-conf", "feat-789"])
+    assert result.exit_code == 1
+    assert "load no modules" in result.output + (result.stderr or "")
+    assert not conf.exists()
+
+
+@pytest.mark.cli_integration
+def test_validate_reports_empty_addons_path(runner, standard_instance_toml, tmp_workspace):
+    """validate reports an empty-resolving addons_path as an error (exit 1), not a
+    silent pass or a misleading 'out of sync — run regen-conf' warning."""
+    (tmp_workspace / "workspace.toml").write_text(
+        "[repos]\n"
+        'odoo_like = "/dev/null"\n'
+        'product_core = "/dev/null"\n'
+        'customer_config = "/dev/null"\n'
+        "[clusters]\n"
+    )
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789"])
+    assert result.exit_code == 1
+    out = result.output + (result.stderr or "")
+    assert "load no modules" in out
+    assert "out of sync" not in out  # not the misleading regen-conf nudge

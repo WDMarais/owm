@@ -54,6 +54,7 @@ class ErrorCode(StrEnum):
     # ODOO_CONFIG_* = the Odoo server config owm generates (instance.conf).
     OWM_CONFIG_INVALID   = "OWM_CONFIG_INVALID"
     ODOO_CONFIG_UNMARKED = "ODOO_CONFIG_UNMARKED"
+    ODOO_CONFIG_NO_ADDONS = "ODOO_CONFIG_NO_ADDONS"
 
     def __new__(cls, value, default_severity=Severity.BLOCKING):
         # Codes default to BLOCKING (raised as OwmError). A code emitted as a
@@ -90,6 +91,7 @@ NO_ODOO_REPO          = ErrorCode.NO_ODOO_REPO
 FETCH_TIMEOUT         = ErrorCode.FETCH_TIMEOUT
 OWM_CONFIG_INVALID    = ErrorCode.OWM_CONFIG_INVALID
 ODOO_CONFIG_UNMARKED  = ErrorCode.ODOO_CONFIG_UNMARKED
+ODOO_CONFIG_NO_ADDONS = ErrorCode.ODOO_CONFIG_NO_ADDONS
 
 
 class OwmError(Exception):

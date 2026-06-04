@@ -3,6 +3,23 @@ import os
 from owm.worktrees import resolve_worktree_path
 
 
+def empty_addons_path_message(instance_name: str) -> str:
+    """Wording for the empty-addons-path failure, shared by every callsite.
+
+    An instance whose addons_path resolves to empty would get an Odoo config
+    that loads no modules — not even `base`, so the server can't start. This is
+    never a valid steady state, so generation refuses it loudly rather than
+    writing a module-less conf. The usual cause is a workspace.toml that names
+    repos but declares `has_addons = true` on none of them (e.g. owm's legacy
+    flat `name = "url"` form), so resolution opts every repo out.
+    """
+    return (
+        f"addons_path for {instance_name!r} resolved to empty — the generated Odoo "
+        f"config would load no modules (not even base). Declare 'has_addons = true' "
+        f"on the contributing repos in workspace.toml (at minimum the odoo repo)."
+    )
+
+
 def resolve_addons_path(
     workspace_repos: dict,
     instance_repos: dict,
