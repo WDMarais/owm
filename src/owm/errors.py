@@ -49,7 +49,11 @@ class ErrorCode(StrEnum):
     CONFIRMATION_REQUIRED = "CONFIRMATION_REQUIRED"
     NO_ODOO_REPO        = "NO_ODOO_REPO"
     FETCH_TIMEOUT       = "FETCH_TIMEOUT"
-    CONFIG_INVALID      = "CONFIG_INVALID"
+    # Config failures, named by owning domain rather than file format (which is
+    # incidental): OWM_CONFIG_* = owm's own config (instance.toml / workspace.toml);
+    # ODOO_CONFIG_* = the Odoo server config owm generates (instance.conf).
+    OWM_CONFIG_INVALID   = "OWM_CONFIG_INVALID"
+    ODOO_CONFIG_UNMARKED = "ODOO_CONFIG_UNMARKED"
 
     def __new__(cls, value, default_severity=Severity.BLOCKING):
         # Codes default to BLOCKING (raised as OwmError). A code emitted as a
@@ -84,7 +88,8 @@ ARCHIVE_CONFLICT      = ErrorCode.ARCHIVE_CONFLICT
 CONFIRMATION_REQUIRED = ErrorCode.CONFIRMATION_REQUIRED
 NO_ODOO_REPO          = ErrorCode.NO_ODOO_REPO
 FETCH_TIMEOUT         = ErrorCode.FETCH_TIMEOUT
-CONFIG_INVALID        = ErrorCode.CONFIG_INVALID
+OWM_CONFIG_INVALID    = ErrorCode.OWM_CONFIG_INVALID
+ODOO_CONFIG_UNMARKED  = ErrorCode.ODOO_CONFIG_UNMARKED
 
 
 class OwmError(Exception):
@@ -100,12 +105,12 @@ class OwmError(Exception):
 class ConfigError(OwmError):
     """A workspace.toml / instance.toml that cannot be parsed into config.
 
-    Always carries CONFIG_INVALID. Callers (dashboard, api, CLI) catch this
+    Always carries OWM_CONFIG_INVALID. Callers (dashboard, api, CLI) catch this
     specifically to distinguish a malformed config from operational errors
     rather than swallowing every exception."""
 
     def __init__(self, message: str, **extra):
-        super().__init__(message, CONFIG_INVALID, **extra)
+        super().__init__(message, OWM_CONFIG_INVALID, **extra)
 
 
 def format_error(message: str, code: ErrorCode | str, **extra) -> dict:

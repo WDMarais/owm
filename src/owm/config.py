@@ -1,8 +1,33 @@
 import os
 import tomllib
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 from owm.errors import ConfigError, NOT_FOUND, OwmError
+
+
+class ConfOwnership(StrEnum):
+    """Ownership marker carried on the first lines of a generated instance.conf.
+
+    MANAGED lets owm regenerate the file wholesale; MANUAL opts out so owm
+    leaves it alone. An absent marker is not a state owm proceeds from: to drive
+    a conf through owm you must explicitly declare it MANAGED or MANUAL, so the
+    regen paths raise ODOO_CONFIG_UNMARKED rather than silently clobbering a
+    hand-written conf whose ownership was never declared.
+    """
+    MANAGED = "# owm: managed"
+    MANUAL  = "# owm: manual"
+
+    @classmethod
+    def detect(cls, conf_path: str) -> "ConfOwnership | None":
+        """Return the ownership marker present in the conf at conf_path, or
+        None if it carries no recognised marker."""
+        with open(conf_path) as f:
+            for line in f:
+                for member in cls:
+                    if line.startswith(member):
+                        return member
+        return None
 
 
 def instance_config_path(instance: str, workspace_root: str) -> str:
@@ -356,7 +381,7 @@ def load_instance_config(instance: str, workspace_root: str) -> InstanceConfig:
     (`parse_instance_config` -> ConfigError on malformed toml) that the
     lifecycle, operations and sync paths otherwise repeat inline. Adapters
     shape the two failure modes by catching OwmError (NOT_FOUND) and
-    ConfigError (CONFIG_INVALID).
+    ConfigError (OWM_CONFIG_INVALID).
 
     Directory-enumeration callers that already hold a path from a workspace
     scan keep calling `parse_instance_config` directly — they reach the toml

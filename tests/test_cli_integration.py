@@ -710,3 +710,33 @@ def test_reset_dirty_with_force_exits_zero(runner, standard_instance_toml, tmp_w
             "--workspace", str(tmp_workspace), "reset", "feat-789", "--all", "--force",
         ])
     assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# owm regen-conf — instance.conf ownership guard (short-circuits before config load)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_regen_conf_skips_manual_conf(runner, tmp_workspace):
+    """A conf marked '# owm: manual' is left untouched, with a note, not an error."""
+    conf = tmp_workspace / "instances" / "feat-789" / "instance.conf"
+    conf.parent.mkdir(parents=True, exist_ok=True)
+    original = "# owm: manual\n[options]\nhttp_port = 9999\n"
+    conf.write_text(original)
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "regen-conf", "feat-789"])
+    assert result.exit_code == 0
+    assert "manually owned" in result.output + (result.stderr or "")
+    assert conf.read_text() == original
+
+
+@pytest.mark.cli_integration
+def test_regen_conf_refuses_unmarked_conf(runner, tmp_workspace):
+    """A conf with no ownership marker is refused (exit 1) rather than clobbered."""
+    conf = tmp_workspace / "instances" / "feat-789" / "instance.conf"
+    conf.parent.mkdir(parents=True, exist_ok=True)
+    original = "[options]\nhttp_port = 9999\n"
+    conf.write_text(original)
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "regen-conf", "feat-789"])
+    assert result.exit_code == 1
+    assert "no ownership marker" in result.output + (result.stderr or "")
+    assert conf.read_text() == original

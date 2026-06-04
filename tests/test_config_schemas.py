@@ -5,6 +5,7 @@ Covers: Config schemas, Requirements patching sections.
 import pytest
 
 from owm.config import parse_workspace_config, parse_instance_config, load_instance_config
+from owm.config import ConfOwnership
 from owm.config import WorkspaceConfig, InstanceConfig, RepoSpec, ClusterConfig
 from owm.config import WorkspaceDefaults, WorkspaceRepo
 from owm.errors import OwmError, ConfigError, NOT_FOUND
@@ -559,18 +560,18 @@ def test_resolve_patches_major_version_key_matches():
 
 
 # ---------------------------------------------------------------------------
-# Structured config errors: parse failures raise ConfigError (CONFIG_INVALID)
+# Structured config errors: parse failures raise ConfigError (OWM_CONFIG_INVALID)
 # with a message naming the offending field, not a leaked TypeError/KeyError.
 # ---------------------------------------------------------------------------
 
-from owm.errors import ConfigError, CONFIG_INVALID
+from owm.errors import ConfigError, OWM_CONFIG_INVALID
 
 
 @pytest.mark.config_schemas
 def test_malformed_toml_raises_config_error():
     with pytest.raises(ConfigError) as exc:
         parse_instance_config("this is not = valid toml [[[")
-    assert exc.value.code == CONFIG_INVALID
+    assert exc.value.code == OWM_CONFIG_INVALID
 
 
 @pytest.mark.config_schemas
@@ -588,7 +589,7 @@ test = "run.py"
 """
     with pytest.raises(ConfigError) as exc:
         parse_instance_config(toml)
-    assert exc.value.code == CONFIG_INVALID
+    assert exc.value.code == OWM_CONFIG_INVALID
     assert "scripts.runners" in str(exc.value)
     assert "test" in str(exc.value)
 
@@ -633,3 +634,30 @@ def test_instance_config_path_raises_not_found_for_missing_instance(tmp_path):
     with pytest.raises(OwmError) as exc:
         instance_config_path("ghost", str(tmp_path))
     assert exc.value.code == "NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# ConfOwnership — the marker that gates instance.conf regeneration. A managed
+# conf may be regenerated, a manual one is left alone, and an unmarked one is a
+# refusal (so a hand-written conf is never clobbered without an explicit choice).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.config_schemas
+def test_conf_ownership_detect_managed(tmp_path):
+    p = tmp_path / "instance.conf"
+    p.write_text(f"{ConfOwnership.MANAGED} — change to manual to take ownership\n[options]\n")
+    assert ConfOwnership.detect(str(p)) is ConfOwnership.MANAGED
+
+
+@pytest.mark.config_schemas
+def test_conf_ownership_detect_manual(tmp_path):
+    p = tmp_path / "instance.conf"
+    p.write_text(f"{ConfOwnership.MANUAL}\n[options]\nhttp_port = 9999\n")
+    assert ConfOwnership.detect(str(p)) is ConfOwnership.MANUAL
+
+
+@pytest.mark.config_schemas
+def test_conf_ownership_detect_absent_marker_is_none(tmp_path):
+    p = tmp_path / "instance.conf"
+    p.write_text("[options]\nhttp_port = 8069\n")
+    assert ConfOwnership.detect(str(p)) is None

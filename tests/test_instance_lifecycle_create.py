@@ -7,6 +7,8 @@ from unittest.mock import patch, MagicMock
 
 from owm.instance import new_instance, create_instance
 from owm.workspace import init_workspace
+from owm.config import ConfOwnership
+from owm.errors import OwmError, ODOO_CONFIG_UNMARKED
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +106,49 @@ def test_create_instance_writes_proxy_block_and_conf(standard_instance_toml, tmp
     conf_content = (tmp_workspace / "instances" / "feat-789" / "instance.conf").read_text()
     assert "http_port = 8142" in conf_content
     assert "db_name = owm_test_feat789" in conf_content
+
+
+# ---------------------------------------------------------------------------
+# owm create — instance.conf ownership guard
+# ---------------------------------------------------------------------------
+
+@pytest.mark.instance_lifecycle_create
+def test_create_instance_conf_carries_managed_marker(standard_instance_toml, tmp_workspace):
+    """A freshly generated instance.conf is stamped owm-managed so later regen is allowed."""
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance._create_instance_db"):
+        create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=False)
+    conf_path = tmp_workspace / "instances" / "feat-789" / "instance.conf"
+    assert ConfOwnership.detect(str(conf_path)) is ConfOwnership.MANAGED
+
+
+@pytest.mark.instance_lifecycle_create
+def test_create_instance_leaves_manual_conf_untouched(standard_instance_toml, tmp_workspace):
+    """A conf marked '# owm: manual' is never regenerated; the result reports it as not generated."""
+    conf_path = tmp_workspace / "instances" / "feat-789" / "instance.conf"
+    conf_path.parent.mkdir(parents=True, exist_ok=True)
+    original = f"{ConfOwnership.MANUAL}\n[options]\nhttp_port = 9999\n"
+    conf_path.write_text(original)
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance._create_instance_db"):
+        result = create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=True)
+    assert result.odoo_conf_generated is False
+    assert conf_path.read_text() == original
+
+
+@pytest.mark.instance_lifecycle_create
+def test_create_instance_refuses_unmarked_conf(standard_instance_toml, tmp_workspace):
+    """An existing conf with no ownership marker is a refusal (ODOO_CONFIG_UNMARKED), not a silent clobber."""
+    conf_path = tmp_workspace / "instances" / "feat-789" / "instance.conf"
+    conf_path.parent.mkdir(parents=True, exist_ok=True)
+    original = "[options]\nhttp_port = 9999\n"
+    conf_path.write_text(original)
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance._create_instance_db"):
+        with pytest.raises(OwmError) as exc:
+            create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=True)
+    assert exc.value.code == ODOO_CONFIG_UNMARKED
+    assert conf_path.read_text() == original  # left untouched
 
 
 @pytest.mark.instance_lifecycle_create

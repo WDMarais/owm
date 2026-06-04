@@ -217,7 +217,7 @@ def api_instance(name: str):
     except OwmError as e:
         return {"error": str(e.args[0]), "code": str(e.code)}
     except OSError as e:
-        return {"error": f"instance.toml unreadable: {e}", "code": "CONFIG_INVALID"}
+        return {"error": f"instance.toml unreadable: {e}", "code": "OWM_CONFIG_INVALID"}
 
     state  = _read_state(name)
     pid    = state.get("pid")

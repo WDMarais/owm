@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 
 from owm.api import instance_status, workspace_status
-from owm.config import load_instance_config, parse_workspace_config
+from owm.config import ConfOwnership, load_instance_config, parse_workspace_config
 from owm.addons import resolve_addons_path
 from owm.database import check_pg_reachability
 from owm.errors import OwmError, NOT_FOUND
@@ -844,6 +844,7 @@ def cmd_validate(ctx, name, live):
 
     errors = []
     warnings = []
+    notes = []
 
     # --- Tier 1: static ---
     try:
@@ -902,6 +903,10 @@ def cmd_validate(ctx, name, live):
     conf_path = os.path.join(instance_dir, "instance.conf")
     if not os.path.isfile(conf_path):
         warnings.append("instance.conf missing — run owm create")
+    elif ConfOwnership.detect(conf_path) == ConfOwnership.MANUAL:
+        # manually owned: intentionally divergent from instance.toml, so surface that
+        # the sync check was skipped rather than silently passing it off as "ok".
+        notes.append(f"instance.conf is manually owned ({ConfOwnership.MANUAL}) — not checked against instance.toml")
     else:
         log_path = os.path.join(instance_dir, "instance.log")
         expected_conf = generate_instance_conf(
@@ -918,7 +923,7 @@ def cmd_validate(ctx, name, live):
         with open(conf_path) as f:
             on_disk = f.read()
         if on_disk != expected_conf:
-            warnings.append("instance.conf is out of sync with instance.toml — run owm create")
+            warnings.append("instance.conf is out of sync with instance.toml — run owm regen-conf")
 
     # --- Tier 3: live ---
     if live:
@@ -933,6 +938,8 @@ def cmd_validate(ctx, name, live):
         except Exception as e:
             warnings.append(f"live HTTP check failed: {e}")
 
+    for n in notes:
+        click.echo(f"note:  {n}")
     if errors:
         for e in errors:
             click.echo(f"error: {e}", err=True)
@@ -990,11 +997,30 @@ def cmd_branches(ctx, repo):
 
 @cli.command("regen-conf")
 @click.argument("name", required=False)
+@click.option("--force", is_flag=True,
+              help="Regenerate even if instance.conf carries no ownership marker.")
 @click.pass_context
-def cmd_regen_conf(ctx, name):
+def cmd_regen_conf(ctx, name, force):
     """Regenerate instance.conf from current toml and workspace config."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
+    conf_path = os.path.join(workspace_root, "instances", instance, "instance.conf")
+    if os.path.exists(conf_path):
+        match ConfOwnership.detect(conf_path):
+            case ConfOwnership.MANAGED:
+                pass
+            case ConfOwnership.MANUAL:
+                click.echo(f"{instance}  instance.conf is manually owned "
+                           f"({ConfOwnership.MANUAL}) — skipping")
+                return
+            case None if not force:
+                click.echo(
+                    f"error: {instance} instance.conf carries no ownership marker; add "
+                    f"'{ConfOwnership.MANAGED}' to let owm regenerate it, "
+                    f"'{ConfOwnership.MANUAL}' to keep it yours, or pass --force",
+                    err=True,
+                )
+                sys.exit(1)
     conf = load_instance_config(instance, workspace_root)
     ws_toml_path = os.path.join(workspace_root, "workspace.toml")
     with open(ws_toml_path) as f:
@@ -1025,7 +1051,6 @@ def cmd_regen_conf(ctx, name):
         addons_path=addons_paths or None,
         logfile=log_path,
     )
-    conf_path = os.path.join(workspace_root, "instances", instance, "instance.conf")
     with open(conf_path, "w") as f:
         f.write(content)
     click.echo(f"{instance}  instance.conf regenerated")
