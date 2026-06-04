@@ -900,6 +900,11 @@ def cmd_validate(ctx, name, live):
                 warnings.append(f"addon path has no modules: {ap}")
         if not addons_paths:
             errors.append(empty_addons_path_message(instance))
+        elif len(addons_paths) > 1:
+            # surface the resolved precedence (first wins) so the order isn't a
+            # hidden consequence of repo_priority / declaration order
+            rel = [os.path.relpath(p, workspace_root) for p in addons_paths]
+            notes.append("addons import order (first path wins): " + ", ".join(rel))
     else:
         addons_paths = None
 

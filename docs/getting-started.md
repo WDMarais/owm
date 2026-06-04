@@ -96,6 +96,10 @@ addons_paths = ["."]          # addons at repo root — the common case
 [defaults]
 http_port_range = [8100, 8299]
 workers = 2
+# Addons precedence: first path wins for duplicate module names. List only the repos
+# whose precedence matters (here, customer-config must shadow odoo's base modules);
+# any other has_addons repo follows in [repos] declaration order.
+repo_priority = ["customer-config"]
 
 [proxy]
 domain_suffix = "localhost"
@@ -107,6 +111,13 @@ backend = "nginx"             # or "caddy"
 > The string shorthand (`name = "url"`) is for repos with no addons metadata (scripts,
 > tooling, etc.). `owm validate` will warn about repos missing addons metadata if they
 > appear to contain modules.
+
+> **Addons import order:** Odoo resolves a duplicate module name from the *first* matching
+> entry in `addons_path`, so override repos must come before the base they shadow. State that
+> precedence explicitly in `[defaults] repo_priority` rather than relying on how `[repos]` is
+> ordered — name only the repos that must rank first; the rest follow in declaration order.
+> `owm validate` prints the resolved order, and it's echoed as a comment above `addons_path`
+> in the generated `instance.conf`.
 
 ### 2. Run owm init
 

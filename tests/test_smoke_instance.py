@@ -50,6 +50,24 @@ def test_smoke_generate_instance_conf_no_dbfilter_when_proxy_inactive():
     assert not parser.has_option("options", "dbfilter")
 
 
+@pytest.mark.smoke
+def test_smoke_generate_instance_conf_documents_addons_order():
+    """The generated conf carries the first-path-wins precedence note immediately above
+    addons_path, and stays INI-parseable (comment, not a key)."""
+    conf = generate_instance_conf("feat-789", http_port=8142, gevent_port=8143, workers=2,
+                                  addons_path=["/ws/instances/feat-789/customer-config",
+                                               "/ws/_shared/odoo/19.0/addons"])
+    lines = conf.splitlines()
+    addons_idx = next(i for i, l in enumerate(lines) if l.startswith("addons_path ="))
+    preceding = "\n".join(lines[:addons_idx])
+    assert "first path wins" in preceding
+    assert "repo_priority" in preceding
+    # still valid INI — the note is a comment
+    parser = configparser.ConfigParser()
+    parser.read_string(conf)
+    assert parser.get("options", "addons_path").startswith("/ws/instances/feat-789/customer-config")
+
+
 # ---------------------------------------------------------------------------
 # new_instance — disk write + round-trip parse
 # ---------------------------------------------------------------------------

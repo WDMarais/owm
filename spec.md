@@ -260,6 +260,17 @@ multi-repo.addons_paths = ["primary_addons", "extras"] # arbitrary folder names;
 scripts.has_addons      = false
 ```
 
+### Precedence
+
+Odoo resolves a duplicate module name from the **first** matching entry in `addons_path`, so a repo that overrides modules must rank ahead of the base it shadows. Precedence is stated explicitly in `[defaults] repo_priority` — a list of repo names, highest first — rather than inferred from `[repos]` declaration order, which keeps "how repos are listed" decoupled from "what shadows what" (the same explicit-over-implicit stance as `has_addons`).
+
+`repo_priority` is partial by design: it names only the repos whose precedence matters, and every other `has_addons` repo follows afterwards in `[repos]` declaration order. Omitting a repo therefore only ranks it lower — it is never silently dropped from `addons_path`. When `repo_priority` is unset, declaration order is the priority order.
+
+```toml
+[defaults]
+repo_priority = ["customer-config", "product-core"]   # odoo (unlisted) falls in last
+```
+
 Only repos explicitly listed in `instance.toml` contribute to addons_path — no implicit fallback to shared for absent repos. If product-core is not in the instance, it is not in addons_path. Silent exclusion, no warnings.
 
 For repos present in instance but via shared worktree: each configured addons_path entry resolves under `_shared/<repo>/<branch>/`.

@@ -709,6 +709,12 @@ def generate_instance_conf(
     if proxy_active:
         lines.append(f"dbfilter = ^{instance_name}$")
     if addons_path:
+        lines.append(
+            "# addons_path: first path wins for duplicate module names. Order set by"
+        )
+        lines.append(
+            "# [defaults] repo_priority, then [repos] declaration order, in workspace.toml."
+        )
         lines.append(f"addons_path = {','.join(addons_path)}")
     if logfile:
         lines.append(f"logfile = {logfile}")
