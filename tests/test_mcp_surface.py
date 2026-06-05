@@ -37,9 +37,9 @@ def test_owm_status_instance_stopped_no_conflict(standard_instance_toml, tmp_wor
         result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
     assert result["instance"] == "feat-789"
     assert result["state"] == "stopped"
-    assert result["http_port"] == 8142
+    assert result["http_port"] == 18142
     assert result["db"] == "owm_test_feat789"
-    assert result["local_url"] == "http://localhost:8142"
+    assert result["local_url"] == "http://localhost:18142"
     assert result["url"] is None
     assert result["suspected_linked"] is None
 
@@ -80,7 +80,7 @@ def test_owm_status_instance_running(standard_instance_toml, tmp_workspace):
     assert result["state"] == "healthy"
     assert result["pid"] == 1234
     assert result["url"] == "https://feat-789.localhost"
-    assert result["local_url"] == "http://localhost:8142"
+    assert result["local_url"] == "http://localhost:18142"
     assert result["suspected_linked"] is None
 
 
@@ -104,7 +104,7 @@ def test_owm_status_workspace_stopped_instance(standard_instance_toml, tmp_works
         result = owm_status(workspace_root=str(tmp_workspace))
     assert "feat-789" in result["instances"]
     assert result["instances"]["feat-789"]["state"] == "stopped"
-    assert result["instances"]["feat-789"]["local_url"] == "http://localhost:8142"
+    assert result["instances"]["feat-789"]["local_url"] == "http://localhost:18142"
 
 
 @pytest.mark.mcp_surface
@@ -128,7 +128,7 @@ def test_owm_status_workspace_unmanaged_port_surfaces_in_port_alerts(standard_in
     assert len(result["port_alerts"]) == 1
     alert = result["port_alerts"][0]
     assert alert["instance"] == "feat-789"
-    assert alert["http_port"] == 8142
+    assert alert["http_port"] == 18142
     assert alert["classification"] == "probable_orphan"
 
 

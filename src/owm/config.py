@@ -75,6 +75,25 @@ def resolve_workspace_root(override: str | None = None) -> str:
     )
 
 
+def cwd_workspace_conflict(resolved_root: str) -> str | None:
+    """If the cwd sits inside a workspace different from resolved_root, return that
+    other workspace's root; else None.
+
+    resolve_workspace_root deliberately lets an override / OWM_WORKSPACE win over
+    the cwd, but that means standing inside workspace B while operating on A is
+    silent. This detector lets an adapter warn about the shadowing without changing
+    which root wins. Returns None when the cwd is inside resolved_root itself (the
+    walkup case) or inside no workspace at all.
+    """
+    target = os.path.abspath(resolved_root)
+    cwd = Path.cwd()
+    for ancestor in (cwd, *cwd.parents):
+        if (ancestor / "workspace.toml").is_file():
+            other = os.path.abspath(str(ancestor))
+            return other if other != target else None
+    return None
+
+
 @dataclass
 class RepoSpec:
     branch: str

@@ -28,8 +28,8 @@ name = "owm_test_feat789"
 pg_port = 5432
 
 [server]
-http_port = 8142
-gevent_port = 8143
+http_port = 18142
+gevent_port = 18143
 workers = 2
 """
 
@@ -140,7 +140,7 @@ def test_start_wait_timeout_exits_nonzero(tmp_path):
     with patch("owm.instance.subprocess.Popen", return_value=mock_proc), \
          patch("owm.instance._read_pid", return_value=None), \
          patch("owm.instance._wait_for_http",
-               side_effect=OwmError("timed out waiting for instance to start (port 8142)", code=START_TIMEOUT)):
+               side_effect=OwmError("timed out waiting for instance to start (port 18142)", code=START_TIMEOUT)):
         with pytest.raises(Exception) as exc_info:
             start_instance("feat-789", str(tmp_path), wait=True, timeout_seconds=1)
     assert "START_TIMEOUT" in str(exc_info.value) or "timed out" in str(exc_info.value).lower()
@@ -344,7 +344,7 @@ def test_health_unmanaged_process(tmp_path):
         result = health_check("feat-789", str(tmp_path))
     assert result["status"] == "unmanaged"
     assert result["pid"] == 9999
-    assert result["port"] == 8142
+    assert result["port"] == 18142
 
 
 @pytest.mark.instance_lifecycle_start_stop

@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 
 from owm.api import instance_status, workspace_status
-from owm.config import ConfOwnership, load_instance_config, parse_workspace_config, resolve_workspace_root
+from owm.config import ConfOwnership, cwd_workspace_conflict, load_instance_config, parse_workspace_config, resolve_workspace_root
 from owm.addons import empty_addons_path_message, module_names, resolve_addons_path
 from owm.database import check_pg_reachability
 from owm.errors import OwmError, NOT_FOUND
@@ -41,11 +41,21 @@ from owm.worktrees import resolve_worktree_path
 
 
 def _resolve_workspace(ctx) -> str:
+    override = ctx.obj.get("workspace")
     try:
-        return resolve_workspace_root(ctx.obj.get("workspace"))
+        root = resolve_workspace_root(override)
     except OwmError as e:
         # lib raises NOT_FOUND; present it as a click usage error (exit 2)
         raise click.UsageError(e.args[0]) from e
+    other = cwd_workspace_conflict(root)
+    if other:
+        source = "--workspace" if override else "OWM_WORKSPACE"
+        click.echo(
+            f"warning: operating on {root} (from {source}), but cwd is inside a "
+            f"different workspace {other}",
+            err=True,
+        )
+    return root
 
 
 def _resolve_instance(ctx, name: str | None) -> str:

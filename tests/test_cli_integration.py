@@ -840,3 +840,18 @@ def test_validate_no_lag_warning_when_branch_current(runner, standard_instance_t
     result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789"])
     out = result.output + (result.stderr or "")
     assert "not on this feature branch" not in out
+
+
+@pytest.mark.cli_integration
+def test_cli_warns_when_cwd_in_different_workspace(runner, tmp_workspace, tmp_path, monkeypatch):
+    """Operating on one workspace (--workspace/OWM_WORKSPACE) while standing inside
+    another is allowed (the deliberate root wins) but warned about, so the shadowing
+    isn't silent."""
+    other = tmp_path / "other_ws"
+    other.mkdir()
+    (other / "workspace.toml").write_text("[repos]\n[clusters]\n")
+    monkeypatch.chdir(other)
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "list"])
+    out = result.output + (result.stderr or "")
+    assert "but cwd is inside a different workspace" in out
+    assert str(other) in out

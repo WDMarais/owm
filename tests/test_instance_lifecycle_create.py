@@ -99,12 +99,12 @@ def test_create_instance_writes_proxy_block_and_conf(standard_instance_toml, tmp
     assert (tmp_workspace / "_proxy" / "feat-789.conf").exists()
     proxy_content = (tmp_workspace / "_proxy" / "feat-789.conf").read_text()
     assert "feat_789" in proxy_content
-    assert "8142" in proxy_content
+    assert "18142" in proxy_content
     assert "feat-789.localhost" in proxy_content
 
     assert (tmp_workspace / "instances" / "feat-789" / "instance.conf").exists()
     conf_content = (tmp_workspace / "instances" / "feat-789" / "instance.conf").read_text()
-    assert "http_port = 8142" in conf_content
+    assert "http_port = 18142" in conf_content
     assert "db_name = owm_test_feat789" in conf_content
 
 
@@ -174,13 +174,13 @@ def test_create_instance_refuses_empty_addons_path(standard_instance_toml, tmp_w
 
 @pytest.mark.instance_lifecycle_create
 def test_create_instance_port_conflict_reassigns(standard_instance_toml, tmp_workspace):
-    """If another instance holds port 8142, create_instance picks a fresh one."""
-    # Plant a second instance that already occupies port 8142
+    """If another instance holds the requested port, create_instance picks a fresh one."""
+    # Plant a second instance that already occupies feat-789's requested port (18142)
     other_dir = tmp_workspace / "instances" / "other-999"
     other_dir.mkdir()
     (other_dir / "instance.toml").write_text(
         "[repos]\n\n[database]\nname = \"owm_other\"\npg_port = 5432\n"
-        "[server]\nhttp_port = 8142\ngevent_port = 8143\nworkers = 2\n"
+        "[server]\nhttp_port = 18142\ngevent_port = 18143\nworkers = 2\n"
     )
     with patch("owm.instance.create_worktree"), \
          patch("owm.instance._create_instance_db"):
@@ -190,8 +190,8 @@ def test_create_instance_port_conflict_reassigns(standard_instance_toml, tmp_wor
             instance_exists=False,
         )
     conf_content = (tmp_workspace / "instances" / "feat-789" / "instance.conf").read_text()
-    # port must not be 8142 since that's taken
-    assert "http_port = 8142" not in conf_content
+    # port must not be 18142 since that's taken
+    assert "http_port = 18142" not in conf_content
 
 
 @pytest.mark.instance_lifecycle_create

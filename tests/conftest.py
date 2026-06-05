@@ -16,11 +16,53 @@ suffice for the red phase; swap for real imports when going green.
 """
 
 import shutil
+import os
+import socket
 import subprocess
 import textwrap
 from pathlib import Path
 
 import pytest
+
+
+# Fixture instance ports, deliberately outside the workspace http_port_range
+# ([8100, 8299]) so the real socket checks in lifecycle/health tests can never
+# collide with an actual running owm instance. gevent is derived as http_port + 1.
+FIXTURE_HTTP_PORT = 18142
+FIXTURE_GEVENT_PORT = FIXTURE_HTTP_PORT + 1
+
+
+@pytest.fixture(autouse=True)
+def _isolate_owm_workspace(tmp_path_factory, monkeypatch):
+    """Point OWM_WORKSPACE at a throwaway dir for every test, so resolution is
+    hermetic (never the dev's exported ~/dev-instances) yet default_workspace()
+    still resolves without raising. Tests that need a real workspace pass
+    --workspace / workspace_root; tests exercising resolution precedence override
+    this via monkeypatch (see test_resolve_workspace_root)."""
+    sentinel = tmp_path_factory.mktemp("owm_ws_sentinel")
+    monkeypatch.setenv("OWM_WORKSPACE", str(sentinel))
+
+
+def _port_in_use(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _fixture_ports_unoccupied():
+    """The lifecycle/health tests run real socket checks on the fixture instance's
+    ports. Those are chosen out of the real range to avoid collisions, but fail
+    loudly and specifically if something is on them anyway — so a stray process
+    reads as 'free this port' instead of a baffling PORT_CONTESTED / unmanaged deep
+    inside an unrelated-looking test."""
+    busy = [p for p in (FIXTURE_HTTP_PORT, FIXTURE_GEVENT_PORT) if _port_in_use(p)]
+    if busy:
+        pytest.fail(
+            f"fixture port(s) {busy} are occupied by another process. The lifecycle "
+            f"and health tests start/probe an instance on these and will spuriously "
+            f"fail. Stop whatever is listening (e.g. a stray owm instance) and re-run.",
+            pytrace=False,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +336,7 @@ def instance_toml(
     repos: dict,
     db_name: str,
     pg_port: int = 5432,
-    http_port: int = 8142,
+    http_port: int = FIXTURE_HTTP_PORT,
     workers: int = 2,
     template: str | None = None,
     modules: list | None = None,
@@ -398,7 +440,7 @@ def standard_instance_toml(tmp_workspace):
             "customer_config": "feat-789-dev:main",
         },
         db_name="owm_test_feat789",
-        http_port=8142,
+        http_port=FIXTURE_HTTP_PORT,
         modules=["test_sale_ext", "test_customer_addon"],
         python_version="3.12",
     )
