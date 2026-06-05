@@ -36,9 +36,10 @@ FIXTURE_GEVENT_PORT = FIXTURE_HTTP_PORT + 1
 def _isolate_owm_workspace(tmp_path_factory, monkeypatch):
     """Point OWM_WORKSPACE at a throwaway dir for every test, so resolution is
     hermetic (never the dev's exported ~/dev-instances) yet default_workspace()
-    still resolves without raising. Tests that need a real workspace pass
-    --workspace / workspace_root; tests exercising resolution precedence override
-    this via monkeypatch (see test_resolve_workspace_root)."""
+    still resolves without raising. Tests that need a real workspace use the
+    tmp_workspace fixture (which re-points OWM_WORKSPACE at itself); tests
+    exercising resolution precedence override this via monkeypatch (see
+    test_resolve_workspace_root)."""
     sentinel = tmp_path_factory.mktemp("owm_ws_sentinel")
     monkeypatch.setenv("OWM_WORKSPACE", str(sentinel))
 
@@ -184,9 +185,14 @@ def make_worktree(git_commit):
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def tmp_workspace(tmp_path):
+def tmp_workspace(tmp_path, monkeypatch):
     """
     Minimal owm workspace directory structure, no repos cloned yet.
+
+    Points OWM_WORKSPACE at the created workspace (overriding the autouse
+    sentinel in _isolate_owm_workspace), so code that resolves its own root via
+    default_workspace() — e.g. the MCP tools — targets this workspace without
+    being handed it explicitly. This is how the real runtime resolves it.
 
     Layout:
         tmp_path/workspace/
@@ -208,6 +214,7 @@ def tmp_workspace(tmp_path):
         "customer_config = {path = \"/dev/null\", has_addons = true}\n"
         "\n[clusters]\n\n[proxy]\nbackend = \"nginx\"\ndomain_suffix = \"localhost\"\n"
     )
+    monkeypatch.setenv("OWM_WORKSPACE", str(ws))
     return ws
 
 

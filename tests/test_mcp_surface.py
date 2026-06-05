@@ -11,14 +11,33 @@ import pytest
 from unittest.mock import patch
 
 from owm.mcp import (
-    owm_status, owm_ps, owm_validate, owm_env,
-    owm_audit_log, owm_new, owm_create, owm_start,
-    owm_stop, owm_kill, owm_restart, owm_health,
-    owm_archive, owm_delete, owm_rename,
-    owm_fetch, owm_sync, owm_push, owm_reset,
-    owm_run_script, owm_get_script_failures,
-    owm_compare, owm_upgrade, owm_db_reset,
-    owm_db_dump, owm_db_restore, owm_logs,
+    owm_status,
+    owm_ps,
+    owm_validate,
+    owm_env,
+    owm_audit_log,
+    owm_new,
+    owm_create,
+    owm_start,
+    owm_stop,
+    owm_kill,
+    owm_restart,
+    owm_health,
+    owm_archive,
+    owm_delete,
+    owm_rename,
+    owm_fetch,
+    owm_sync,
+    owm_push,
+    owm_reset,
+    owm_run_script,
+    owm_get_script_failures,
+    owm_compare,
+    owm_upgrade,
+    owm_db_reset,
+    owm_db_dump,
+    owm_db_restore,
+    owm_logs,
     owm_agent_context,
 )
 from owm.errors import OwmError, ALREADY_EXISTS
@@ -34,7 +53,7 @@ from owm.database import ResetDbResult
 def test_owm_status_instance_stopped_no_conflict(standard_instance_toml, tmp_workspace):
     with patch("owm.api.health_check", return_value={"status": "stopped"}), \
          patch("owm.api.find_conflicting_process", return_value=None):
-        result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_status(instance="feat-789")
     assert result["instance"] == "feat-789"
     assert result["state"] == "stopped"
     assert result["http_port"] == 18142
@@ -46,7 +65,7 @@ def test_owm_status_instance_stopped_no_conflict(standard_instance_toml, tmp_wor
 
 @pytest.mark.mcp_surface
 def test_owm_status_instance_not_found(tmp_workspace):
-    result = owm_status(instance="nonexistent", workspace_root=str(tmp_workspace))
+    result = owm_status(instance="nonexistent")
     assert result["error"] is not None
     assert result["code"] == "NOT_FOUND"
 
@@ -56,7 +75,7 @@ def test_owm_status_instance_suspected_orphan(standard_instance_toml, tmp_worksp
     proc = {"pid": 5678, "name": "python3", "cmdline": "python3 /ws/odoo-bin --config feat-789.conf"}
     with patch("owm.api.health_check", return_value={"status": "stopped"}), \
          patch("owm.api.find_conflicting_process", return_value=proc):
-        result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_status(instance="feat-789")
     assert result["suspected_linked"]["classification"] == "probable_orphan"
     assert result["suspected_linked"]["pid"] == 5678
 
@@ -66,7 +85,7 @@ def test_owm_status_instance_suspected_squatter(standard_instance_toml, tmp_work
     proc = {"pid": 9999, "name": "node", "cmdline": "node server.js"}
     with patch("owm.api.health_check", return_value={"status": "stopped"}), \
          patch("owm.api.find_conflicting_process", return_value=proc):
-        result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_status(instance="feat-789")
     assert result["suspected_linked"]["classification"] == "probable_squatter"
     assert result["suspected_linked"]["pid"] == 9999
 
@@ -76,7 +95,7 @@ def test_owm_status_instance_running(standard_instance_toml, tmp_workspace):
     h = {"status": "healthy", "pid": 1234, "url": "https://feat-789.localhost"}
     with patch("owm.api.health_check", return_value=h), \
          patch("owm.api.find_conflicting_process", return_value=None):
-        result = owm_status(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_status(instance="feat-789")
     assert result["state"] == "healthy"
     assert result["pid"] == 1234
     assert result["url"] == "https://feat-789.localhost"
@@ -90,7 +109,7 @@ def test_owm_status_instance_running(standard_instance_toml, tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_status_workspace_empty(tmp_workspace):
-    result = owm_status(workspace_root=str(tmp_workspace))
+    result = owm_status()
     assert result["instances"] == {}
     assert result["repo_alerts"] == []
     assert result["port_alerts"] == []
@@ -101,7 +120,7 @@ def test_owm_status_workspace_empty(tmp_workspace):
 def test_owm_status_workspace_stopped_instance(standard_instance_toml, tmp_workspace):
     with patch("owm.api.health_check", return_value={"status": "stopped"}), \
          patch("owm.api.find_conflicting_process", return_value=None):
-        result = owm_status(workspace_root=str(tmp_workspace))
+        result = owm_status()
     assert "feat-789" in result["instances"]
     assert result["instances"]["feat-789"]["state"] == "stopped"
     assert result["instances"]["feat-789"]["local_url"] == "http://localhost:18142"
@@ -112,7 +131,7 @@ def test_owm_status_workspace_running_instance(standard_instance_toml, tmp_works
     h = {"status": "healthy", "pid": 1234, "url": "https://feat-789.localhost"}
     with patch("owm.api.health_check", return_value=h), \
          patch("owm.api.find_conflicting_process", return_value=None):
-        result = owm_status(workspace_root=str(tmp_workspace))
+        result = owm_status()
     inst = result["instances"]["feat-789"]
     assert inst["state"] == "healthy"
     assert inst["pid"] == 1234
@@ -124,7 +143,7 @@ def test_owm_status_workspace_unmanaged_port_surfaces_in_port_alerts(standard_in
     proc = {"pid": 5678, "name": "python3", "cmdline": "python3 /ws/odoo-bin --config feat-789.conf"}
     with patch("owm.api.health_check", return_value={"status": "unmanaged", "pid": 5678}), \
          patch("owm.api.find_conflicting_process", return_value=proc):
-        result = owm_status(workspace_root=str(tmp_workspace))
+        result = owm_status()
     assert len(result["port_alerts"]) == 1
     alert = result["port_alerts"][0]
     assert alert["instance"] == "feat-789"
@@ -135,7 +154,7 @@ def test_owm_status_workspace_unmanaged_port_surfaces_in_port_alerts(standard_in
 @pytest.mark.mcp_surface
 def test_owm_status_workspace_orphan_dir_surfaces_as_warning(tmp_workspace):
     (tmp_workspace / "instances" / "mystery-dir").mkdir()
-    result = owm_status(workspace_root=str(tmp_workspace))
+    result = owm_status()
     assert any(w["type"] == "orphan_dir" for w in result["workspace_warnings"])
 
 
@@ -143,7 +162,7 @@ def test_owm_status_workspace_orphan_dir_surfaces_as_warning(tmp_workspace):
 def test_owm_status_workspace_files_and_underscore_dirs_silently_ignored(tmp_workspace):
     (tmp_workspace / "instances" / ".gitkeep").touch()
     (tmp_workspace / "instances" / "_scratch").mkdir()
-    result = owm_status(workspace_root=str(tmp_workspace))
+    result = owm_status()
     assert result["workspace_warnings"] == []
 
 
@@ -209,7 +228,7 @@ def test_owm_validate_live_richer_errors():
 
 @pytest.mark.mcp_surface
 def test_owm_env_returns_all_required_keys(standard_instance_toml, tmp_workspace):
-    result = owm_env(instance="feat-789", workspace_root=str(tmp_workspace))
+    result = owm_env(instance="feat-789")
     expected_keys = {
         "ODOO_BIN", "VENV_PYTHON", "PSQL", "DB_NAME", "DB_PORT",
         "INSTANCE_DIR", "LOG_FILE", "HTTP_PORT", "GEVENT_PORT",
@@ -255,7 +274,6 @@ def test_owm_new_returns_toml_path_and_content(tmp_path):
     result = owm_new(
         instance="feat-789",
         repos={"odoo": "19.0:shared", "product-core": "feat-789-dev:dev"},
-        workspace_root=str(tmp_path),
     )
     assert result["path"].endswith("instance.toml")
     assert result["content"] is not None
@@ -280,7 +298,7 @@ def test_owm_create_from_disk_returns_status_dict(standard_instance_toml, tmp_wo
                         port_reserved=True, proxy_block_written=True, odoo_conf_generated=True)
     with patch("owm.mcp.read_repo_state", return_value={"status": "clean"}), \
          patch("owm.mcp.create_instance", return_value=fake):
-        result = owm_create(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_create(instance="feat-789")
     assert result["status"] == "ok"
     assert "created" in result
     assert "updated" in result
@@ -299,7 +317,6 @@ def test_owm_create_branch_not_found_with_exists_flag(tmp_workspace):
         result = owm_create(
             instance="feat-789",
             repos={"product-core": "feat-789-dev:dev+exists"},
-            workspace_root=str(tmp_workspace),
         )
     assert result == {"error": "branch feat-789-dev not found on origin", "code": "BRANCH_NOT_FOUND"}
 
@@ -307,7 +324,7 @@ def test_owm_create_branch_not_found_with_exists_flag(tmp_workspace):
 @pytest.mark.mcp_surface
 def test_owm_create_dirty_worktree_error(standard_instance_toml, tmp_workspace):
     with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}):
-        result = owm_create(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_create(instance="feat-789")
     assert result["code"] == "DIRTY_WORKTREE"
     assert result["repo"] == "product_core"
 
@@ -511,7 +528,6 @@ def test_owm_rename_stopped_instance(standard_instance_toml, tmp_workspace):
         result = owm_rename(
             instance="feat-789",
             new_name="pd-789",
-            workspace_root=str(tmp_workspace),
         )
     assert result == {"status": "renamed", "old": "feat-789", "new": "pd-789", "url": "https://pd-789.localhost"}
 
@@ -533,7 +549,7 @@ def test_owm_fetch_returns_repo_and_worktree_status(tmp_workspace):
         '[clusters]\n"19" = {pg_version = "16", port = 5432}\n'
     )
     with patch("owm.sync.git_fetch_bare", return_value=False):
-        result = owm_fetch(workspace_root=str(tmp_workspace))
+        result = owm_fetch()
     assert "repos" in result
     assert "shared_worktrees" in result
 
@@ -542,7 +558,7 @@ def test_owm_fetch_returns_repo_and_worktree_status(tmp_workspace):
 def test_owm_sync_fast_forward(standard_instance_toml, tmp_workspace):
     with patch("owm.sync.read_repo_state", return_value={"status": "behind", "behind_by": 3}), \
          patch("owm.sync.git_fast_forward"):
-        result = owm_sync(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_sync(instance="feat-789")
     assert result["repos"]["product_core"]["status"] == "fast-forwarded"
     assert result["repos"]["odoo_like"]["status"] == "skipped"   # shared worktree
 
@@ -552,15 +568,14 @@ def test_owm_sync_rebase(standard_instance_toml, tmp_workspace):
     with patch("owm.sync.read_repo_state", return_value={"status": "diverged"}), \
          patch("owm.sync.git_rebase"):
         result = owm_sync(instance="feat-789", repo="product_core",
-                          rebase=True, workspace_root=str(tmp_workspace))
+                          rebase=True)
     assert result["repos"]["product_core"]["status"] == "rebased"
 
 
 @pytest.mark.mcp_surface
 def test_owm_sync_dirty_skipped(standard_instance_toml, tmp_workspace):
     with patch("owm.sync.read_repo_state", return_value={"status": "dirty"}):
-        result = owm_sync(instance="feat-789", repo="product_core",
-                          workspace_root=str(tmp_workspace))
+        result = owm_sync(instance="feat-789", repo="product_core")
     assert result["repos"]["product_core"]["status"] == "skipped"
     assert "uncommitted" in result["repos"]["product_core"]["reason"].lower()
 
@@ -569,8 +584,7 @@ def test_owm_sync_dirty_skipped(standard_instance_toml, tmp_workspace):
 def test_owm_push_owned_branch(standard_instance_toml, tmp_workspace):
     with patch("owm.sync.read_repo_state", return_value={"status": "ahead", "ahead_by": 1}), \
          patch("owm.sync.git_push"):
-        result = owm_push(instance="feat-789", repo="product_core",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="feat-789", repo="product_core")
     assert result["status"] == "pushed"
     assert result["repo"] == "product_core"
     assert result["branch"] == "feat-789-dev"
@@ -579,8 +593,7 @@ def test_owm_push_owned_branch(standard_instance_toml, tmp_workspace):
 @pytest.mark.mcp_surface
 def test_owm_push_diverged_error(standard_instance_toml, tmp_workspace):
     with patch("owm.sync.read_repo_state", return_value={"status": "diverged"}):
-        result = owm_push(instance="feat-789", repo="product_core",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="feat-789", repo="product_core")
     assert result["code"] == "DIVERGED"
 
 
@@ -588,8 +601,7 @@ def test_owm_push_diverged_error(standard_instance_toml, tmp_workspace):
 def test_owm_push_shared_error_with_hint(standard_instance_toml, tmp_workspace):
     # odoo_like is declared shared in standard_instance_toml
     with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
-        result = owm_push(instance="feat-789", repo="odoo_like",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="feat-789", repo="odoo_like")
     assert result["code"] == "SHARED_REPO"
     assert "git" in result["hint"]
 
@@ -604,8 +616,7 @@ def test_owm_push_not_owned_error(tmp_workspace):
         '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
     )
     with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
-        result = owm_push(instance="review-101", repo="product_core",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="review-101", repo="product_core")
     assert result["code"] == "NOT_OWNED"
 
 
@@ -614,8 +625,7 @@ def test_owm_reset_clean(standard_instance_toml, tmp_workspace):
     with patch("owm.mcp.read_repo_state", return_value={"status": "clean"}), \
          patch("owm.mcp.has_local_commits", return_value=False), \
          patch("owm.mcp.git_reset_hard"):
-        result = owm_reset(instance="feat-789", repo="product_core",
-                           workspace_root=str(tmp_workspace))
+        result = owm_reset(instance="feat-789", repo="product_core")
     assert result["status"] == "reset"
     assert result["to"].startswith("origin/")
 
@@ -624,8 +634,7 @@ def test_owm_reset_clean(standard_instance_toml, tmp_workspace):
 def test_owm_reset_dirty_requires_force(standard_instance_toml, tmp_workspace):
     with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}), \
          patch("owm.mcp.has_local_commits", return_value=False):
-        result = owm_reset(instance="feat-789", repo="product_core",
-                           workspace_root=str(tmp_workspace))
+        result = owm_reset(instance="feat-789", repo="product_core")
     assert result["code"] == "DIRTY_WORKTREE"
     assert "force" in result["hint"].lower()
 
@@ -636,7 +645,7 @@ def test_owm_reset_force_discards(standard_instance_toml, tmp_workspace):
          patch("owm.mcp.has_local_commits", return_value=False), \
          patch("owm.mcp.git_reset_hard"):
         result = owm_reset(instance="feat-789", repo="product_core",
-                           force=True, workspace_root=str(tmp_workspace))
+                           force=True)
     assert result["status"] == "reset"
     assert result["discarded_changes"] is True
 
@@ -656,8 +665,7 @@ def test_owm_run_script_ok_result(tmp_path):
              summary=ScriptSummary(ok=8, fail=0, warn=0, none=2, total=10),
              rows=[],
          )):
-        result = owm_run_script(instance="feat-789", script="run",
-                                workspace_root=str(tmp_path))
+        result = owm_run_script(instance="feat-789", script="run")
     assert result["status"] == "ok"
     assert result["summary"] == {"ok": 8, "fail": 0, "warn": 0, "none": 2, "total": 10}
     assert result["failures"] == []
@@ -673,8 +681,7 @@ def test_owm_run_script_fail_result_includes_failures(tmp_path):
              summary=ScriptSummary(ok=7, fail=1, warn=0, none=2, total=10),
              rows=[failure_row],
          )):
-        result = owm_run_script(instance="feat-789", script="run",
-                                workspace_root=str(tmp_path))
+        result = owm_run_script(instance="feat-789", script="run")
     assert result["status"] == "fail"
     assert len(result["failures"]) == 1
     assert result["failures"][0]["case"] == "test_x"
@@ -690,8 +697,7 @@ def test_owm_run_script_abort_includes_rows_run_and_reason(tmp_path):
              rows_run=3,
              abort_reason="DB connection failed",
          )):
-        result = owm_run_script(instance="feat-789", script="run",
-                                workspace_root=str(tmp_path))
+        result = owm_run_script(instance="feat-789", script="run")
     assert result["status"] == "abort"
     assert result["reason"] == "DB connection failed"
     assert result["rows_run"] == 3
@@ -707,8 +713,7 @@ def test_owm_run_script_full_stdout_not_returned(tmp_path):
              summary=ScriptSummary(ok=10, fail=0, warn=0, none=0, total=10),
              rows=[],
          )):
-        result = owm_run_script(instance="feat-789", script="run",
-                                workspace_root=str(tmp_path))
+        result = owm_run_script(instance="feat-789", script="run")
     assert "stdout" not in result
     assert "full_output" not in result
 
@@ -749,7 +754,7 @@ def test_owm_compare_ok_result(tmp_workspace):
         summary=ScriptSummary(ok=9, fail=0, warn=0, none=0, total=9),
         unexpected=[],
     )):
-        result = owm_compare(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_compare(instance="feat-789")
     assert result["status"] == "ok"
     assert result["unexpected"] == []
 
@@ -762,7 +767,7 @@ def test_owm_compare_has_unexpected_changes(tmp_workspace):
         summary=ScriptSummary(ok=0, fail=0, warn=0, none=0, total=9, unexpected_changes=1),
         unexpected=[{"case": "test_x", "base": "OK", "feat": "FAIL", "result_diff": "..."}],
     )):
-        result = owm_compare(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_compare(instance="feat-789")
     assert result["status"] == "unexpected_changes"
     assert len(result["unexpected"]) == 1
 
@@ -770,7 +775,7 @@ def test_owm_compare_has_unexpected_changes(tmp_workspace):
 @pytest.mark.mcp_surface
 def test_owm_compare_no_compare_pair_configured(tmp_workspace):
     _write_workspace_toml(tmp_workspace)  # no compare_pairs
-    result = owm_compare(instance="feat-789", workspace_root=str(tmp_workspace))
+    result = owm_compare(instance="feat-789")
     assert result["code"] == "NO_COMPARE_TARGET"
     assert "hint" in result
 
@@ -783,8 +788,7 @@ def test_owm_compare_ad_hoc_base(tmp_workspace):
         summary=ScriptSummary(ok=0, fail=0, warn=0, none=0, total=0),
         unexpected=[],
     )):
-        result = owm_compare(instance="feat-789", base="main",
-                             workspace_root=str(tmp_workspace))
+        result = owm_compare(instance="feat-789", base="main")
     assert result["status"] in ("ok", "has_changes", "unexpected_changes", "abort")
 
 
@@ -801,8 +805,11 @@ def test_owm_upgrade_ok():
 
 
 @pytest.mark.mcp_surface
+@pytest.mark.xfail(strict=True, reason="upgrade execution + failure detection not wired; "
+                   "upgrade_modules is a pure planner (no odoo-bin -u, no rc/log capture). "
+                   "Asserts the real UPGRADE_FAILED contract so it flips green when wired.")
 def test_owm_upgrade_fail_includes_log_tail():
-    result = owm_upgrade(instance="feat-789", modules=["my_module"], simulate_failure=True)
+    result = owm_upgrade(instance="feat-789", modules=["my_module"])
     assert result["status"] == "fail"
     assert result["code"] == "UPGRADE_FAILED"
     assert result["log_tail"] is not None
@@ -829,7 +836,7 @@ def test_owm_db_reset(tmp_workspace):
     )
     fake = ResetDbResult(restored_from="feat789_base")
     with patch("owm.mcp.reset_db", return_value=fake):
-        result = owm_db_reset(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_db_reset(instance="feat-789")
     assert result["status"] == "ok"
     assert result["restored_from"] == "feat789_base"
 
@@ -837,7 +844,7 @@ def test_owm_db_reset(tmp_workspace):
 @pytest.mark.mcp_surface
 def test_owm_db_dump_default_path(standard_instance_toml, tmp_workspace):
     with patch("owm.operations._pg_dump"):
-        result = owm_db_dump(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_db_dump(instance="feat-789")
     assert result["status"] == "ok"
     assert "_dumps/feat-789/" in result["path"]
 
@@ -846,15 +853,14 @@ def test_owm_db_dump_default_path(standard_instance_toml, tmp_workspace):
 def test_owm_db_dump_explicit_path(standard_instance_toml, tmp_workspace):
     out = str(tmp_workspace / "snapshot.dump")
     with patch("owm.operations._pg_dump"), patch("owm.operations.os.makedirs"):
-        result = owm_db_dump(instance="feat-789", out=out, workspace_root=str(tmp_workspace))
+        result = owm_db_dump(instance="feat-789", out=out)
     assert result["path"] == out
 
 
 @pytest.mark.mcp_surface
 def test_owm_db_restore_relative_path(standard_instance_toml, tmp_workspace):
     with patch("owm.operations._pg_restore"):
-        result = owm_db_restore(instance="feat-789", path="2026-05-16T09:32.dump",
-                                workspace_root=str(tmp_workspace))
+        result = owm_db_restore(instance="feat-789", path="2026-05-16T09:32.dump")
     assert result["status"] == "ok"
 
 
@@ -932,8 +938,7 @@ def test_owm_agent_context_no_instance_notes_not_an_error():
 @pytest.mark.safety_invariants
 def test_push_always_refuses_shared_repo(standard_instance_toml, tmp_workspace):
     with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
-        result = owm_push(instance="feat-789", repo="odoo_like",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="feat-789", repo="odoo_like")
     assert result["code"] == "SHARED_REPO"
 
 
@@ -948,8 +953,7 @@ def test_push_always_refuses_unowned_branch(tmp_workspace):
         '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
     )
     with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
-        result = owm_push(instance="review-101", repo="product_core",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="review-101", repo="product_core")
     assert result["code"] == "NOT_OWNED"
 
 
@@ -986,8 +990,7 @@ def test_reset_operates_on_local_state_only(standard_instance_toml, tmp_workspac
     with patch("owm.mcp.read_repo_state", return_value={"status": "clean"}), \
          patch("owm.mcp.has_local_commits", return_value=False), \
          patch("owm.mcp.git_reset_hard"):
-        result = owm_reset(instance="feat-789", repo="product_core",
-                           workspace_root=str(tmp_workspace))
+        result = owm_reset(instance="feat-789", repo="product_core")
     assert result.get("remote_reset", False) is False
 
 

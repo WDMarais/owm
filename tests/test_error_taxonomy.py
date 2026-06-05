@@ -11,17 +11,45 @@ import pytest
 from unittest.mock import patch
 
 from owm.errors import (
-    NOT_FOUND, ALREADY_EXISTS, INSTANCE_RUNNING, DIRTY_WORKTREE,
-    BRANCH_NOT_FOUND, NOT_OWNED, SHARED_REPO, DIVERGED,
-    NO_COMPARE_TARGET, START_TIMEOUT, STOP_TIMEOUT,
-    DB_UNAVAILABLE, UPGRADE_FAILED, XMLRPC_UNAVAILABLE,
-    NO_WORKERS, PORT_RANGE_EXHAUSTED, PORT_CONTESTED,
+    NOT_FOUND,
+    ALREADY_EXISTS,
+    INSTANCE_RUNNING,
+    DIRTY_WORKTREE,
+    BRANCH_NOT_FOUND,
+    NOT_OWNED,
+    SHARED_REPO,
+    DIVERGED,
+    NO_COMPARE_TARGET,
+    START_TIMEOUT,
+    STOP_TIMEOUT,
+    DB_UNAVAILABLE,
+    UPGRADE_FAILED,
+    XMLRPC_UNAVAILABLE,
+    NO_WORKERS,
+    PORT_RANGE_EXHAUSTED,
+    PORT_CONTESTED,
 )
-from owm.errors import OwmError, format_error, Severity, Finding, NO_ODOO_REPO
+from owm.errors import (
+    OwmError,
+    format_error,
+    Severity,
+    Finding,
+    NO_ODOO_REPO,
+)
 from owm.mcp import (
-    owm_status, owm_new, owm_delete, owm_archive, owm_rename,
-    owm_db_restore, owm_create, owm_reset, owm_push, owm_compare,
-    owm_start, owm_stop, owm_upgrade,
+    owm_status,
+    owm_new,
+    owm_delete,
+    owm_archive,
+    owm_rename,
+    owm_db_restore,
+    owm_create,
+    owm_reset,
+    owm_push,
+    owm_compare,
+    owm_start,
+    owm_stop,
+    owm_upgrade,
 )
 from owm.instance import StopResult
 from owm.ports import assign_port, honour_pinned_port
@@ -138,7 +166,7 @@ def test_instance_running_on_db_restore_while_running():
 @pytest.mark.error_taxonomy
 def test_dirty_worktree_on_create_branch_switch(standard_instance_toml, tmp_workspace):
     with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}):
-        result = owm_create(instance="feat-789", workspace_root=str(tmp_workspace))
+        result = owm_create(instance="feat-789")
     assert result["code"] == DIRTY_WORKTREE
 
 
@@ -146,8 +174,7 @@ def test_dirty_worktree_on_create_branch_switch(standard_instance_toml, tmp_work
 def test_dirty_worktree_on_reset_without_force(standard_instance_toml, tmp_workspace):
     with patch("owm.mcp.read_repo_state", return_value={"status": "dirty"}), \
          patch("owm.mcp.has_local_commits", return_value=False):
-        result = owm_reset(instance="feat-789", repo="product_core",
-                           workspace_root=str(tmp_workspace))
+        result = owm_reset(instance="feat-789", repo="product_core")
     assert result["code"] == DIRTY_WORKTREE
 
 
@@ -157,7 +184,6 @@ def test_branch_not_found_on_create_with_exists_flag(tmp_workspace):
         result = owm_create(
             instance="feat-789",
             repos={"product-core": "feat-789-dev:dev+exists"},
-            workspace_root=str(tmp_workspace),
         )
     assert result["code"] == BRANCH_NOT_FOUND
 
@@ -172,16 +198,14 @@ def test_not_owned_on_push_readonly(tmp_workspace):
         '[server]\nhttp_port = 8100\ngevent_port = 8101\n'
     )
     with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
-        result = owm_push(instance="review-101", repo="product_core",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="review-101", repo="product_core")
     assert result["code"] == NOT_OWNED
 
 
 @pytest.mark.error_taxonomy
 def test_shared_repo_on_push_shared(standard_instance_toml, tmp_workspace):
     with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
-        result = owm_push(instance="feat-789", repo="odoo_like",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="feat-789", repo="odoo_like")
     assert result["code"] == SHARED_REPO
 
 
@@ -189,8 +213,7 @@ def test_shared_repo_on_push_shared(standard_instance_toml, tmp_workspace):
 def test_shared_repo_error_includes_hint(standard_instance_toml, tmp_workspace):
     """SHARED_REPO errors must include a raw git command hint."""
     with patch("owm.sync.read_repo_state", return_value={"status": "ahead"}):
-        result = owm_push(instance="feat-789", repo="odoo_like",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="feat-789", repo="odoo_like")
     assert result["code"] == SHARED_REPO
     assert "hint" in result
     assert "git" in result["hint"]
@@ -199,8 +222,7 @@ def test_shared_repo_error_includes_hint(standard_instance_toml, tmp_workspace):
 @pytest.mark.error_taxonomy
 def test_diverged_on_push_diverged_branch(standard_instance_toml, tmp_workspace):
     with patch("owm.sync.read_repo_state", return_value={"status": "diverged"}):
-        result = owm_push(instance="feat-789", repo="product_core",
-                          workspace_root=str(tmp_workspace))
+        result = owm_push(instance="feat-789", repo="product_core")
     assert result["code"] == DIVERGED
 
 
@@ -209,7 +231,7 @@ def test_no_compare_target_when_no_pair_and_no_base(tmp_workspace):
     (tmp_workspace / "workspace.toml").write_text(
         '[repos]\nproduct_core = "url"\n\n[clusters]\n"19" = {pg_version = "16", port = 5432}\n'
     )
-    result = owm_compare(instance="feat-789", workspace_root=str(tmp_workspace))
+    result = owm_compare(instance="feat-789")
     assert result["code"] == NO_COMPARE_TARGET
     assert "hint" in result
 
@@ -235,8 +257,11 @@ def test_stop_timeout_code_and_hint():
 
 
 @pytest.mark.error_taxonomy
+@pytest.mark.xfail(strict=True, reason="upgrade execution + failure detection not wired; "
+                   "upgrade_modules is a pure planner (no odoo-bin -u, no rc/log capture). "
+                   "Asserts the real UPGRADE_FAILED contract so it flips green when wired.")
 def test_upgrade_failed_includes_log_tail():
-    result = owm_upgrade(instance="feat-789", modules=["my_module"], simulate_failure=True)
+    result = owm_upgrade(instance="feat-789", modules=["my_module"])
     assert result["code"] == UPGRADE_FAILED
     assert "log_tail" in result
 

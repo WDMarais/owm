@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.1",
     "fastapi>=0.115",
+    "mcp>=1.27.2",
     "psutil>=7.2.2",
     "uvicorn>=0.47.0",
 ]
@@ -19,6 +20,7 @@ dev = [
 
 [project.scripts]
 owm                 = "owm.cli:cli"
+owm-mcp             = "owm.mcp:main"
 owm-dashboard       = "dashboard.server:main"
 owm-dashboard-demo  = "dashboard.fixture_server:main"
 

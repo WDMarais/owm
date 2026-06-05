@@ -3,27 +3,63 @@ MCP tool surface — thin response-shaping layer.
 Each owm_* function calls the appropriate underlying module, converts
 OwmError to ErrorResponse dicts, and returns JSON-serialisable results.
 No business logic lives here.
+
+The workspace root is resolved internally via ``default_workspace()`` (which
+routes through ``config.resolve_workspace_root``: override > OWM_WORKSPACE >
+cwd-walkup) — tools never take it as an argument, matching the spec's surface
+and the real agent runtime, where it comes from the environment.
+
+Running the server: ``owm-mcp`` (console script) or ``python -m owm.mcp``.
 """
 import json
 import os
 
+from mcp.server.fastmcp import FastMCP
+
 from owm.errors import (
-    OwmError, format_error,
-    START_TIMEOUT, STOP_TIMEOUT, NO_COMPARE_TARGET, BRANCH_NOT_FOUND, DIRTY_WORKTREE,
+    OwmError,
+    format_error,
+    START_TIMEOUT,
+    STOP_TIMEOUT,
+    NO_COMPARE_TARGET,
+    BRANCH_NOT_FOUND,
+    DIRTY_WORKTREE,
     NOT_FOUND,
 )
 from owm.instance import (
-    new_instance, create_instance, start_instance, stop_instance,
-    kill_instance, restart_instance, list_running_instances,
-    odoo_bin_path, find_odoo_repo,
+    new_instance,
+    create_instance,
+    start_instance,
+    stop_instance,
+    kill_instance,
+    restart_instance,
+    list_running_instances,
+    odoo_bin_path,
+    find_odoo_repo,
 )
 from owm.archive import archive_instance
-from owm.config import parse_workspace_config, parse_instance_config, parse_repo_spec, load_instance_config
-from owm.operations import delete_instance, rename_instance, show_logs, db_dump, db_restore
+from owm.config import (
+    parse_workspace_config,
+    parse_instance_config,
+    parse_repo_spec,
+    load_instance_config,
+)
+from owm.operations import (
+    delete_instance,
+    rename_instance,
+    show_logs,
+    db_dump,
+    db_restore,
+)
 from owm.database import reset_db
 from owm.sync import (
-    fetch_active_branches, sync_worktrees, push_worktree, reset_instance,
-    read_repo_state, has_local_commits, branch_exists_on_origin,
+    fetch_active_branches,
+    sync_worktrees,
+    push_worktree,
+    reset_instance,
+    read_repo_state,
+    has_local_commits,
+    branch_exists_on_origin,
     git_reset_hard,
 )
 from owm.api import default_workspace, health_check, instance_status, workspace_status
@@ -31,6 +67,8 @@ from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
 from owm.scripts import execute_script, run_script, compare_instances
 from owm.session_context import build_agent_context
+
+mcp = FastMCP("owm")
 
 
 def _e(e: OwmError) -> dict:
@@ -41,23 +79,26 @@ def _e(e: OwmError) -> dict:
 # Workspace tools
 # ---------------------------------------------------------------------------
 
-def owm_status(instance=None, workspace_root=None):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_status(instance: str | None = None) -> dict:
+    workspace_root = default_workspace()
     if instance is not None:
         return instance_status(instance, workspace_root)
     return workspace_status(workspace_root)
 
 
-def owm_ps(workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_ps() -> dict:
+    workspace_root = default_workspace()
     return {
         "managed": list_running_instances(workspace_root),
         "unmanaged": [],
     }
 
 
-def owm_validate(instance, live=False, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_validate(instance: str, live: bool = False) -> dict:
+    workspace_root = default_workspace()
     errors = []
     warnings = []
 
@@ -82,8 +123,9 @@ def owm_validate(instance, live=False, workspace_root=None, **kwargs):
     return {"valid": not errors, "errors": errors, "warnings": warnings, "live_checks_run": live}
 
 
-def owm_env(instance, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_env(instance: str) -> dict:
+    workspace_root = default_workspace()
     try:
         conf = load_instance_config(instance, workspace_root)
     except OwmError as e:
@@ -119,7 +161,8 @@ def owm_env(instance, workspace_root=None, **kwargs):
     return {"env": env, "findings": [f.to_dict() for f in findings]}
 
 
-def owm_audit_log(n=50, level=None, since=None):
+@mcp.tool()
+def owm_audit_log(n: int = 50, level: str | None = None, since: str | None = None) -> dict:
     lines = []
     if level:
         lines = [l for l in lines if l.get("level") in (level, "CRITICAL")]
@@ -132,8 +175,9 @@ def owm_audit_log(n=50, level=None, since=None):
 # Lifecycle tools
 # ---------------------------------------------------------------------------
 
-def owm_new(instance, repos, workspace_root=None, force=False, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_new(instance: str, repos: dict[str, str], force: bool = False) -> dict:
+    workspace_root = default_workspace()
     try:
         result = new_instance(name=instance, repos=repos, workspace_root=workspace_root, force=force)
         return {"path": result.toml_path, "content": result.toml_content}
@@ -141,8 +185,9 @@ def owm_new(instance, repos, workspace_root=None, force=False, **kwargs):
         return {"error": "instance already exists", "code": "ALREADY_EXISTS"}
 
 
-def owm_create(instance, toml=None, repos=None, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_create(instance: str, toml: str | None = None, repos: dict[str, str] | None = None) -> dict:
+    workspace_root = default_workspace()
     if toml:
         conf = parse_instance_config(toml)
         specs = conf.repos
@@ -172,8 +217,9 @@ def owm_create(instance, toml=None, repos=None, workspace_root=None, **kwargs):
     return {"status": "ok", "created": result.created, "updated": result.updated, "skipped": result.skipped}
 
 
-def owm_start(instance, workspace_root=None, wait=False, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_start(instance: str, wait: bool = False) -> dict:
+    workspace_root = default_workspace()
     try:
         result = start_instance(instance, workspace_root, wait=wait)
     except OwmError as e:
@@ -181,8 +227,9 @@ def owm_start(instance, workspace_root=None, wait=False, **kwargs):
     return {"status": result.status, "pid": result.pid, "url": f"https://{instance}.localhost"}
 
 
-def owm_stop(instance, workspace_root=None, wait=False, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_stop(instance: str, wait: bool = False) -> dict:
+    workspace_root = default_workspace()
     result = stop_instance(instance, workspace_root, wait=wait)
     if result.status == "not_running":
         return {"status": "not_running"}
@@ -195,16 +242,18 @@ def owm_stop(instance, workspace_root=None, wait=False, **kwargs):
     return {"status": result.status, "pid": result.pid}
 
 
-def owm_kill(instance, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_kill(instance: str) -> dict:
+    workspace_root = default_workspace()
     result = kill_instance(instance, workspace_root)
     if result.status == "not_running":
         return {"status": "not_running"}
     return {"status": "killed", "pid": result.pid}
 
 
-def owm_restart(instance, workspace_root=None, wait=False, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_restart(instance: str, wait: bool = False) -> dict:
+    workspace_root = default_workspace()
     try:
         result = restart_instance(instance, workspace_root, wait=wait)
     except OwmError as e:
@@ -215,13 +264,15 @@ def owm_restart(instance, workspace_root=None, wait=False, **kwargs):
     return {"status": "restarted", "pid": result.pid, "url": f"https://{instance}.localhost"}
 
 
-def owm_health(instance, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
-    return health_check(instance, workspace_root, **kwargs)
+@mcp.tool()
+def owm_health(instance: str) -> dict:
+    workspace_root = default_workspace()
+    return health_check(instance, workspace_root)
 
 
-def owm_archive(instance, running=False, discard_db=False, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_archive(instance: str, running: bool = False, discard_db: bool = False) -> dict:
+    workspace_root = default_workspace()
     try:
         archive_instance(instance=instance, workspace_root=workspace_root, running=running,
                          discard_db=discard_db)
@@ -230,8 +281,9 @@ def owm_archive(instance, running=False, discard_db=False, workspace_root=None, 
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
 
 
-def owm_delete(instance, force=True, running=False, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_delete(instance: str, force: bool = True, running: bool = False) -> dict:
+    workspace_root = default_workspace()
     try:
         result = delete_instance(instance=instance, running=running, force=force,
                                  workspace_root=workspace_root)
@@ -240,8 +292,9 @@ def owm_delete(instance, force=True, running=False, workspace_root=None, **kwarg
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
 
 
-def owm_rename(instance, new_name, running=False, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_rename(instance: str, new_name: str, running: bool = False) -> dict:
+    workspace_root = default_workspace()
     try:
         result = rename_instance(instance=instance, new_name=new_name, running=running,
                                  workspace_root=workspace_root)
@@ -255,8 +308,9 @@ def owm_rename(instance, new_name, running=False, workspace_root=None, **kwargs)
 # Sync tools
 # ---------------------------------------------------------------------------
 
-def owm_fetch(workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_fetch() -> dict:
+    workspace_root = default_workspace()
     run = fetch_active_branches(workspace_root)
     repos = {}
     for rec in run["repos"]:
@@ -272,13 +326,15 @@ def owm_fetch(workspace_root=None, **kwargs):
     }
 
 
-def owm_sync(instance, repo=None, rebase=False, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_sync(instance: str, repo: str | None = None, rebase: bool = False) -> dict:
+    workspace_root = default_workspace()
     return sync_worktrees(instance, workspace_root, repo=repo, rebase=rebase)
 
 
-def owm_push(instance, repo, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_push(instance: str, repo: str) -> dict:
+    workspace_root = default_workspace()
     try:
         return push_worktree(instance, workspace_root, repo=repo)
     except OwmError as e:
@@ -288,8 +344,9 @@ def owm_push(instance, repo, workspace_root=None, **kwargs):
         return err
 
 
-def owm_reset(instance, repo, force=False, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_reset(instance: str, repo: str, force: bool = False) -> dict:
+    workspace_root = default_workspace()
     conf = load_instance_config(instance, workspace_root)
 
     spec = conf.repos[repo]
@@ -321,8 +378,9 @@ def owm_reset(instance, repo, force=False, workspace_root=None, **kwargs):
 # Script tools
 # ---------------------------------------------------------------------------
 
-def owm_run_script(instance, script, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_run_script(instance: str, script: str) -> dict:
+    workspace_root = default_workspace()
     ndjson_dir = os.path.join(workspace_root, "_dumps", instance)
     ndjson_path = os.path.join(ndjson_dir, f"{script}-latest.ndjson")
 
@@ -356,7 +414,8 @@ def owm_run_script(instance, script, workspace_root=None, **kwargs):
     }
 
 
-def owm_get_script_failures(ndjson_path):
+@mcp.tool()
+def owm_get_script_failures(ndjson_path: str) -> list:
     if not os.path.exists(ndjson_path):
         return []
     with open(ndjson_path) as f:
@@ -365,8 +424,9 @@ def owm_get_script_failures(ndjson_path):
             and not r.get("abort") and not r.get("_non_conforming")]
 
 
-def owm_compare(instance, base=None, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_compare(instance: str, base: str | None = None) -> dict:
+    workspace_root = default_workspace()
     with open(os.path.join(workspace_root, "workspace.toml")) as f:
         ws = parse_workspace_config(f.read())
 
@@ -416,12 +476,11 @@ def owm_compare(instance, base=None, workspace_root=None, **kwargs):
     return out
 
 
-def owm_upgrade(instance, modules, in_place=False, workers=2, simulate_failure=False, **kwargs):
+@mcp.tool()
+def owm_upgrade(instance: str, modules: list[str], in_place: bool = False,
+                workers: int = 2) -> dict:
     if in_place and workers == 0:
         return format_error("in-place upgrade requires at least one worker", "NO_WORKERS")
-    if simulate_failure:
-        return {"status": "fail", "code": "UPGRADE_FAILED",
-                "log_tail": "[last 20 lines of odoo.log]"}
     result = upgrade_modules(instance=instance, modules=modules)
     return {"status": "ok", "modules": result.modules if result.modules != "all" else modules,
             "restarted": result.restarted}
@@ -431,8 +490,9 @@ def owm_upgrade(instance, modules, in_place=False, workers=2, simulate_failure=F
 # DB tools
 # ---------------------------------------------------------------------------
 
-def owm_db_reset(instance, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_db_reset(instance: str) -> dict:
+    workspace_root = default_workspace()
     try:
         conf = load_instance_config(instance, workspace_root)
     except OwmError as e:
@@ -461,8 +521,9 @@ def owm_db_reset(instance, workspace_root=None, **kwargs):
     return out
 
 
-def owm_db_dump(instance, out=None, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_db_dump(instance: str, out: str | None = None) -> dict:
+    workspace_root = default_workspace()
     conf = load_instance_config(instance, workspace_root)
     result = db_dump(
         instance=instance, out=out, workspace_root=workspace_root,
@@ -471,8 +532,9 @@ def owm_db_dump(instance, out=None, workspace_root=None, **kwargs):
     return {"status": "ok", "path": result.path}
 
 
-def owm_db_restore(instance, path, running=False, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_db_restore(instance: str, path: str, running: bool = False) -> dict:
+    workspace_root = default_workspace()
     if running:
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
     conf = load_instance_config(instance, workspace_root)
@@ -491,13 +553,15 @@ def owm_db_restore(instance, path, running=False, workspace_root=None, **kwargs)
 # Context tools
 # ---------------------------------------------------------------------------
 
-def owm_logs(instance, n=50, level=None, workspace_root=None, **kwargs):
-    workspace_root = workspace_root or default_workspace()
+@mcp.tool()
+def owm_logs(instance: str, n: int = 50, level: str | None = None) -> dict:
+    workspace_root = default_workspace()
     result = show_logs(instance=instance, n=n, follow=False, level=level, workspace_root=workspace_root)
     return {"lines": result.lines, "log_path": result.log_path}
 
 
-def owm_agent_context(instance, role=None, has_instance_notes=True, **kwargs):
+@mcp.tool()
+def owm_agent_context(instance: str, role: str | None = None, has_instance_notes: bool = True) -> dict:
     return {
         "context": f"Agent context for {instance}",
         "sources": {
@@ -506,3 +570,12 @@ def owm_agent_context(instance, role=None, has_instance_notes=True, **kwargs):
             "instance":      f"instances/{instance}/context.md" if has_instance_notes else None,
         },
     }
+
+
+def main() -> None:
+    """Console-script / module entry point: serve the tools over stdio."""
+    mcp.run()
+
+
+if __name__ == "__main__":
+    main()

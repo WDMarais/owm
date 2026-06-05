@@ -56,7 +56,7 @@ def test_cli_and_mcp_agree_per_instance_odoo(runner, tmp_workspace):
     _write_instance(runner, tmp_workspace, "odoo=feat-789:main")
 
     cli_bin = _cli_odoo_bin(runner, tmp_workspace)
-    mcp_bin = owm_env("feat-789", workspace_root=str(tmp_workspace))["env"]["ODOO_BIN"]
+    mcp_bin = owm_env("feat-789")["env"]["ODOO_BIN"]
     expected = str(tmp_workspace / "instances" / "feat-789" / "odoo" / "odoo-bin")
 
     assert cli_bin == mcp_bin == expected
@@ -68,7 +68,7 @@ def test_cli_and_mcp_agree_shared_odoo(runner, tmp_workspace):
     _write_instance(runner, tmp_workspace, "odoo=main:shared")
 
     cli_bin = _cli_odoo_bin(runner, tmp_workspace)
-    mcp_bin = owm_env("feat-789", workspace_root=str(tmp_workspace))["env"]["ODOO_BIN"]
+    mcp_bin = owm_env("feat-789")["env"]["ODOO_BIN"]
     expected = str(tmp_workspace / "_shared" / "odoo" / "main" / "odoo-bin")
 
     assert cli_bin == mcp_bin == expected
@@ -86,7 +86,7 @@ def test_assumed_odoo_surfaces_as_finding_not_a_print(runner, tmp_workspace):
     assert "assuming repo 'odoo'" in result.stderr
 
     # MCP: env self-contained, finding carried alongside under its own key.
-    env_result = owm_env("feat-789", workspace_root=str(tmp_workspace))
+    env_result = owm_env("feat-789")
     assert set(env_result) == {"env", "findings"}
     assert "ODOO_BIN" in env_result["env"]
     assert "findings" not in env_result["env"]
@@ -100,5 +100,5 @@ def test_shared_odoo_emits_no_finding(runner, tmp_workspace):
     """A clean single-shared-repo resolution carries no findings."""
     _write_instance(runner, tmp_workspace, "odoo=main:shared")
 
-    env_result = owm_env("feat-789", workspace_root=str(tmp_workspace))
+    env_result = owm_env("feat-789")
     assert env_result["findings"] == []
