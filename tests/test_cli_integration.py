@@ -4,6 +4,7 @@ Exercises the full command → library → disk path with no mocks.
 All tests use tmp_workspace for isolation; no Postgres or git required.
 """
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -525,6 +526,28 @@ def test_archive_output_mentions_instance_name(runner, standard_instance_toml, t
             "--workspace", str(tmp_workspace), "archive", "feat-789",
         ])
     assert "feat-789" in result.output
+
+
+# ---------------------------------------------------------------------------
+# owm install
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_install_saves_new_module_to_toml(runner, standard_instance_toml, tmp_workspace):
+    # Guards the cmd_install save path: a freshly-installed module must be appended
+    # to [install].modules in the on-disk instance.toml. The odoo spawn is mocked
+    # (not under test); the toml-path derivation + append run for real — so this
+    # would catch a regression of the `toml_path` NameError the path had.
+    with patch("owm.cli._is_running", return_value=False), \
+         patch("owm.cli._query_installed_modules", return_value=[]), \
+         patch("owm.cli.start_instance"), \
+         patch("owm.cli.stop_instance"):
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "install", "feat-789", "test_brand_new",
+        ])
+    assert result.exit_code == 0, result.output
+    saved = tomllib.loads(standard_instance_toml.read_text())
+    assert "test_brand_new" in saved["install"]["modules"]
 
 
 # ---------------------------------------------------------------------------

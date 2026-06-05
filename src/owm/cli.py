@@ -10,31 +10,60 @@ from pathlib import Path
 import click
 
 from owm.api import instance_status, workspace_status
-from owm.config import ConfOwnership, cwd_workspace_conflict, load_instance_config, parse_workspace_config, resolve_workspace_root
+from owm.config import (
+    ConfOwnership,
+    cwd_workspace_conflict,
+    instance_config_path,
+    load_instance_config,
+    parse_workspace_config,
+    resolve_workspace_root,
+)
 from owm.addons import empty_addons_path_message, module_names, resolve_addons_path
 from owm.database import check_pg_reachability
 from owm.errors import OwmError, NOT_FOUND
 from owm.instance import (
-    new_instance, create_instance, list_running_instances,
-    start_instance, stop_instance, kill_instance, health_check,
-    generate_instance_conf, find_odoo_repo, odoo_bin_path,
-    _read_pid, _process_alive,
-    _append_modules_to_toml, _query_installed_modules,
+    new_instance,
+    create_instance,
+    list_running_instances,
+    start_instance,
+    stop_instance,
+    kill_instance,
+    health_check,
+    generate_instance_conf,
+    find_odoo_repo,
+    odoo_bin_path,
+    _read_pid,
+    _process_alive,
+    _append_modules_to_toml,
+    _query_installed_modules,
 )
 from owm.archive import archive_instance, _strip_archived_sections
 from owm.env import resolve_env, format_env
 from owm.modules import upgrade_modules
 from owm.operations import (
     infer_instance_from_cwd,
-    delete_instance, rename_instance, show_logs,
-    db_dump, db_restore, validate_instance,
+    delete_instance,
+    rename_instance,
+    show_logs,
+    db_dump,
+    db_restore,
+    validate_instance,
 )
 from owm.database import reset_db
 from owm.oplog import workspace_log
 from owm.sync import (
-    fetch_active_branches, sync_instance, push_instance, reset_instance,
-    read_repo_state, git_fast_forward, git_rebase,
-    git_push, git_reset_hard, pull_base_instance, list_bare_branches,
+    fetch_active_branches,
+    sync_instance,
+    push_instance,
+    reset_instance,
+    read_repo_state,
+    git_fetch_bare,
+    git_fast_forward,
+    git_rebase,
+    git_push,
+    git_reset_hard,
+    pull_base_instance,
+    list_bare_branches,
 )
 from owm.workspace import init_workspace
 from owm.worktrees import resolve_worktree_path
@@ -324,6 +353,7 @@ def cmd_install(ctx, name, modules, timeout, no_save):
         click.echo(f"  nothing to install")
 
     if modules and not no_save:
+        toml_path = instance_config_path(instance, workspace_root)
         added, _ = _append_modules_to_toml(toml_path, install_modules)
         if added:
             click.echo(f"  manifest: added {', '.join(added)}")
