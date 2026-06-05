@@ -6,7 +6,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from owm.config import load_instance_config, parse_workspace_config, InstanceConfig
-from owm.errors import OwmError, INSTANCE_RUNNING, ARCHIVE_CONFLICT, CONFIRMATION_REQUIRED
+from owm.errors import (
+    OwmError,
+    INSTANCE_RUNNING,
+    ARCHIVE_CONFLICT,
+    CONFIRMATION_REQUIRED,
+)
 from owm.proxy import get_proxy_backend
 from owm.sync import git_run
 from owm.worktrees import resolve_worktree_path, remove_worktree

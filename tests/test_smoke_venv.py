@@ -5,7 +5,13 @@ Covers: create_venv, sync_venv_if_needed, rebuild_venv.
 import os
 import pytest
 
-from owm.venv import create_venv, sync_venv_if_needed, rebuild_venv, _read_stamp, compute_stamp
+from owm.venv import (
+    create_venv,
+    sync_venv_if_needed,
+    rebuild_venv,
+    _read_stamp,
+    compute_stamp,
+)
 
 
 @pytest.mark.smoke

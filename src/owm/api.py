@@ -4,7 +4,11 @@ Consumed by owm.mcp (MCP tool surface) and owm.cli (--json flag, and prose forma
 """
 import os
 
-from owm.config import parse_instance_config, load_instance_config, resolve_workspace_root
+from owm.config import (
+    parse_instance_config,
+    load_instance_config,
+    resolve_workspace_root,
+)
 from owm.errors import OwmError, format_error
 from owm.instance import health_check
 from owm.ports import find_conflicting_process

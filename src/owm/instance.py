@@ -13,10 +13,25 @@ from dataclasses import dataclass, field
 import psutil
 
 from owm.addons import empty_addons_path_message, resolve_addons_path
-from owm.config import ConfOwnership, instance_config_path, load_instance_config, parse_instance_config, parse_workspace_config, InstanceConfig
+from owm.config import (
+    ConfOwnership,
+    instance_config_path,
+    load_instance_config,
+    parse_instance_config,
+    parse_workspace_config,
+    InstanceConfig,
+)
 from owm.errors import (
-    OwmError, Finding, Severity, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT,
-    NO_ODOO_REPO, PORT_CONTESTED, ODOO_CONFIG_UNMARKED, ODOO_CONFIG_NO_ADDONS,
+    OwmError,
+    Finding,
+    Severity,
+    ALREADY_EXISTS,
+    START_TIMEOUT,
+    STOP_TIMEOUT,
+    NO_ODOO_REPO,
+    PORT_CONTESTED,
+    ODOO_CONFIG_UNMARKED,
+    ODOO_CONFIG_NO_ADDONS,
 )
 from owm.oplog import workspace_log, instance_separator
 from owm.ports import assign_port, find_conflicting_process

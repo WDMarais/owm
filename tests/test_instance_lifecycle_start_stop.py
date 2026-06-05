@@ -11,7 +11,13 @@ from owm.errors import OwmError, START_TIMEOUT
 from owm.instance import start_instance, stop_instance, kill_instance
 from owm.instance import restart_instance, health_check
 from owm.instance import StartResult, StopResult
-from owm.instance import _state_file_path, _write_pid, _read_pid, _clear_pid, _process_alive
+from owm.instance import (
+    _state_file_path,
+    _write_pid,
+    _read_pid,
+    _clear_pid,
+    _process_alive,
+)
 from owm.instance import _PID_UNSET
 
 

@@ -5,7 +5,11 @@ Covers: Worktrees and branch ownership section.
 import pytest
 from unittest.mock import patch
 
-from owm.worktrees import resolve_worktree_path, push_branch, check_shared_commit_warning
+from owm.worktrees import (
+    resolve_worktree_path,
+    push_branch,
+    check_shared_commit_warning,
+)
 from owm.worktrees import create_worktree, WorktreeConfig
 
 

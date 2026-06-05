@@ -4,7 +4,11 @@ Covers: Config schemas, Requirements patching sections.
 """
 import pytest
 
-from owm.config import parse_workspace_config, parse_instance_config, load_instance_config
+from owm.config import (
+    parse_workspace_config,
+    parse_instance_config,
+    load_instance_config,
+)
 from owm.config import ConfOwnership
 from owm.config import WorkspaceConfig, InstanceConfig, RepoSpec, ClusterConfig
 from owm.config import WorkspaceDefaults, WorkspaceRepo

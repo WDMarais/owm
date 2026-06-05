@@ -4,7 +4,11 @@ Covers: Unmanaged processes and adoption section.
 """
 import pytest
 
-from owm.adoption import detect_unmanaged_processes, adopt_process, status_with_unmanaged
+from owm.adoption import (
+    detect_unmanaged_processes,
+    adopt_process,
+    status_with_unmanaged,
+)
 
 
 # ---------------------------------------------------------------------------

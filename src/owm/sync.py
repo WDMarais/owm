@@ -4,8 +4,19 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import load_instance_config, parse_instance_config, parse_workspace_config
-from owm.errors import OwmError, DIVERGED, NOT_OWNED, SHARED_REPO, DIRTY_WORKTREE, FETCH_TIMEOUT
+from owm.config import (
+    load_instance_config,
+    parse_instance_config,
+    parse_workspace_config,
+)
+from owm.errors import (
+    OwmError,
+    DIVERGED,
+    NOT_OWNED,
+    SHARED_REPO,
+    DIRTY_WORKTREE,
+    FETCH_TIMEOUT,
+)
 from owm.oplog import workspace_log
 from owm.worktrees import resolve_worktree_path
 

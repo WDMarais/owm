@@ -6,7 +6,12 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from owm.config import instance_config_path, load_instance_config, parse_instance_config, parse_workspace_config
+from owm.config import (
+    instance_config_path,
+    load_instance_config,
+    parse_instance_config,
+    parse_workspace_config,
+)
 from owm.errors import OwmError, INSTANCE_RUNNING, NOT_FOUND
 from owm.archive import _remove_proxy_block, _remove_worktrees, _dropdb_archive
 from owm.adoption import adopt_process
