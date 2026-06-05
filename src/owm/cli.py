@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 
 from owm.api import instance_status, workspace_status
-from owm.config import ConfOwnership, load_instance_config, parse_workspace_config
+from owm.config import ConfOwnership, load_instance_config, parse_workspace_config, resolve_workspace_root
 from owm.addons import empty_addons_path_message, module_names, resolve_addons_path
 from owm.database import check_pg_reachability
 from owm.errors import OwmError, NOT_FOUND
@@ -40,21 +40,12 @@ from owm.workspace import init_workspace
 from owm.worktrees import resolve_worktree_path
 
 
-def _find_workspace_root(start: Path | None = None) -> str:
-    current = start or Path.cwd()
-    for parent in [current, *current.parents]:
-        if (parent / "workspace.toml").exists():
-            return str(parent)
-    raise click.UsageError(
-        "No workspace.toml found. Run from inside a workspace or pass --workspace."
-    )
-
-
 def _resolve_workspace(ctx) -> str:
-    w = ctx.obj.get("workspace")
-    if w:
-        return w
-    return _find_workspace_root()
+    try:
+        return resolve_workspace_root(ctx.obj.get("workspace"))
+    except OwmError as e:
+        # lib raises NOT_FOUND; present it as a click usage error (exit 2)
+        raise click.UsageError(e.args[0]) from e
 
 
 def _resolve_instance(ctx, name: str | None) -> str:
@@ -91,7 +82,7 @@ def _workspace_compare_pairs(workspace_root: str) -> list:
     "--workspace", "-w",
     default=None,
     metavar="PATH",
-    help="Workspace root (default: walk up from CWD for workspace.toml).",
+    help="Workspace root (default: OWM_WORKSPACE, else walk up from CWD for workspace.toml).",
 )
 @click.pass_context
 def cli(ctx, workspace):

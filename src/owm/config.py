@@ -2,6 +2,7 @@ import os
 import tomllib
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 
 from owm.errors import ConfigError, NOT_FOUND, OwmError
 
@@ -41,6 +42,37 @@ def instance_config_path(instance: str, workspace_root: str) -> str:
     if not os.path.exists(path):
         raise OwmError(f"instance {instance!r} not found", code=NOT_FOUND)
     return path
+
+
+def resolve_workspace_root(override: str | None = None) -> str:
+    """Resolve the workspace root by the precedence owm and git both use:
+    explicit override > OWM_WORKSPACE env var > walk up from cwd for workspace.toml.
+
+    A deliberate signal (the --workspace flag, the exported OWM_WORKSPACE spine)
+    beats the incidental cwd — mirroring git's `--git-dir > GIT_DIR > discovery` —
+    so a workspace manager configured once works from anywhere. The override and
+    env values are trusted as given (abspath'd, not validated); only the cwd-walkup
+    fallback requires an actual workspace.toml on disk.
+
+    Raises OwmError(NOT_FOUND) when none of the three resolve, so adapters surface
+    one clear "no workspace" error instead of silently operating on '.'.
+    """
+    if override:
+        return os.path.abspath(override)
+    env = os.environ.get("OWM_WORKSPACE")
+    if env:
+        return os.path.abspath(env)
+    # cwd.parents is the finite ancestor chain up to the filesystem root; walking
+    # that bounded list (cwd first, then each parent) avoids an unbounded loop.
+    cwd = Path.cwd()
+    for ancestor in (cwd, *cwd.parents):
+        if (ancestor / "workspace.toml").is_file():
+            return str(ancestor)
+    raise OwmError(
+        "No workspace.toml found. Run from inside a workspace, set "
+        "OWM_WORKSPACE, or pass --workspace.",
+        code=NOT_FOUND,
+    )
 
 
 @dataclass

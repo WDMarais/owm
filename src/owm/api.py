@@ -4,7 +4,7 @@ Consumed by owm.mcp (MCP tool surface) and owm.cli (--json flag, and prose forma
 """
 import os
 
-from owm.config import parse_instance_config, load_instance_config
+from owm.config import parse_instance_config, load_instance_config, resolve_workspace_root
 from owm.errors import OwmError, format_error
 from owm.instance import health_check
 from owm.ports import find_conflicting_process
@@ -13,8 +13,14 @@ from owm.worktrees import resolve_worktree_path
 
 
 def default_workspace() -> str:
-    """Return OWM_WORKSPACE env var if set, otherwise '.'."""
-    return os.environ.get("OWM_WORKSPACE", ".")
+    """Resolve the workspace root for api/mcp callers that didn't supply one.
+
+    Thin wrapper over the shared resolver (OWM_WORKSPACE, else walk up from cwd)
+    so api/mcp use the same precedence as the CLI. No override here — callers pass
+    an explicit workspace_root when they have one (`workspace_root or
+    default_workspace()`). Raises OwmError(NOT_FOUND) when nothing resolves rather
+    than silently defaulting to '.'."""
+    return resolve_workspace_root()
 
 
 def instance_status(instance: str, workspace_root: str) -> dict:
