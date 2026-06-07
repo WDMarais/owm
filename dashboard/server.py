@@ -59,7 +59,7 @@ def _ui_status(name: str) -> str:
     fixed); `unmanaged` means a process is on the instance's port but re-owm
     didn't start it (e.g. an instance still running under owm)."""
     try:
-        return _UI_STATUS.get(health_check(name, str(WORKSPACE))["status"], "stopped")
+        return _UI_STATUS.get(health_check(name, str(WORKSPACE)).status, "stopped")
     except Exception:
         # Fault-isolation boundary: this runs once per instance in the status
         # list, and health_check is NOT exception-bounded — a malformed
@@ -110,7 +110,7 @@ def _instance_status(instance: str) -> str:
     process-alive, spanning health_check's healthy/starting/unhealthy.)"""
     try:
         return ("running"
-                if health_check(instance, str(WORKSPACE))["status"]
+                if health_check(instance, str(WORKSPACE)).status
                 in ("healthy", "starting", "unhealthy")
                 else "stopped")
     except Exception:
@@ -277,7 +277,7 @@ def _running(name: str) -> bool:
     """Whether re-owm's managed process for `name` is alive (delete/archive/
     rename take `running` as a trust-the-caller guard arg)."""
     try:
-        return health_check(name, str(WORKSPACE))["status"] in ("healthy", "starting", "unhealthy")
+        return health_check(name, str(WORKSPACE)).status in ("healthy", "starting", "unhealthy")
     except Exception:
         return False
 

@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 
 from owm.errors import OwmError, START_TIMEOUT
 from owm.instance import start_instance, stop_instance, kill_instance
-from owm.instance import restart_instance, health_check
+from owm.instance import restart_instance, health_check, InstanceInfo
 from owm.instance import StartResult, StopResult
 from owm.instance import (
     _state_file_path,
@@ -306,7 +306,7 @@ def test_health_running_and_http_alive(tmp_path):
          patch("owm.instance._process_alive", return_value=True), \
          patch("owm.instance._probe_http", return_value=True):
         result = health_check("feat-789", str(tmp_path))
-    assert result == {"status": "healthy", "pid": 1234, "http_alive": True, "url": "https://feat-789.localhost"}
+    assert result == InstanceInfo(status="healthy", pid=1234, http_alive=True, url="https://feat-789.localhost")
 
 
 @pytest.mark.instance_lifecycle_start_stop
@@ -316,8 +316,8 @@ def test_health_starting(tmp_path):
          patch("owm.instance._process_alive", return_value=True), \
          patch("owm.instance._probe_http", return_value=False):
         result = health_check("feat-789", str(tmp_path))  # wait=False by default
-    assert result["status"] == "starting"
-    assert result["http_alive"] is False
+    assert result.status == "starting"
+    assert result.http_alive is False
 
 
 @pytest.mark.instance_lifecycle_start_stop
@@ -328,7 +328,7 @@ def test_health_unhealthy_process_running_no_http(tmp_path):
          patch("owm.instance._probe_http", return_value=False), \
          patch("owm.instance._wait_for_http", side_effect=OwmError("timeout", code=START_TIMEOUT)):
         result = health_check("feat-789", str(tmp_path), wait=True)
-    assert result["status"] == "unhealthy"
+    assert result.status == "unhealthy"
 
 
 @pytest.mark.instance_lifecycle_start_stop
@@ -337,7 +337,7 @@ def test_health_stopped(tmp_path):
     with patch("owm.instance._read_pid", return_value=None), \
          patch("owm.instance.find_conflicting_process", return_value=None):
         result = health_check("feat-789", str(tmp_path))
-    assert result == {"status": "stopped"}
+    assert result.status == "stopped"
 
 
 @pytest.mark.instance_lifecycle_start_stop
@@ -348,9 +348,9 @@ def test_health_unmanaged_process(tmp_path):
          patch("owm.instance.find_conflicting_process",
                return_value={"pid": 9999, "name": "nginx", "cmdline": "nginx -g daemon off;"}):
         result = health_check("feat-789", str(tmp_path))
-    assert result["status"] == "unmanaged"
-    assert result["pid"] == 9999
-    assert result["port"] == 18142
+    assert result.status == "unmanaged"
+    assert result.pid == 9999
+    assert result.port == 18142
 
 
 @pytest.mark.instance_lifecycle_start_stop
@@ -361,9 +361,9 @@ def test_health_is_process_and_http_only_not_db_or_venv(tmp_path):
          patch("owm.instance._process_alive", return_value=True), \
          patch("owm.instance._probe_http", return_value=True):
         result = health_check("feat-789", str(tmp_path))
-    assert "db" not in result
-    assert "venv" not in result
-    assert "modules" not in result
+    assert not hasattr(result, "db")
+    assert not hasattr(result, "venv")
+    assert not hasattr(result, "modules")
 
 
 # === SPEC GAPS ===

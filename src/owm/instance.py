@@ -662,13 +662,25 @@ def restart_instance(
     return RestartResult(status="restarted", pid=start_result.pid, url=f"https://{instance}.localhost")
 
 
+HealthStatus = Literal["healthy", "starting", "unhealthy", "unmanaged", "stopped"]
+
+
+@dataclass
+class InstanceInfo:
+    status: HealthStatus
+    pid: int | None = None
+    port: int | None = None
+    http_alive: bool | None = None
+    url: str | None = None
+
+
 def health_check(
     instance: str,
     workspace_root: str,
     *,
     wait: bool = False,
     timeout_seconds: int = 30,
-) -> dict:
+) -> InstanceInfo:
     conf = load_instance_config(instance, workspace_root)
     port = conf.server.http_port
 
@@ -676,20 +688,20 @@ def health_check(
     if pid is None or not _process_alive(pid):
         other = find_conflicting_process(port)
         if other:
-            return {"status": "unmanaged", "pid": other["pid"], "port": port}
-        return {"status": "stopped"}
+            return InstanceInfo(status="unmanaged", pid=other["pid"], port=port)
+        return InstanceInfo(status="stopped")
 
     if _probe_http(port):
-        return {"status": "healthy", "pid": pid, "http_alive": True, "url": f"https://{instance}.localhost"}
+        return InstanceInfo(status="healthy", pid=pid, http_alive=True, url=f"https://{instance}.localhost")
 
     if not wait:
-        return {"status": "starting", "pid": pid, "http_alive": False}
+        return InstanceInfo(status="starting", pid=pid, http_alive=False)
 
     try:
         _wait_for_http(port, timeout_seconds)
-        return {"status": "healthy", "pid": pid, "http_alive": True, "url": f"https://{instance}.localhost"}
+        return InstanceInfo(status="healthy", pid=pid, http_alive=True, url=f"https://{instance}.localhost")
     except OwmError:
-        return {"status": "unhealthy", "pid": pid, "http_alive": False}
+        return InstanceInfo(status="unhealthy", pid=pid, http_alive=False)
 
 
 def list_running_instances(workspace_root: str) -> list[dict]:
@@ -718,8 +730,8 @@ def list_running_instances(workspace_root: str) -> list[dict]:
             "instance": entry.name,
             "pid": pid,
             "port": port,
-            "url": h.get("url"),
-            "status": h.get("status"),
+            "url": h.url,
+            "status": h.status,
         })
     return result
 

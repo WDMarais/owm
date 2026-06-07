@@ -422,11 +422,11 @@ def cmd_health(ctx, name):
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     h = health_check(instance, workspace_root)
-    line = f"{instance}  {h.get('status', 'unknown')}"
-    if h.get("pid"):
-        line += f"  pid={h['pid']}"
-    if h.get("url"):
-        line += f"  {h['url']}"
+    line = f"{instance}  {h.status}"
+    if h.pid:
+        line += f"  pid={h.pid}"
+    if h.url:
+        line += f"  {h.url}"
     click.echo(line)
 
 
@@ -995,7 +995,7 @@ def cmd_validate(ctx, name, live):
             errors.append(f"DB not reachable at port {conf.database.pg_port}")
         try:
             result = health_check(instance, workspace_root)
-            if not result.get("http_ok"):
+            if not result.http_alive:
                 warnings.append(f"HTTP port {conf.server.http_port} not responding")
         except Exception as e:
             warnings.append(f"live HTTP check failed: {e}")

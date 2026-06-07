@@ -37,7 +37,7 @@ def instance_status(instance: str, workspace_root: str) -> dict:
     http_port = conf.server.http_port
 
     suspected_linked = None
-    if h["status"] in ("stopped", "unmanaged"):
+    if h.status in ("stopped", "unmanaged"):
         proc = find_conflicting_process(http_port)
         if proc:
             if "odoo-bin" in proc.get("cmdline", "") or instance in proc.get("cmdline", ""):
@@ -48,12 +48,12 @@ def instance_status(instance: str, workspace_root: str) -> dict:
 
     return {
         "instance": instance,
-        "state": h["status"],
+        "state": h.status,
         "http_port": http_port,
         "local_url": f"http://localhost:{http_port}",
-        "url": h.get("url"),
+        "url": h.url,
         "db": conf.database.name,
-        "pid": h.get("pid"),
+        "pid": h.pid,
         "suspected_linked": suspected_linked,
     }
 
@@ -110,21 +110,21 @@ def workspace_status(workspace_root: str) -> dict:
         except Exception:
             continue
         h = health_check(entry.name, workspace_root)
-        inst: dict = {"state": h["status"]}
-        if h.get("pid"):
-            inst["pid"] = h["pid"]
-        if h.get("url"):
-            inst["url"] = h["url"]
+        inst: dict = {"state": h.status}
+        if h.pid:
+            inst["pid"] = h.pid
+        if h.url:
+            inst["url"] = h.url
         inst["local_url"] = f"http://localhost:{conf.server.http_port}"
         instances[entry.name] = inst
         repo_alerts.extend(_repo_alerts(entry.name, conf, workspace_root))
 
-        if h["status"] == "unmanaged":
+        if h.status == "unmanaged":
             proc = find_conflicting_process(conf.server.http_port)
             port_alerts.append({
                 "instance": entry.name,
                 "http_port": conf.server.http_port,
-                "pid": h.get("pid"),
+                "pid": h.pid,
                 "classification": "probable_orphan" if proc and "odoo-bin" in proc.get("cmdline", "") else "probable_squatter",
             })
 

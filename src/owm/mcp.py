@@ -62,6 +62,8 @@ from owm.sync import (
     branch_exists_on_origin,
     git_reset_hard,
 )
+import dataclasses
+
 from owm.api import default_workspace, health_check, instance_status, workspace_status
 from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
@@ -115,7 +117,7 @@ def owm_validate(instance: str, live: bool = False) -> dict:
     if live:
         try:
             result = health_check(instance, workspace_root)
-            if not result.get("http_ok"):
+            if not result.http_alive:
                 errors.append(f"HTTP port {conf.server.http_port} not reachable")
         except Exception as e:
             errors.append(f"live check failed: {e}")
@@ -267,7 +269,8 @@ def owm_restart(instance: str, wait: bool = False) -> dict:
 @mcp.tool()
 def owm_health(instance: str) -> dict:
     workspace_root = default_workspace()
-    return health_check(instance, workspace_root)
+    result = health_check(instance, workspace_root)
+    return {k: v for k, v in dataclasses.asdict(result).items() if v is not None}
 
 
 @mcp.tool()

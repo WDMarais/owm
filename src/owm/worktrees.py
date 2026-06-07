@@ -15,7 +15,7 @@ class WorktreeConfig:
 
 @dataclass
 class WorktreeResult:
-    action: str   # "linked" | "created"
+    action: Literal["linked", "created"]
     path: str
 
 
