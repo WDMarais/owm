@@ -9,6 +9,7 @@ import tomllib
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from typing import Literal
 
 import psutil
 
@@ -50,7 +51,7 @@ class NewResult:
 
 @dataclass
 class CreateResult:
-    status: str
+    status: Literal["up_to_date", "created", "updated", "needs_resolution"]
     created: list = field(default_factory=list)
     updated: list = field(default_factory=list)
     skipped: list = field(default_factory=list)
@@ -66,7 +67,7 @@ class CreateResult:
 
 @dataclass
 class StartResult:
-    status: str
+    status: Literal["already_running", "healthy", "spawned"]
     pid: int | None = None
     events_emitted: list = field(default_factory=list)
     message: str | None = None
@@ -75,7 +76,7 @@ class StartResult:
 
 @dataclass
 class StopResult:
-    status: str
+    status: Literal["not_running", "stopping", "stopped", "stop_timeout"]
     pid: int | None = None
     events_emitted: list = field(default_factory=list)
     hint: str | None = None
@@ -85,13 +86,13 @@ class StopResult:
 
 @dataclass
 class KillResult:
-    status: str
+    status: Literal["not_running", "killed"]
     pid: int | None = None
 
 
 @dataclass
 class RestartResult:
-    status: str
+    status: Literal["restarted"]
     pid: int | None = None
     url: str | None = None
 

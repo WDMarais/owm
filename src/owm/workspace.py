@@ -3,6 +3,7 @@ import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from typing import Literal
 
 from owm.config import parse_workspace_config
 
@@ -14,7 +15,7 @@ from owm.config import parse_workspace_config
 @dataclass
 class CloneResult:
     name: str
-    status: str  # "cloned" | "local_copy" | "skipped" | "error"
+    status: Literal["cloned", "local_copy", "skipped", "error"]
     error: str | None = None
 
 

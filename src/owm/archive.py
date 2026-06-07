@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Literal
 
 from owm.config import load_instance_config, parse_workspace_config, InstanceConfig
 from owm.errors import (
@@ -49,7 +50,7 @@ class RestoreResult:
 
 @dataclass
 class DeleteResult:
-    status: str
+    status: Literal["deleted"]
     path: str
 
 

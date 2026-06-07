@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
+from typing import Literal
 
 
 @dataclass
 class AdoptResult:
-    status: str
+    status: Literal["needs_confirmation", "adopted"]
     pid: int | None = None
     pid_written_to_state: bool = False
     manageable: bool = False

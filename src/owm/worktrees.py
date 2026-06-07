@@ -1,6 +1,7 @@
 import os
 import subprocess
 from dataclasses import dataclass
+from typing import Literal
 
 from owm.errors import OwmError, NOT_OWNED, SHARED_REPO, BRANCH_NOT_FOUND
 
@@ -20,7 +21,7 @@ class WorktreeResult:
 
 @dataclass
 class PushResult:
-    status: str
+    status: Literal["pushed"]
 
 
 @dataclass

@@ -3,6 +3,7 @@ import os
 import subprocess
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Literal
 
 
 class FailureMode(StrEnum):
@@ -26,7 +27,7 @@ class ScriptSummary:
 
 @dataclass
 class ScriptResult:
-    status: str
+    status: Literal["abort", "ok", "fail"]
     summary: ScriptSummary
     rows: list
     rows_run: int | None = None
@@ -37,7 +38,7 @@ class ScriptResult:
 
 @dataclass
 class CompareResult:
-    status: str
+    status: Literal["error", "ok", "unexpected_changes"]
     base_instance: str | None = None
     feat_instance: str | None = None
     summary: ScriptSummary | None = None

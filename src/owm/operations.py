@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Literal
 
 from owm.config import (
     instance_config_path,
@@ -20,7 +21,7 @@ from owm.proxy import get_proxy_backend
 
 @dataclass
 class DeleteResult:
-    status: str
+    status: Literal["pending_confirmation", "deleted"]
     checklist: list | None = None
     worktrees_removed: bool = False
     db_dropped: bool = False
@@ -32,7 +33,7 @@ class DeleteResult:
 
 @dataclass
 class RenameResult:
-    status: str
+    status: Literal["renamed"]
     old_name: str
     new_name: str
     db_renamed: bool = False
