@@ -2,6 +2,7 @@
 Tests for unmanaged process detection and adoption.
 Covers: Unmanaged processes and adoption section.
 """
+import json
 import pytest
 
 from owm.adoption import (
@@ -9,6 +10,7 @@ from owm.adoption import (
     adopt_process,
     status_with_unmanaged,
 )
+from owm.operations import adopt_instance
 
 
 # ---------------------------------------------------------------------------
@@ -108,8 +110,48 @@ def test_adopt_port_mismatch_force_proceeds():
     assert result.status == "adopted"
 
 
+
+# ---------------------------------------------------------------------------
+# adopt_instance — wiring (writes state.json)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.adoption
+def test_adopt_instance_writes_pid_to_state(standard_instance_toml, tmp_workspace):
+    state_path = tmp_workspace / "instances" / "feat-789" / "state.json"
+    result = adopt_instance(
+        "feat-789", 9999, str(tmp_workspace),
+        configured_port=18142,
+        process_port=18142,
+    )
+    assert result.status == "adopted"
+    assert json.loads(state_path.read_text())["pid"] == 9999
+
+
+@pytest.mark.adoption
+def test_adopt_instance_port_mismatch_does_not_write_state(standard_instance_toml, tmp_workspace):
+    state_path = tmp_workspace / "instances" / "feat-789" / "state.json"
+    result = adopt_instance(
+        "feat-789", 9999, str(tmp_workspace),
+        configured_port=18142,
+        process_port=18150,
+    )
+    assert result.status == "needs_confirmation"
+    assert not state_path.exists()
+
+
+@pytest.mark.adoption
+def test_adopt_instance_force_port_mismatch_writes_state(standard_instance_toml, tmp_workspace):
+    state_path = tmp_workspace / "instances" / "feat-789" / "state.json"
+    result = adopt_instance(
+        "feat-789", 9999, str(tmp_workspace),
+        configured_port=18142,
+        process_port=18150,
+        force=True,
+    )
+    assert result.status == "adopted"
+    assert json.loads(state_path.read_text())["pid"] == 9999
+
+
 # === SPEC GAPS ===
-# test_adopt_mcp_tool: spec notes owm_adopt is not listed in MCP tools (Deferred section);
-#   no MCP test written for adoption.
 # test_unmanaged_detection_method: spec says "owm processes" but does not specify whether
 #   detection scans /proc, uses ps, or inspects port bindings — implementation-defined.

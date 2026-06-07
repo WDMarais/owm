@@ -42,6 +42,7 @@ from owm.env import resolve_env, format_env
 from owm.modules import upgrade_modules
 from owm.operations import (
     infer_instance_from_cwd,
+    adopt_instance,
     delete_instance,
     rename_instance,
     show_logs,
@@ -49,6 +50,7 @@ from owm.operations import (
     db_restore,
     validate_instance,
 )
+from owm.ports import find_port_for_pid
 from owm.database import reset_db
 from owm.oplog import workspace_log
 from owm.sync import (
@@ -412,6 +414,31 @@ def cmd_kill(ctx, name):
         click.echo(f"{instance}  not running")
     else:
         click.echo(f"{instance}  killed  pid={result.pid}")
+
+
+@cli.command("adopt")
+@click.argument("name")
+@click.argument("pid", type=int)
+@click.option("--force", is_flag=True, help="Adopt even if port does not match configured port.")
+@click.pass_context
+def cmd_adopt(ctx, name, pid, force):
+    """Adopt an externally-started Odoo process as a managed instance."""
+    workspace_root = _resolve_workspace(ctx)
+    conf = load_instance_config(name, workspace_root)
+    process_port = find_port_for_pid(pid)
+    if process_port is None:
+        raise click.ClickException(f"pid {pid} has no LISTEN port — is the process running?")
+    result = adopt_instance(
+        name, pid, workspace_root,
+        configured_port=conf.server.http_port,
+        process_port=process_port,
+        force=force,
+    )
+    if result.status == "needs_confirmation":
+        click.echo(result.warning)
+        click.echo("Re-run with --force to adopt anyway.")
+    else:
+        click.echo(f"{name}  adopted  pid={result.pid}")
 
 
 @cli.command("health")

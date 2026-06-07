@@ -174,6 +174,13 @@ def find_conflicting_process(port: int) -> dict | None:
     return None
 
 
+def find_port_for_pid(pid: int) -> int | None:
+    for conn in psutil.net_connections(kind="tcp"):
+        if conn.pid == pid and conn.status == "LISTEN":
+            return conn.laddr.port
+    return None
+
+
 def get_eviction_log(log_path: str) -> list[dict]:
     try:
         with open(log_path) as f:

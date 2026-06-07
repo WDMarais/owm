@@ -15,7 +15,8 @@ from owm.config import (
 )
 from owm.errors import OwmError, INSTANCE_RUNNING, NOT_FOUND
 from owm.archive import _remove_proxy_block, _remove_worktrees, _dropdb_archive
-from owm.adoption import adopt_process
+from owm.adoption import adopt_process, AdoptResult
+from owm.instance import _write_pid
 from owm.proxy import get_proxy_backend
 
 
@@ -330,5 +331,22 @@ def infer_instance_from_cwd(
     return CwdResult(instance=instance or None)
 
 
-def adopt_instance(instance: str, pid: int, **kwargs):
-    return adopt_process(instance=instance, pid=pid, **kwargs)
+def adopt_instance(
+    instance: str,
+    pid: int,
+    workspace_root: str,
+    configured_port: int,
+    process_port: int,
+    *,
+    force: bool = False,
+) -> AdoptResult:
+    result = adopt_process(
+        instance=instance,
+        pid=pid,
+        configured_port=configured_port,
+        process_port=process_port,
+        force=force,
+    )
+    if result.status == "adopted":
+        _write_pid(instance, workspace_root, pid)
+    return result

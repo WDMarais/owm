@@ -45,12 +45,14 @@ from owm.config import (
     load_instance_config,
 )
 from owm.operations import (
+    adopt_instance,
     delete_instance,
     rename_instance,
     show_logs,
     db_dump,
     db_restore,
 )
+from owm.ports import find_port_for_pid
 from owm.database import reset_db
 from owm.sync import (
     fetch_active_branches,
@@ -264,6 +266,25 @@ def owm_restart(instance: str, wait: bool = False) -> dict:
             err["hint"] = "run owm kill to force-stop the instance first"
         return err
     return {"status": "restarted", "pid": result.pid, "url": f"https://{instance}.localhost"}
+
+
+@mcp.tool()
+def owm_adopt(instance: str, pid: int, force: bool = False) -> dict:
+    workspace_root = default_workspace()
+    try:
+        conf = load_instance_config(instance, workspace_root)
+    except OwmError as e:
+        return _e(e)
+    process_port = find_port_for_pid(pid)
+    if process_port is None:
+        return format_error(f"pid {pid} has no LISTEN port", "PROCESS_NOT_FOUND")
+    result = adopt_instance(
+        instance, pid, workspace_root,
+        configured_port=conf.server.http_port,
+        process_port=process_port,
+        force=force,
+    )
+    return {"status": result.status, "pid": result.pid, "warning": result.warning}
 
 
 @mcp.tool()
