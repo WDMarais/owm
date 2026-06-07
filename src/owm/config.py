@@ -1,10 +1,9 @@
 import os
 import tomllib
-from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_field, model_validator
 
 from owm.errors import ConfigError, NOT_FOUND, OwmError
 
@@ -296,69 +295,10 @@ def parse_workspace_config(toml: str) -> WorkspaceConfig:
         raw = tomllib.loads(toml)
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"invalid workspace.toml: {e}") from e
-
-    if "repos" not in raw:
-        raise ConfigError("workspace.toml must have [repos]")
-    if "clusters" not in raw:
-        raise ConfigError("workspace.toml must have [clusters]")
-
-    repos_raw = dict(raw["repos"])
-
-    repos: dict[str, WorkspaceRepo] = {}
-    for name, val in repos_raw.items():
-        if isinstance(val, str):
-            repos[name] = WorkspaceRepo(path=val)
-        else:
-            repos[name] = WorkspaceRepo(
-                path=val["path"],
-                has_addons=val.get("has_addons", False),
-                addons_paths=val.get("addons_paths", ["."]),
-            )
-
-    clusters = {
-        k: ClusterConfig(pg_version=v["pg_version"], port=v["port"])
-        for k, v in raw["clusters"].items()
-    }
-
-    dr = raw.get("defaults", {})
-    if "http_port_range" in dr and not isinstance(dr["http_port_range"], list):
-        raise ConfigError("workspace.toml: http_port_range must be a list")
-    defaults = WorkspaceDefaults(
-        instances_dir=dr.get("instances_dir", "instances"),
-        http_port_range=dr.get("http_port_range", [8100, 8299]),
-        owm_port_range=dr.get("owm_port_range", [8090, 8099]),
-        workers=dr.get("workers", 2),
-        sync_warn_hours=dr.get("sync_warn_hours", 72),
-        eviction_threshold=dr.get("eviction_threshold", 10),
-        template_warn_days=dr.get("template_warn_days", 30),
-        repo_priority=dr.get("repo_priority", None),
-    )
-
-    patches = raw.get("patches", {})
-    compare_pairs = raw.get("compare_pairs", {}).get("pairs", [])
-
-    proxy = None
-    if "proxy" in raw:
-        p = raw["proxy"]
-        proxy = ProxyConfig(
-            domain_suffix=p["domain_suffix"],
-            backend=p.get("backend", "nginx"),
-            caddy_config=p.get("caddy_config"),
-        )
-
-    scripts = None
-    if "scripts" in raw:
-        scripts = WorkspaceScripts(scripts_dir=raw["scripts"]["scripts_dir"])
-
-    return WorkspaceConfig(
-        repos=repos,
-        clusters=clusters,
-        defaults=defaults,
-        patches=patches,
-        compare_pairs=compare_pairs,
-        proxy=proxy,
-        scripts=scripts,
-    )
+    try:
+        return WorkspaceConfig.model_validate(raw)
+    except ValidationError as e:
+        raise ConfigError(f"invalid workspace.toml: {e}") from e
 
 
 def parse_instance_config(toml: str) -> InstanceConfig:
@@ -366,92 +306,10 @@ def parse_instance_config(toml: str) -> InstanceConfig:
         raw = tomllib.loads(toml)
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"invalid instance.toml: {e}") from e
-
-    if "database" not in raw:
-        raise ConfigError("instance.toml must have [database]")
-    if "server" not in raw:
-        raise ConfigError("instance.toml must have [server]")
-
-    repos = {}
-    for name, spec in raw.get("repos", {}).items():
-        try:
-            repos[name] = parse_repo_spec(spec)
-        except (ValueError, TypeError) as e:
-            raise ConfigError(
-                f"instance.toml: invalid repo spec for {name!r} ({spec!r}): {e}"
-            ) from e
-
-    db = raw["database"]
     try:
-        database = DatabaseSection(
-            name=db["name"],
-            pg_port=db["pg_port"],
-            template=db.get("template"),
-        )
-    except (KeyError, TypeError) as e:
-        raise ConfigError(f"instance.toml: [database] missing required key {e}") from e
-
-    srv = raw["server"]
-    http_port = srv.get("http_port", 0)
-    # gevent_port is derived (http_port + 1), not stored — see ServerSection.gevent_port.
-    # An explicit gevent_port in the toml is only honoured if it matches; a mismatch is a
-    # hand-edit mistake and is rejected loudly rather than silently ignored.
-    explicit_gevent = srv.get("gevent_port")
-    if explicit_gevent is not None and http_port and explicit_gevent != http_port + 1:
-        raise ConfigError(
-            f"gevent_port is derived as http_port + 1 ({http_port + 1}); "
-            f"remove it from the toml or set it to {http_port + 1} (got {explicit_gevent})"
-        )
-    server = ServerSection(
-        http_port=http_port,
-        workers=srv.get("workers", 2),
-        odoo_repo=srv.get("odoo_repo"),
-    )
-
-    install = None
-    if "install" in raw:
-        install = InstallSection(modules=raw["install"].get("modules", []))
-
-    python = None
-    if "python" in raw:
-        python = PythonSection(version=raw["python"].get("version"))
-
-    scripts = None
-    if "scripts" in raw:
-        s = raw["scripts"]
-        runners = {}
-        for rname, r in s.get("runners", {}).items():
-            try:
-                runners[rname] = ScriptRunner(file=r["file"], type=r["type"])
-            except (KeyError, TypeError) as e:
-                raise ConfigError(
-                    f"instance.toml: [scripts.runners].{rname} must be a table with "
-                    f"'file' and 'type' keys (got {r!r})"
-                ) from e
-        try:
-            compare = ScriptCompare(target=s["compare"]["target"]) if "compare" in s else None
-        except (KeyError, TypeError) as e:
-            raise ConfigError(f"instance.toml: invalid [scripts.compare]: {e}") from e
-        scripts = InstanceScripts(
-            default=s.get("default"),
-            scripts_dir=s.get("scripts_dir"),
-            runners=runners,
-            compare=compare,
-        )
-
-    template = None
-    if "template" in raw:
-        template = TemplateSection(sync_opt_in=raw["template"].get("sync_opt_in", False))
-
-    return InstanceConfig(
-        repos=repos,
-        database=database,
-        server=server,
-        install=install,
-        python=python,
-        scripts=scripts,
-        template=template,
-    )
+        return InstanceConfig.model_validate(raw)
+    except ValidationError as e:
+        raise ConfigError(f"invalid instance.toml: {e}") from e
 
 
 def load_instance_config(instance: str, workspace_root: str) -> InstanceConfig:
