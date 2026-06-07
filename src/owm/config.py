@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from owm.errors import ConfigError, NOT_FOUND, OwmError
 
@@ -185,15 +185,25 @@ class WorkspaceScripts(BaseModel):
     scripts_dir: str
 
 
-@dataclass
-class WorkspaceConfig:
+class WorkspaceConfig(BaseModel):
     repos: dict[str, WorkspaceRepo]
     clusters: dict[str, ClusterConfig]
-    defaults: WorkspaceDefaults
-    patches: dict[str, list[str]]
-    compare_pairs: list[list[str]]
-    proxy: ProxyConfig | None
-    scripts: WorkspaceScripts | None
+    defaults: WorkspaceDefaults = Field(default_factory=WorkspaceDefaults)
+    patches: dict[str, list[str]] = {}
+    compare_pairs: list[list[str]] = []
+    proxy: ProxyConfig | None = None
+    scripts: WorkspaceScripts | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def _normalise(cls, data):
+        if isinstance(data, dict):
+            data = dict(data)
+            # TOML: [compare_pairs] / pairs = [...] — unnest to a flat list.
+            cp = data.get("compare_pairs", {})
+            if isinstance(cp, dict):
+                data["compare_pairs"] = cp.get("pairs", [])
+        return data
 
 
 class DatabaseSection(BaseModel):
@@ -261,9 +271,8 @@ class TemplateSection(BaseModel):
     sync_opt_in: bool = False
 
 
-@dataclass
-class InstanceConfig:
-    repos: dict[str, RepoSpec]
+class InstanceConfig(BaseModel):
+    repos: dict[str, RepoSpec] = {}
     database: DatabaseSection
     server: ServerSection
     install: InstallSection | None = None
