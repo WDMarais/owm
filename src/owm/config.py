@@ -202,17 +202,34 @@ class DatabaseSection(BaseModel):
     template: str | None = None
 
 
-@dataclass
-class ServerSection:
-    http_port: int
+class ServerSection(BaseModel):
+    # extra='ignore' so an explicit gevent_port in the TOML (validated then
+    # discarded) doesn't land as an unknown-field error.
+    model_config = ConfigDict(extra='ignore')
+
+    http_port: int = 0
     workers: int = 2
     odoo_repo: str | None = None  # explicit Odoo source repo; falls back to the shared repo
 
+    @model_validator(mode='before')
+    @classmethod
+    def _check_gevent(cls, data):
+        if isinstance(data, dict):
+            http_port = data.get("http_port", 0)
+            explicit_gevent = data.get("gevent_port")
+            if explicit_gevent is not None and http_port and explicit_gevent != http_port + 1:
+                raise ValueError(
+                    f"gevent_port is derived as http_port + 1 ({http_port + 1}); "
+                    f"remove it from the toml or set it to {http_port + 1} (got {explicit_gevent})"
+                )
+        return data
+
+    @computed_field
     @property
     def gevent_port(self) -> int:
         # Derived, not stored: the gevent/longpolling port is conventionally http_port + 1.
-        # Keeping it a property (rather than a field) makes the only invalid state —
-        # gevent != http+1 — unrepresentable, so there's nothing to drift or validate.
+        # Keeping it a computed_field (rather than a stored field) makes the only invalid
+        # state — gevent != http+1 — unrepresentable, so there's nothing to drift or validate.
         return self.http_port + 1 if self.http_port else 0
 
 
