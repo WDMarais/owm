@@ -20,6 +20,7 @@ from owm.config import (
     parse_instance_config,
     parse_workspace_config,
     InstanceConfig,
+    WorkspaceConfig,
 )
 from owm.errors import (
     OwmError,
@@ -381,6 +382,138 @@ workers = 2
     return NewResult(toml_path=toml_path, toml_content=toml_content, materialised=False)
 
 
+def _assign_instance_ports(
+    conf: InstanceConfig, workspace_root: str, name: str, toml_path: str,
+) -> tuple[int, int]:
+    occupied = _collect_occupied_ports(workspace_root, exclude_instance=name)
+    if not conf.server.http_port or conf.server.http_port in occupied:
+        pair = assign_port({"range": [8100, 8299], "occupied": occupied})
+        http_port, gevent_port = pair.http_port, pair.gevent_port
+        _rewrite_ports_in_toml(toml_path, http_port, gevent_port)
+    else:
+        http_port, gevent_port = conf.server.http_port, conf.server.gevent_port
+    return http_port, gevent_port
+
+
+def _provision_worktrees(conf: InstanceConfig, workspace_root: str, name: str) -> None:
+    for repo_name, spec in conf.repos.items():
+        create_worktree(
+            repo_name, spec.branch, spec.shared, workspace_root, name,
+            base=spec.base, assert_exists=spec.assert_exists, create=spec.create,
+        )
+
+
+def _resolve_instance_addons(
+    conf: InstanceConfig, ws_conf: WorkspaceConfig, workspace_root: str, name: str,
+) -> list[str]:
+    workspace_repos_meta = {
+        n: {"has_addons": r.has_addons, "addons_paths": r.addons_paths}
+        for n, r in ws_conf.repos.items()
+    }
+    instance_repos_dict = {
+        n: {"shared": s.shared, "branch": s.branch}
+        for n, s in conf.repos.items()
+    }
+    addons_paths = resolve_addons_path(
+        workspace_repos=workspace_repos_meta,
+        instance_repos=instance_repos_dict,
+        workspace_root=workspace_root,
+        instance_name=name,
+        repo_priority=ws_conf.defaults.repo_priority,
+    )
+    if not addons_paths:
+        raise OwmError(empty_addons_path_message(name), code=ODOO_CONFIG_NO_ADDONS)
+    return addons_paths
+
+
+def _provision_venv(conf: InstanceConfig, workspace_root: str, name: str) -> None:
+    venv_dir = os.path.join(workspace_root, "instances", name, ".venv")
+    if os.path.exists(venv_dir):
+        return
+    python_version = conf.python.version if conf.python else "3.12"
+    r = find_odoo_repo(conf)
+    odoo_wt = resolve_worktree_path(r.name, r.spec.branch, r.spec.shared, workspace_root, name)
+    req_files = []
+    default_req = os.path.join(odoo_wt.path, "requirements.txt")
+    if os.path.exists(default_req):
+        req_files.append(default_req)
+    create_venv(name, python_version, req_files, patches=[], venv_dir=venv_dir)
+
+
+def _configure_proxy(
+    ws_conf: WorkspaceConfig, name: str, http_port: int, gevent_port: int, workspace_root: str,
+):
+    domain_suffix = ws_conf.proxy.domain_suffix if ws_conf.proxy else "localhost"
+    proxy = get_proxy_backend(ws_conf.proxy)
+    if proxy:
+        proxy.write_instance(name, http_port, gevent_port, domain_suffix, workspace_root)
+    return proxy
+
+
+def _write_instance_odoo_conf(
+    name: str, http_port: int, gevent_port: int,
+    conf: InstanceConfig, ws_conf: WorkspaceConfig,
+    addons_paths: list[str], workspace_root: str,
+) -> bool:
+    """Write instance.conf; return False (without writing) if the conf is MANUAL-owned."""
+    log_path = os.path.join(workspace_root, "instances", name, "instance.log")
+    conf_content = generate_instance_conf(
+        name, http_port, gevent_port, conf.server.workers,
+        db_name=conf.database.name,
+        db_port=conf.database.pg_port,
+        proxy_active=True,
+        addons_path=addons_paths or None,
+        logfile=log_path,
+    )
+    conf_path = os.path.join(workspace_root, "instances", name, "instance.conf")
+    if os.path.exists(conf_path):
+        match ConfOwnership.detect(conf_path):
+            case ConfOwnership.MANAGED:
+                pass
+            case ConfOwnership.MANUAL:
+                return False
+            case None:
+                raise OwmError(
+                    f"instance.conf for {name!r} carries no ownership marker; add "
+                    f"'{ConfOwnership.MANAGED}' to let owm regenerate it or "
+                    f"'{ConfOwnership.MANUAL}' to keep it yours",
+                    code=ODOO_CONFIG_UNMARKED,
+                )
+    with open(conf_path, "w") as f:
+        f.write(conf_content)
+    return True
+
+
+def _materialise_instance(name: str, workspace_root: str) -> CreateResult:
+    """Full provisioning from scratch: port, worktrees, addons, venv, DB, proxy, conf.
+    create_instance() is the dispatcher — it handles incremental/idempotent cases
+    and falls through here only for a fresh materialisation."""
+    toml_path = instance_config_path(name, workspace_root)
+    with open(toml_path) as f:
+        conf = parse_instance_config(f.read())
+    ws_toml_path = os.path.join(workspace_root, "workspace.toml")
+    with open(ws_toml_path) as f:
+        ws_conf = parse_workspace_config(f.read())
+
+    http_port, gevent_port = _assign_instance_ports(conf, workspace_root, name, toml_path)
+    _provision_worktrees(conf, workspace_root, name)
+    addons_paths = _resolve_instance_addons(conf, ws_conf, workspace_root, name)
+    _provision_venv(conf, workspace_root, name)
+    _create_instance_db(conf.database.name, conf.database.pg_port)
+    proxy = _configure_proxy(ws_conf, name, http_port, gevent_port, workspace_root)
+    conf_written = _write_instance_odoo_conf(
+        name, http_port, gevent_port, conf, ws_conf, addons_paths, workspace_root,
+    )
+    return CreateResult(
+        status="created",
+        worktrees_created=True,
+        db_created=True,
+        port_reserved=True,
+        proxy_block_written=proxy is not None,
+        odoo_conf_generated=conf_written,
+    )
+
+
 def create_instance(
     name: str,
     workspace_root: str,
@@ -416,112 +549,7 @@ def create_instance(
             branches_deleted=[],
         )
 
-    # Fresh materialisation: read toml, create all resources. Holds the path
-    # explicitly — the assigned port is rewritten back into it below.
-    toml_path = instance_config_path(name, workspace_root)
-    with open(toml_path) as f:
-        conf = parse_instance_config(f.read())
-
-    ws_toml_path = os.path.join(workspace_root, "workspace.toml")
-    with open(ws_toml_path) as f:
-        ws_conf = parse_workspace_config(f.read())
-
-    # Assign port: pick fresh if unassigned (http_port=0) or pinned port is taken
-    occupied = _collect_occupied_ports(workspace_root, exclude_instance=name)
-    if not conf.server.http_port or conf.server.http_port in occupied:
-        pair = assign_port({"range": [8100, 8299], "occupied": occupied})
-        http_port, gevent_port = pair.http_port, pair.gevent_port
-        _rewrite_ports_in_toml(toml_path, http_port, gevent_port)
-    else:
-        http_port, gevent_port = conf.server.http_port, conf.server.gevent_port
-
-    # Worktrees (shared repos get a linked path; per-instance get their own)
-    for repo_name, spec in conf.repos.items():
-        create_worktree(
-            repo_name, spec.branch, spec.shared, workspace_root, name,
-            base=spec.base, assert_exists=spec.assert_exists, create=spec.create,
-        )
-
-    # Addons paths from workspace repo metadata
-    workspace_repos_meta = {
-        n: {"has_addons": r.has_addons, "addons_paths": r.addons_paths}
-        for n, r in ws_conf.repos.items()
-    }
-    instance_repos_dict = {
-        n: {"shared": s.shared, "branch": s.branch}
-        for n, s in conf.repos.items()
-    }
-    addons_paths = resolve_addons_path(
-        workspace_repos=workspace_repos_meta,
-        instance_repos=instance_repos_dict,
-        workspace_root=workspace_root,
-        instance_name=name,
-        repo_priority=ws_conf.defaults.repo_priority,
-    )
-    if not addons_paths:
-        raise OwmError(empty_addons_path_message(name), code=ODOO_CONFIG_NO_ADDONS)
-
-    # Venv
-    python_version = conf.python.version if conf.python else "3.12"
-    venv_dir = os.path.join(workspace_root, "instances", name, ".venv")
-    if not os.path.exists(venv_dir):
-        r = find_odoo_repo(conf)
-        odoo_wt = resolve_worktree_path(r.name, r.spec.branch, r.spec.shared, workspace_root, name)
-        req_files = []
-        default_req = os.path.join(odoo_wt.path, "requirements.txt")
-        if os.path.exists(default_req):
-            req_files.append(default_req)
-        create_venv(name, python_version, req_files, patches=[], venv_dir=venv_dir)
-
-    # Database
-    _create_instance_db(conf.database.name, conf.database.pg_port)
-
-    # Reverse-proxy block
-    domain_suffix = ws_conf.proxy.domain_suffix if ws_conf.proxy else "localhost"
-    proxy = get_proxy_backend(ws_conf.proxy)
-    if proxy:
-        proxy.write_instance(name, http_port, gevent_port, domain_suffix, workspace_root)
-
-    # odoo.conf
-    log_path = os.path.join(workspace_root, "instances", name, "instance.log")
-    conf_content = generate_instance_conf(
-        name,
-        http_port,
-        gevent_port,
-        conf.server.workers,
-        db_name=conf.database.name,
-        db_port=conf.database.pg_port,
-        proxy_active=True,
-        addons_path=addons_paths or None,
-        logfile=log_path,
-    )
-    conf_path = os.path.join(workspace_root, "instances", name, "instance.conf")
-    conf_written = True
-    if os.path.exists(conf_path):
-        match ConfOwnership.detect(conf_path):
-            case ConfOwnership.MANAGED:
-                pass
-            case ConfOwnership.MANUAL:
-                conf_written = False
-            case None:
-                raise OwmError(
-                    f"instance.conf for {name!r} carries no ownership marker; add "
-                    f"'{ConfOwnership.MANAGED}' to let owm regenerate it or "
-                    f"'{ConfOwnership.MANUAL}' to keep it yours",
-                    code=ODOO_CONFIG_UNMARKED,
-                )
-    if conf_written:
-        with open(conf_path, "w") as f:
-            f.write(conf_content)
-
-    return CreateResult(
-        status="created",
-        worktrees_created=True,
-        db_created=True,
-        port_reserved=True,
-        proxy_block_written=proxy is not None,
-        odoo_conf_generated=conf_written,
-    )
+    return _materialise_instance(name, workspace_root)
 
 
 def start_instance(
