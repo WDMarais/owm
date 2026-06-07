@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
+
 from owm.errors import ConfigError, NOT_FOUND, OwmError
 
 
@@ -94,34 +96,78 @@ def cwd_workspace_conflict(resolved_root: str) -> str | None:
     return None
 
 
-@dataclass
-class RepoSpec:
+def _parse_repo_spec_string(spec: str) -> dict:
+    """DSL string → field dict for RepoSpec.
+
+    "feat-789-dev:main+readonly+exists"  →  branch/base/flags dict
+    "12.0"                               →  bare branch, no base
+    """
+    if ":" in spec:
+        branch, _, rest = spec.partition(":")
+        parts = rest.split("+")
+        base_or_flag = parts[0]
+        flags = set(parts[1:])
+        if base_or_flag == "shared":
+            shared, base = True, None
+        else:
+            shared, base = False, base_or_flag
+    else:
+        parts = spec.split("+")
+        branch = parts[0]
+        flags = set(parts[1:])
+        shared, base = False, None
+    return {
+        "branch": branch,
+        "base": base,
+        "shared": shared,
+        "readonly": "readonly" in flags,
+        "assert_exists": "exists" in flags,
+        "create": "create" in flags,
+    }
+
+
+class RepoSpec(BaseModel):
     branch: str
-    base: str | None
-    shared: bool
-    readonly: bool
-    assert_exists: bool
+    base: str | None = None
+    shared: bool = False
+    readonly: bool = False
+    assert_exists: bool = False
     create: bool = False
 
+    @model_validator(mode='before')
+    @classmethod
+    def _coerce(cls, data):
+        if isinstance(data, str):
+            return _parse_repo_spec_string(data)
+        if isinstance(data, dict) and "exists" in data:
+            # TOML inline-table uses "exists"; model field is assert_exists.
+            data = dict(data)
+            data["assert_exists"] = data.pop("exists")
+        return data
 
-@dataclass
-class WorkspaceRepo:
+
+class WorkspaceRepo(BaseModel):
     path: str
     has_addons: bool = False
-    addons_paths: list[str] = field(default_factory=lambda: ["."])
+    addons_paths: list[str] = ["."]
+
+    @model_validator(mode='before')
+    @classmethod
+    def _from_string(cls, data):
+        if isinstance(data, str):
+            return {"path": data}
+        return data
 
 
-@dataclass
-class ClusterConfig:
+class ClusterConfig(BaseModel):
     pg_version: str
     port: int
 
 
-@dataclass
-class WorkspaceDefaults:
+class WorkspaceDefaults(BaseModel):
     instances_dir: str = "instances"
-    http_port_range: list[int] = field(default_factory=lambda: [8100, 8299])
-    owm_port_range: list[int] = field(default_factory=lambda: [8090, 8099])
+    http_port_range: list[int] = [8100, 8299]
+    owm_port_range: list[int] = [8090, 8099]
     workers: int = 2
     sync_warn_hours: int = 72
     eviction_threshold: int = 10
@@ -129,15 +175,13 @@ class WorkspaceDefaults:
     repo_priority: list[str] | None = None
 
 
-@dataclass
-class ProxyConfig:
+class ProxyConfig(BaseModel):
     domain_suffix: str
     backend: str = "nginx"
     caddy_config: str | None = None
 
 
-@dataclass
-class WorkspaceScripts:
+class WorkspaceScripts(BaseModel):
     scripts_dir: str
 
 
@@ -152,8 +196,7 @@ class WorkspaceConfig:
     scripts: WorkspaceScripts | None
 
 
-@dataclass
-class DatabaseSection:
+class DatabaseSection(BaseModel):
     name: str
     pg_port: int
     template: str | None = None
@@ -173,37 +216,31 @@ class ServerSection:
         return self.http_port + 1 if self.http_port else 0
 
 
-@dataclass
-class InstallSection:
-    modules: list[str]
+class InstallSection(BaseModel):
+    modules: list[str] = []
 
 
-@dataclass
-class PythonSection:
-    version: str | None
+class PythonSection(BaseModel):
+    version: str | None = None
 
 
-@dataclass
-class ScriptRunner:
+class ScriptRunner(BaseModel):
     file: str
     type: str
 
 
-@dataclass
-class ScriptCompare:
+class ScriptCompare(BaseModel):
     target: str
 
 
-@dataclass
-class InstanceScripts:
+class InstanceScripts(BaseModel):
     default: str | None = None
     scripts_dir: str | None = None
-    runners: dict[str, ScriptRunner] = field(default_factory=dict)
+    runners: dict[str, ScriptRunner] = {}
     compare: ScriptCompare | None = None
 
 
-@dataclass
-class TemplateSection:
+class TemplateSection(BaseModel):
     sync_opt_in: bool = False
 
 
@@ -225,40 +262,7 @@ def parse_repo_spec(spec: str | dict) -> RepoSpec:
     Bare branch:  "12.0"  (no colon → no base, matching owm's tolerant form)
     Inline table: {branch = "feat-789-dev", base = "main", readonly = true, exists = true}
     """
-    if isinstance(spec, dict):
-        return RepoSpec(
-            branch=spec["branch"],
-            base=spec.get("base"),
-            shared=spec.get("shared", False),
-            readonly=spec.get("readonly", False),
-            assert_exists=spec.get("exists", False),
-            create=spec.get("create", False),
-        )
-    # "branch[:base|shared][+flag...]" — the colon (base/shared) is optional;
-    # a bare "branch" means no base, so callers don't have to invent one.
-    if ":" in spec:
-        branch, _, rest = spec.partition(":")
-        parts = rest.split("+")
-        base_or_flag = parts[0]
-        flags = set(parts[1:])
-        if base_or_flag == "shared":
-            shared, base = True, None
-        else:
-            shared, base = False, base_or_flag
-    else:
-        parts = spec.split("+")
-        branch = parts[0]
-        flags = set(parts[1:])
-        shared, base = False, None
-
-    return RepoSpec(
-        branch=branch,
-        base=base,
-        shared=shared,
-        readonly="readonly" in flags,
-        assert_exists="exists" in flags,
-        create="create" in flags,
-    )
+    return RepoSpec.model_validate(spec)
 
 
 def parse_workspace_config(toml: str) -> WorkspaceConfig:
