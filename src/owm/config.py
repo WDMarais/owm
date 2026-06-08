@@ -32,6 +32,11 @@ class ConfOwnership(StrEnum):
         return None
 
 
+def instances_root(workspace_root: str) -> str:
+    """The workspace's instances directory (part of the skeleton; always present)."""
+    return os.path.join(workspace_root, "instances")
+
+
 def instance_config_path(instance: str, workspace_root: str) -> str:
     """Path to an instance's instance.toml, raising NOT_FOUND if it is absent.
 
@@ -39,10 +44,19 @@ def instance_config_path(instance: str, workspace_root: str) -> str:
     sync orchestrators raise a shapeable OwmError(NOT_FOUND) instead of leaking
     a bare FileNotFoundError that adapters (CLI, MCP, dashboard) cannot shape.
     """
-    path = os.path.join(workspace_root, "instances", instance, "instance.toml")
+    path = os.path.join(instances_root(workspace_root), instance, "instance.toml")
     if not os.path.exists(path):
         raise OwmError(f"instance {instance!r} not found", code=NOT_FOUND)
     return path
+
+
+def list_instances(workspace_root: str) -> list[str]:
+    """Names of configured instances — dirs under instances_root with an instance.toml."""
+    return sorted(
+        e.name for e in os.scandir(instances_root(workspace_root))
+        if e.is_dir() and not e.name.startswith(("_", "."))
+        and os.path.exists(os.path.join(e.path, "instance.toml"))
+    )
 
 
 def resolve_workspace_root(override: str | None = None) -> str:

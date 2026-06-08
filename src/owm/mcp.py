@@ -66,7 +66,7 @@ from owm.sync import (
 )
 import dataclasses
 
-from owm.api import default_workspace, health_check, instance_status, workspace_status
+from owm.api import default_workspace, health_check, instance_status, orphan_processes, workspace_status
 from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
 from owm.scripts import execute_script, run_script, compare_instances
@@ -96,7 +96,7 @@ def owm_ps() -> dict:
     workspace_root = default_workspace()
     return {
         "managed": list_running_instances(workspace_root),
-        "unmanaged": [],
+        "unmanaged": orphan_processes(workspace_root),
     }
 
 

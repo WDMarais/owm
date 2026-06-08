@@ -41,7 +41,15 @@ def _isolate_owm_workspace(tmp_path_factory, monkeypatch):
     exercising resolution precedence override this via monkeypatch (see
     test_resolve_workspace_root)."""
     sentinel = tmp_path_factory.mktemp("owm_ws_sentinel")
+    (sentinel / "instances").mkdir()
     monkeypatch.setenv("OWM_WORKSPACE", str(sentinel))
+
+
+@pytest.fixture(autouse=True)
+def _no_real_process_scan(monkeypatch):
+    """Keep unit tests off the real /proc table — the orphan scan walks system
+    processes. Default to none; tests exercising orphan detection patch it."""
+    monkeypatch.setattr("owm.api.workspace_odoo_processes", lambda _ws: [], raising=True)
 
 
 def _port_in_use(port: int) -> bool:

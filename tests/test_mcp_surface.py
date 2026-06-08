@@ -201,6 +201,17 @@ def test_owm_ps_reads_only_state_json():
     assert "unmanaged" in result
 
 
+@pytest.mark.mcp_surface
+def test_owm_ps_surfaces_orphan_process(tmp_workspace):
+    """owm_ps.unmanaged lists odoo owm isn't tracking — here an instance that is
+    no longer managed-running but whose process is still up."""
+    orphan = {"pid": 5678, "instance": "deleted-x"}
+    with patch("owm.api.workspace_odoo_processes", return_value=[orphan]), \
+         patch("owm.api.list_running_instances", return_value=[]):
+        result = owm_ps()
+    assert orphan in result["unmanaged"]
+
+
 # ---------------------------------------------------------------------------
 # Workspace tools — owm_validate
 # ---------------------------------------------------------------------------

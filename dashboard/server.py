@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from owm.api import orphan_processes, unmanaged_status
 from owm.archive import archive_instance
 from owm.config import parse_workspace_config, parse_instance_config, load_instance_config
 from owm.errors import OwmError
@@ -382,7 +383,6 @@ def api_set_pr_url(name: str, repo: str, url: str):
 @app.get("/api/processes")
 def api_processes():
     managed     = []
-    managed_pids = set()
 
     for name in _instances():
         state   = _read_state(name)
@@ -401,8 +401,6 @@ def api_processes():
         if pid_raw and pid_raw != "UNSET":
             try:
                 pid_int = int(pid_raw)
-                if status == "running":
-                    managed_pids.add(pid_int)
             except Exception:
                 pass
 
@@ -427,35 +425,12 @@ def api_processes():
         managed.append({"name": name, "status": status, "pid": pid_int,
                          "http": http, "gevent": gevent, "workers": workers})
 
-    # Exclude worker children of managed master pids from orphan scan
-    managed_family: set[int] = set(managed_pids)
-    for entry in managed:
-        for w in entry.get("workers", []):
-            managed_family.add(w["pid"])
+    orphaned = [{"name": p["instance"], "pid": p["pid"], "ports": []}
+                for p in orphan_processes(str(WORKSPACE))]
 
-    orphaned = []
-    for proc in psutil.process_iter(["pid", "cmdline"]):
-        try:
-            if proc.pid in managed_family:
-                continue
-            cmdline = proc.info.get("cmdline") or []
-            if not any("odoo-bin" in c for c in cmdline):
-                continue
-            name = str(proc.pid)
-            for i, arg in enumerate(cmdline):
-                if arg == "--config" and i + 1 < len(cmdline):
-                    name = Path(cmdline[i + 1]).parent.name
-                    break
-            ports: list[int] = []
-            try:
-                ports = [c.laddr.port for c in proc.net_connections() if c.status == "LISTEN"]
-            except Exception:
-                pass
-            orphaned.append({"name": name, "pid": proc.pid, "ports": ports})
-        except Exception:
-            pass
-
-    return {"managed": managed, "orphaned": orphaned, "unregistered": [], "squatters": []}
+    squatters = [{"cmd": f"{s['instance']} (:{s['http_port']})", "pid": s["pid"], "ports": [s["http_port"]]}
+                 for s in unmanaged_status(str(WORKSPACE))]
+    return {"managed": managed, "orphaned": orphaned, "unregistered": [], "squatters": squatters}
 
 
 @app.get("/api/notifications")

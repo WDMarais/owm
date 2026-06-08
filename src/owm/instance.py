@@ -17,6 +17,7 @@ from owm.addons import empty_addons_path_message, resolve_addons_path
 from owm.config import (
     ConfOwnership,
     instance_config_path,
+    instances_root,
     load_instance_config,
     parse_instance_config,
     parse_workspace_config,
@@ -734,6 +735,33 @@ def list_running_instances(workspace_root: str) -> list[dict]:
             "status": h.status,
         })
     return result
+
+
+def _config_arg(cmdline: list[str]) -> str | None:
+    """The --config / -c value in a command line, if present."""
+    return next((val for flag, val in zip(cmdline, cmdline[1:])
+                 if flag in ("--config", "-c")), None)
+
+
+def _configured_instance(cmdline: list[str], root: str) -> str | None:
+    """The instance an odoo process is configured for — the instance dir of its
+    --config path when that path lives directly under root, else None."""
+    config = _config_arg(cmdline)
+    is_odoo = any("odoo-bin" in arg for arg in cmdline)
+    if is_odoo and config and os.path.dirname(os.path.dirname(config)) == root:
+        return os.path.basename(os.path.dirname(config))
+    return None
+
+
+def workspace_odoo_processes(workspace_root: str) -> list[dict]:
+    """odoo configured from this workspace — processes whose --config resolves
+    under instances_root. A cheap /proc walk (pid+cmdline only, no socket scan)."""
+    root = instances_root(workspace_root)
+    return [
+        {"pid": p.info["pid"], "instance": inst}
+        for p in psutil.process_iter(["pid", "cmdline"])
+        if (inst := _configured_instance(p.info["cmdline"] or [], root))
+    ]
 
 
 def generate_instance_conf(
