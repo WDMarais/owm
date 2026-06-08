@@ -16,10 +16,8 @@ suffice for the red phase; swap for real imports when going green.
 """
 
 import shutil
-import os
 import socket
 import subprocess
-import textwrap
 from pathlib import Path
 
 import pytest

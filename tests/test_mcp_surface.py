@@ -40,9 +40,10 @@ from owm.mcp import (
     owm_logs,
     owm_agent_context,
 )
-from owm.errors import OwmError, ALREADY_EXISTS
-from owm.instance import InstanceInfo
+from owm.errors import OwmError, ALREADY_EXISTS, START_TIMEOUT, STOP_TIMEOUT
+from owm.instance import InstanceInfo, StartResult, StopResult, KillResult, RestartResult
 from owm.operations import LogsResult
+from owm.scripts import ScriptResult, ScriptSummary, CompareResult
 from owm.database import ResetDbResult
 
 
@@ -342,9 +343,6 @@ def test_owm_create_dirty_worktree_error(standard_instance_toml, tmp_workspace):
 # ---------------------------------------------------------------------------
 # Lifecycle tools — owm_start / stop / kill / restart
 # ---------------------------------------------------------------------------
-
-from owm.instance import StartResult, StopResult, KillResult, RestartResult
-from owm.errors import OwmError, START_TIMEOUT, STOP_TIMEOUT
 
 
 @pytest.mark.mcp_surface
@@ -662,8 +660,6 @@ def test_owm_reset_force_discards(standard_instance_toml, tmp_workspace):
 # Script tools — owm_run_script
 # ---------------------------------------------------------------------------
 
-from owm.scripts import ScriptResult, ScriptSummary
-
 
 @pytest.mark.mcp_surface
 def test_owm_run_script_ok_result(tmp_path):
@@ -738,8 +734,6 @@ def test_owm_get_script_failures():
 # ---------------------------------------------------------------------------
 # Script tools — owm_compare
 # ---------------------------------------------------------------------------
-
-from owm.scripts import CompareResult
 
 
 def _write_workspace_toml(ws_path, compare_pairs=None):
