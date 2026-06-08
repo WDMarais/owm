@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from owm.api import orphan_processes, unmanaged_status
+from owm.api import find_orphaned_processes, find_port_squatters
 from owm.archive import archive_instance
 from owm.config import parse_workspace_config, parse_instance_config, load_instance_config
 from owm.errors import OwmError
@@ -430,10 +430,10 @@ def api_processes():
                          "http": http, "gevent": gevent, "workers": workers})
 
     orphaned = [{"name": p["instance"], "pid": p["pid"], "ports": []}
-                for p in orphan_processes(str(WORKSPACE))]
+                for p in find_orphaned_processes(str(WORKSPACE))]
 
     squatters = [{"cmd": f"{s['instance']} (:{s['http_port']})", "pid": s["pid"], "ports": [s["http_port"]]}
-                 for s in unmanaged_status(str(WORKSPACE))]
+                 for s in find_port_squatters(str(WORKSPACE))]
     return {"managed": managed, "orphaned": orphaned, "unregistered": [], "squatters": squatters}
 
 

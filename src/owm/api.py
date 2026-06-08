@@ -11,7 +11,7 @@ from owm.config import (
     resolve_workspace_root,
 )
 from owm.errors import OwmError, format_error
-from owm.instance import health_check, list_running_instances, workspace_odoo_processes
+from owm.instance import health_check, list_running_instances, owm_shaped_processes
 from owm.ports import find_conflicting_process
 from owm.sync import repo_sync_status
 from owm.worktrees import resolve_worktree_path
@@ -98,7 +98,7 @@ def _squatter_alert(instance: str, workspace_root: str) -> dict:
             "classification": _holder_classification(proc)}
 
 
-def unmanaged_status(workspace_root: str) -> list[dict]:
+def find_port_squatters(workspace_root: str) -> list[dict]:
     """Configured instances whose port a non-owm process holds — adopt-or-kill
     candidates. health_check is the canonical port+pid check; "unmanaged" means a
     process owm isn't tracking holds the port. CLI, MCP, and dashboard route here."""
@@ -109,13 +109,13 @@ def unmanaged_status(workspace_root: str) -> list[dict]:
     ]
 
 
-def orphan_processes(workspace_root: str) -> list[dict]:
-    """Workspace odoo that owm isn't managing — configured for an instance that
+def find_orphaned_processes(workspace_root: str) -> list[dict]:
+    """owm-shaped processes owm isn't managing — configured for an instance that
     isn't a currently-tracked running instance (deleted instance still up, leaked
-    process, stale state). Complements unmanaged_status: that finds non-owm
+    process, stale state). Complements find_port_squatters: that finds non-owm
     processes on a known instance's port; this finds owm-shaped odoo off the grid."""
     managed = {i["instance"] for i in list_running_instances(workspace_root)}
-    return [p for p in workspace_odoo_processes(workspace_root)
+    return [p for p in owm_shaped_processes(workspace_root)
             if p["instance"] not in managed]
 
 
@@ -157,7 +157,7 @@ def workspace_status(workspace_root: str) -> dict:
     return {
         "instances": instances,
         "repo_alerts": repo_alerts,
-        "port_alerts": unmanaged_status(workspace_root),
-        "unmanaged_odoo": orphan_processes(workspace_root),
+        "port_alerts": find_port_squatters(workspace_root),
+        "unmanaged_odoo": find_orphaned_processes(workspace_root),
         "workspace_warnings": workspace_warnings,
     }

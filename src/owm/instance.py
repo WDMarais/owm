@@ -743,18 +743,19 @@ def _config_arg(cmdline: list[str]) -> str | None:
 
 
 def _configured_instance(cmdline: list[str], root: str) -> str | None:
-    """The instance an odoo process is configured for — the instance dir of its
+    """The instance a process is configured for — the instance dir of its
     --config path when that path lives directly under root, else None."""
     config = _config_arg(cmdline)
-    is_odoo = any("odoo-bin" in arg for arg in cmdline)
-    if is_odoo and config and os.path.dirname(os.path.dirname(config)) == root:
+    if config and os.path.dirname(os.path.dirname(config)) == root:
         return os.path.basename(os.path.dirname(config))
     return None
 
 
-def workspace_odoo_processes(workspace_root: str) -> list[dict]:
-    """odoo configured from this workspace — processes whose --config resolves
-    under instances_root. A cheap /proc walk (pid+cmdline only, no socket scan)."""
+def owm_shaped_processes(workspace_root: str) -> list[dict]:
+    """Running processes bearing an owm instance's config fingerprint — those
+    whose --config resolves under instances_root, managed and orphaned alike.
+    These are the instance processes owm provisions, not owm's own internals.
+    A cheap /proc walk (pid+cmdline only, no socket scan)."""
     root = instances_root(workspace_root)
     return [
         {"pid": p.info["pid"], "instance": inst}

@@ -49,7 +49,7 @@ def _isolate_owm_workspace(tmp_path_factory, monkeypatch):
 def _no_real_process_scan(monkeypatch):
     """Keep unit tests off the real /proc table — the orphan scan walks system
     processes. Default to none; tests exercising orphan detection patch it."""
-    monkeypatch.setattr("owm.api.workspace_odoo_processes", lambda _ws: [], raising=True)
+    monkeypatch.setattr("owm.api.owm_shaped_processes", lambda _ws: [], raising=True)
 
 
 def _port_in_use(port: int) -> bool:
