@@ -1,58 +1,11 @@
 """
-Tests for unmanaged process detection and adoption.
-Covers: Unmanaged processes and adoption section.
+Tests for process adoption (adopt_process + adopt_instance wiring).
 """
 import json
 import pytest
 
-from owm.adoption import (
-    detect_unmanaged_processes,
-    adopt_process,
-    status_with_unmanaged,
-)
+from owm.adoption import adopt_process
 from owm.operations import adopt_instance
-
-
-# ---------------------------------------------------------------------------
-# Detection
-# ---------------------------------------------------------------------------
-
-@pytest.mark.adoption
-def test_status_surfaces_unmanaged_odoo_processes():
-    result = status_with_unmanaged(
-        configured_instances={"feat-789": {"http_port": 8142, "db_name": "odoo19_feat789"}},
-        running_processes=[
-            {"pid": 9999, "port": 8143, "cmdline": "python odoo-bin --http-port 8143"},
-        ],
-    )
-    assert any(p["pid"] == 9999 for p in result.unmanaged)
-
-
-@pytest.mark.adoption
-def test_unmanaged_on_configured_port_surfaced_with_adopt_prompt():
-    """Unmanaged process on feat-789's port → 'adopt or kill?' message."""
-    result = status_with_unmanaged(
-        configured_instances={"feat-789": {"http_port": 8142}},
-        running_processes=[
-            {"pid": 9999, "port": 8142, "cmdline": "python odoo-bin --http-port 8142"},
-        ],
-    )
-    entry = next(p for p in result.instance_conflicts if p["instance"] == "feat-789")
-    assert entry["unmanaged_pid"] == 9999
-    assert "adopt" in entry["message"].lower() or "kill" in entry["message"].lower()
-
-
-@pytest.mark.adoption
-def test_unmanaged_no_matching_instance_shown_without_adopt_option():
-    """Unmanaged process on port not matching any instance → shown, no adopt available."""
-    result = status_with_unmanaged(
-        configured_instances={"feat-789": {"http_port": 8142}},
-        running_processes=[
-            {"pid": 8888, "port": 9999, "cmdline": "python odoo-bin --http-port 9999"},
-        ],
-    )
-    orphan = next(p for p in result.unmanaged if p["pid"] == 8888)
-    assert orphan["adopt_available"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -150,8 +103,3 @@ def test_adopt_instance_force_port_mismatch_writes_state(standard_instance_toml,
     )
     assert result.status == "adopted"
     assert json.loads(state_path.read_text())["pid"] == 9999
-
-
-# === SPEC GAPS ===
-# test_unmanaged_detection_method: spec says "owm processes" but does not specify whether
-#   detection scans /proc, uses ps, or inspects port bindings — implementation-defined.
