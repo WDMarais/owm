@@ -19,7 +19,6 @@ from mcp.server.fastmcp import FastMCP
 from owm.errors import (
     OwmError,
     format_error,
-    START_TIMEOUT,
     STOP_TIMEOUT,
     NO_COMPARE_TARGET,
     BRANCH_NOT_FOUND,
@@ -70,7 +69,6 @@ from owm.api import default_workspace, health_check, instance_status, orphan_pro
 from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
 from owm.scripts import execute_script, run_script, compare_instances
-from owm.session_context import build_agent_context
 
 mcp = FastMCP("owm")
 
@@ -169,9 +167,9 @@ def owm_env(instance: str) -> dict:
 def owm_audit_log(n: int = 50, level: str | None = None, since: str | None = None) -> dict:
     lines = []
     if level:
-        lines = [l for l in lines if l.get("level") in (level, "CRITICAL")]
+        lines = [line for line in lines if line.get("level") in (level, "CRITICAL")]
     if since:
-        lines = [l for l in lines if l.get("timestamp", "") >= since]
+        lines = [line for line in lines if line.get("timestamp", "") >= since]
     return {"lines": lines[:n]}
 
 
@@ -185,7 +183,7 @@ def owm_new(instance: str, repos: dict[str, str], force: bool = False) -> dict:
     try:
         result = new_instance(name=instance, repos=repos, workspace_root=workspace_root, force=force)
         return {"path": result.toml_path, "content": result.toml_content}
-    except OwmError as e:
+    except OwmError:
         return {"error": "instance already exists", "code": "ALREADY_EXISTS"}
 
 
@@ -309,8 +307,8 @@ def owm_archive(instance: str, running: bool = False, discard_db: bool = False) 
 def owm_delete(instance: str, force: bool = True, running: bool = False) -> dict:
     workspace_root = default_workspace()
     try:
-        result = delete_instance(instance=instance, running=running, force=force,
-                                 workspace_root=workspace_root)
+        delete_instance(instance=instance, running=running, force=force,
+                        workspace_root=workspace_root)
         return {"status": "deleted"}
     except OwmError:
         return {"error": "stop instance first", "code": "INSTANCE_RUNNING"}
@@ -320,8 +318,8 @@ def owm_delete(instance: str, force: bool = True, running: bool = False) -> dict
 def owm_rename(instance: str, new_name: str, running: bool = False) -> dict:
     workspace_root = default_workspace()
     try:
-        result = rename_instance(instance=instance, new_name=new_name, running=running,
-                                 workspace_root=workspace_root)
+        rename_instance(instance=instance, new_name=new_name, running=running,
+                        workspace_root=workspace_root)
         return {"status": "renamed", "old": instance, "new": new_name,
                 "url": f"https://{new_name}.localhost"}
     except OwmError as e:
@@ -443,7 +441,7 @@ def owm_get_script_failures(ndjson_path: str) -> list:
     if not os.path.exists(ndjson_path):
         return []
     with open(ndjson_path) as f:
-        rows = [json.loads(l) for l in f if l.strip()]
+        rows = [json.loads(line) for line in f if line.strip()]
     return [r for r in rows if r.get("status") == "FAIL"
             and not r.get("abort") and not r.get("_non_conforming")]
 
@@ -470,7 +468,7 @@ def owm_compare(instance: str, base: str | None = None) -> dict:
         if not os.path.exists(path):
             return None
         with open(path) as fh:
-            return [json.loads(l) for l in fh if l.strip()]
+            return [json.loads(line) for line in fh if line.strip()]
 
     result = compare_instances(
         instance=instance,

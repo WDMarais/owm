@@ -570,7 +570,6 @@ def start_instance(
             message=f"{instance} is already running (pid {pid})",
         )
 
-    instance_dir = os.path.join(workspace_root, "instances", instance)
     conf = load_instance_config(instance, workspace_root)
 
     for port in (conf.server.http_port, conf.server.gevent_port):

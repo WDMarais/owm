@@ -156,10 +156,14 @@ def _rel(iso: str | None) -> str | None:
         return None
     dt   = datetime.fromisoformat(iso.replace("Z", "+00:00"))
     secs = (datetime.now(timezone.utc) - dt).total_seconds()
-    if secs < 0:     return "just now"
-    if secs < 120:   return f"{int(secs)}s ago"
-    if secs < 3600:  return f"{int(secs // 60)}m ago"
-    if secs < 86400: return f"{int(secs // 3600)}h ago"
+    if secs < 0:
+        return "just now"
+    if secs < 120:
+        return f"{int(secs)}s ago"
+    if secs < 3600:
+        return f"{int(secs // 60)}m ago"
+    if secs < 86400:
+        return f"{int(secs // 3600)}h ago"
     return f"{int(secs // 86400)}d ago"
 
 
@@ -500,7 +504,7 @@ def _read_log_tail(log_path: Path, n: int, fmt=None) -> dict:
         offset = len(raw)
     text = raw.decode("utf-8", errors="replace")
     tail = text.splitlines()[-n:]
-    lines = [fmt(l) if fmt else {"text": l} for l in tail]
+    lines = [fmt(line) if fmt else {"text": line} for line in tail]
     return {"lines": lines, "offset": offset}
 
 
