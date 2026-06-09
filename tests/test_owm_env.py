@@ -96,6 +96,13 @@ def test_format_env_shell_suitable_for_eval():
 
 
 @pytest.mark.owm_env
+def test_format_env_shell_quotes_values_with_spaces():
+    env = {"INSTANCE_DIR": "/home/user/my workspace/instances/feat-789"}
+    result = format_env(env=env, fmt="shell")
+    assert "export INSTANCE_DIR='/home/user/my workspace/instances/feat-789'" in result
+
+
+@pytest.mark.owm_env
 def test_format_env_default_format_is_human_readable():
     """Plain owm env (no --format) → human-readable, not a specific machine format."""
     env = {"ODOO_BIN": "/ws/.venv/bin/odoo-bin"}
@@ -104,8 +111,20 @@ def test_format_env_default_format_is_human_readable():
     assert len(result) > 0
 
 
-# === SPEC GAPS ===
-# test_resolve_env_scripts_dir_when_no_instance_scripts: spec shows SCRIPTS_DIR as a key
-#   but instance.toml [scripts].scripts_dir is optional — value when absent is not stated.
-# test_resolve_env_workspace_scripts_dir_when_absent: WORKSPACE_SCRIPTS_DIR when
-#   workspace.toml has no [scripts].scripts_dir is not defined.
+@pytest.mark.owm_env
+def test_resolve_env_scripts_dirs_from_config():
+    result = resolve_env(
+        instance="feat-789",
+        workspace_root="/ws",
+        instance_scripts_dir="/ws/instances/feat-789/scripts",
+        workspace_scripts_dir="/ws/scripts",
+    )
+    assert result["SCRIPTS_DIR"] == "/ws/instances/feat-789/scripts"
+    assert result["WORKSPACE_SCRIPTS_DIR"] == "/ws/scripts"
+
+
+@pytest.mark.owm_env
+def test_resolve_env_scripts_dirs_empty_when_absent():
+    result = resolve_env(instance="feat-789", workspace_root="/ws")
+    assert result["SCRIPTS_DIR"] == ""
+    assert result["WORKSPACE_SCRIPTS_DIR"] == ""

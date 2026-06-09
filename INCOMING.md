@@ -41,15 +41,6 @@ coexistence/adoption gaps. `status` was fully compatible — discovery, running/
 port-conflict classification (`probable_orphan` on `cd-1753:8107`) all correct. Every divergence
 is at the per-instance derivation layer. Classified better / different / worse:
 
-**`owm env` stub bugs (worse — not design choices; these are bugs, belong in REGRESSION_RISKS.md/a task):**
-- `env.py:18` derives `DB_NAME = f"odoo_{instance}".replace("-","_")` → `odoo_pd_407`, *ignoring*
-  `conf.database.name` (`odoo12_pd407`) that every other path (db-dump/restore/upgrade/regen-conf,
-  MCP, the conf writer) reads correctly. So `owm env` reports a DB that doesn't exist and that
-  re-owm's own ops never use. Fix: `env` should read `conf.database.name`, not re-derive.
-- Same path reports `GEVENT_PORT=0` instead of applying the `PortPair(n, n+1)` model `ports.py`
-  already implements (should be `8107` for http `8106`). Same root cause — `env` re-derives
-  instead of reading config.
-
 **Contract divergences (different, arguably better — but break coexistence):**
 - env var names: re-owm emits `DB_NAME`/`HTTP_PORT`/`VENV_PYTHON`; owm's documented `.env`
   contract uses `ODOO_DB`/`ODOO_PORT`/`VENV` (and owm's `VENV` is the dir, re-owm's `VENV_PYTHON`

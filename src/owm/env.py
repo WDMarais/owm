@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 
 
 def resolve_env(
@@ -11,6 +12,8 @@ def resolve_env(
     instance_pg_port: int | None = None,
     instance_http_port: int | None = None,
     instance_gevent_port: int | None = None,
+    instance_scripts_dir: str | None = None,
+    workspace_scripts_dir: str | None = None,
 ) -> dict[str, str]:
     instance_dir = os.path.join(workspace_root, "instances", instance)
     venv_dir = os.path.join(instance_dir, ".venv")
@@ -26,8 +29,8 @@ def resolve_env(
         "GEVENT_PORT":           str(instance_gevent_port) if instance_gevent_port is not None else "",
         "ODOO_CONF":             os.path.join(instance_dir, "instance.conf"),
         "WORKSPACE_DIR":         workspace_root,
-        "SCRIPTS_DIR":           "",
-        "WORKSPACE_SCRIPTS_DIR": "",
+        "SCRIPTS_DIR":           instance_scripts_dir or "",
+        "WORKSPACE_SCRIPTS_DIR": workspace_scripts_dir or "",
     }
 
 
@@ -37,7 +40,7 @@ def format_env(env: dict, fmt: str | None) -> str:
     if fmt == "json":
         return json.dumps(env, indent=2)
     if fmt == "shell":
-        return "\n".join(f"export {k}={v}" for k, v in env.items())
+        return "\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items())
     # human-readable default
     width = max(len(k) for k in env) if env else 0
     return "\n".join(f"{k:<{width}}  {v}" for k, v in env.items())

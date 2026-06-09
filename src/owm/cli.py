@@ -776,6 +776,9 @@ def cmd_env(ctx, name, fmt):
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     conf = load_instance_config(instance, workspace_root)
+    ws_toml = os.path.join(workspace_root, "workspace.toml")
+    with open(ws_toml) as f:
+        ws_conf = parse_workspace_config(f.read())
     env = resolve_env(
         instance=instance,
         workspace_root=workspace_root,
@@ -784,6 +787,8 @@ def cmd_env(ctx, name, fmt):
         instance_pg_port=conf.database.pg_port,
         instance_http_port=conf.server.http_port,
         instance_gevent_port=conf.server.gevent_port,
+        instance_scripts_dir=conf.scripts.scripts_dir if conf.scripts and conf.scripts.scripts_dir else None,
+        workspace_scripts_dir=ws_conf.scripts.scripts_dir if ws_conf.scripts else None,
     )
     # stdout stays pure env (sourceable / parseable in every format); findings
     # are diagnostics and go to stderr — the CLI's finding-rendering boundary.
