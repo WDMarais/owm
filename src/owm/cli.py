@@ -66,6 +66,7 @@ from owm.sync import (
     git_reset_hard,
     pull_base_instance,
     list_bare_branches,
+    repo_sync_status,
 )
 from owm.workspace import init_workspace
 from owm.worktrees import resolve_worktree_path
@@ -1068,10 +1069,47 @@ def _gather_repo_states(instance: str, workspace_root: str) -> dict:
 
 @cli.command("branches")
 @click.argument("repo", required=False)
+@click.option("--instance", "-i", "instance_name", default=None,
+              help="Show checked-out branch and sync state per repo for this instance.")
 @click.pass_context
-def cmd_branches(ctx, repo):
-    """List branches available in the workspace bare repos."""
+def cmd_branches(ctx, repo, instance_name):
+    """List branches available in the workspace bare repos.
+
+    With --instance: show what branch each repo has checked out in that instance,
+    plus dirty/ahead/behind state.
+    """
     workspace_root = _resolve_workspace(ctx)
+
+    if instance_name:
+        conf = load_instance_config(instance_name, workspace_root)
+        repo_width = max((len(r) for r in conf.repos), default=4)
+        branch_width = 0
+        rows = []
+        for repo_name, spec in conf.repos.items():
+            wt = resolve_worktree_path(repo_name, spec.branch, spec.shared, workspace_root, instance_name).path
+            s = repo_sync_status(wt, spec.branch, spec.base, spec.shared)
+            vob  = s["vs_origin_branch"]
+            obob = s["origin_branch_vs_origin_base"]
+            parts = []
+            if s["dirty"]:
+                parts.append("dirty")
+            if vob["ahead_by"] and vob["behind_by"]:
+                parts.append(f"{vob['ahead_by']} ahead, {vob['behind_by']} behind o/{spec.branch}")
+            elif vob["behind_by"]:
+                parts.append(f"{vob['behind_by']} behind o/{spec.branch}")
+            elif vob["ahead_by"]:
+                parts.append(f"{vob['ahead_by']} unpushed")
+            if obob["behind_by"] and spec.base:
+                parts.append(f"o/{spec.branch} {obob['behind_by']} behind {spec.base}")
+            state = "  ".join(parts) if parts else "clean"
+            kind = "shared" if spec.shared else "owned"
+            branch_width = max(branch_width, len(spec.branch))
+            rows.append((repo_name, spec.branch, kind, state))
+        click.echo(f"{instance_name}:")
+        for repo_name, branch, kind, state in rows:
+            click.echo(f"  {repo_name:<{repo_width}}  {branch:<{branch_width}}  {kind:<6}  {state}")
+        return
+
     repos_dir = os.path.join(workspace_root, "_repos")
     if not os.path.isdir(repos_dir):
         click.echo("error: _repos/ not found — run owm init first", err=True)

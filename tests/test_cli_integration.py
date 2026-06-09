@@ -878,3 +878,69 @@ def test_cli_warns_when_cwd_in_different_workspace(runner, tmp_workspace, tmp_pa
     out = result.output + (result.stderr or "")
     assert "but cwd is inside a different workspace" in out
     assert str(other) in out
+
+
+# ---------------------------------------------------------------------------
+# branches --instance
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_branches_instance_shows_repos(runner, tmp_workspace):
+    from tests.conftest import instance_toml, FIXTURE_HTTP_PORT
+    inst_dir = tmp_workspace / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    (inst_dir / "instance.toml").write_text(instance_toml(
+        repos={"odoo": "main:shared", "my_addon": "feat-789-dev:main"},
+        db_name="owm_feat789",
+        http_port=FIXTURE_HTTP_PORT,
+    ))
+    # create worktree dirs so repo_sync_status finds them (no real git needed for structure test)
+    (tmp_workspace / "_shared" / "odoo" / "main").mkdir(parents=True, exist_ok=True)
+    (inst_dir / "my_addon").mkdir(parents=True, exist_ok=True)
+
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace),
+                                 "branches", "--instance", "feat-789"])
+    assert result.exit_code == 0
+    assert "feat-789:" in result.output
+    assert "odoo" in result.output
+    assert "my_addon" in result.output
+
+
+@pytest.mark.cli_integration
+def test_branches_instance_shows_shared_and_owned_kind(runner, tmp_workspace):
+    from tests.conftest import instance_toml, FIXTURE_HTTP_PORT
+    inst_dir = tmp_workspace / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    (inst_dir / "instance.toml").write_text(instance_toml(
+        repos={"odoo": "main:shared", "my_addon": "feat-789-dev:main"},
+        db_name="owm_feat789",
+        http_port=FIXTURE_HTTP_PORT,
+    ))
+    (tmp_workspace / "_shared" / "odoo" / "main").mkdir(parents=True, exist_ok=True)
+    (inst_dir / "my_addon").mkdir(parents=True, exist_ok=True)
+
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace),
+                                 "branches", "--instance", "feat-789"])
+    assert result.exit_code == 0
+    assert "shared" in result.output
+    assert "owned" in result.output
+
+
+@pytest.mark.cli_integration
+def test_branches_instance_shows_branch_names(runner, tmp_workspace):
+    from tests.conftest import instance_toml, FIXTURE_HTTP_PORT
+    inst_dir = tmp_workspace / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    (inst_dir / "instance.toml").write_text(instance_toml(
+        repos={"odoo": "main:shared", "my_addon": "feat-789-dev:main"},
+        db_name="owm_feat789",
+        http_port=FIXTURE_HTTP_PORT,
+    ))
+    (tmp_workspace / "_shared" / "odoo" / "main").mkdir(parents=True, exist_ok=True)
+    (inst_dir / "my_addon").mkdir(parents=True, exist_ok=True)
+
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace),
+                                 "branches", "--instance", "feat-789"])
+    assert result.exit_code == 0
+    assert "main" in result.output
+    assert "feat-789-dev" in result.output
