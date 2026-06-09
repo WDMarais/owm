@@ -372,7 +372,6 @@ def instance_toml(
 
     lines.append("\n[server]")
     lines.append(f"http_port = {http_port}")
-    lines.append(f"gevent_port = {http_port + 1}")
     lines.append(f"workers = {workers}")
 
     if modules:

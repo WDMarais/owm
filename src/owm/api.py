@@ -3,6 +3,7 @@ Structured output layer — returns JSON-serialisable dicts, no prose, no transp
 Consumed by owm.mcp (MCP tool surface) and owm.cli (--json flag, and prose formatting).
 """
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from owm.config import (
     parse_instance_config,
@@ -119,45 +120,69 @@ def find_orphaned_processes(workspace_root: str) -> list[dict]:
             if p["instance"] not in managed]
 
 
+def _scan_instance(entry, workspace_root: str):
+    """Process one instance entry. Returns (name, inst_dict, health, alerts, warning).
+
+    inst_dict and health are None when the entry is skipped (orphan dir, bad toml).
+    Never raises — a single bad instance must not abort the workspace scan.
+    """
+    name = entry.name
+    toml_path = os.path.join(entry.path, "instance.toml")
+    if not os.path.exists(toml_path):
+        return name, None, None, [], {"type": "orphan_dir", "path": f"instances/{name}"}
+    try:
+        with open(toml_path) as f:
+            conf = parse_instance_config(f.read())
+    except Exception:
+        return name, None, None, [], None
+    h = health_check(name, workspace_root)
+    inst: dict = {"state": h.status}
+    if h.pid:
+        inst["pid"] = h.pid
+    if h.url:
+        inst["url"] = h.url
+    inst["local_url"] = f"http://localhost:{conf.server.http_port}"
+    return name, inst, h, _repo_alerts(name, conf, workspace_root), None
+
+
 def workspace_status(workspace_root: str) -> dict:
     instances_dir = os.path.join(workspace_root, "instances")
     instances = {}
     repo_alerts = []
     workspace_warnings = []
+    health_by_instance: dict = {}
 
     try:
-        entries = list(os.scandir(instances_dir))
+        entries = [
+            e for e in os.scandir(instances_dir)
+            if e.is_dir() and not e.name.startswith(("_", "."))
+        ]
     except OSError:
         return {"instances": {}, "repo_alerts": [], "port_alerts": [], "unmanaged_odoo": [], "workspace_warnings": []}
 
-    for entry in entries:
-        if not entry.is_dir():
-            continue
-        if entry.name.startswith("_") or entry.name.startswith("."):
-            continue
-        toml_path = os.path.join(entry.path, "instance.toml")
-        if not os.path.exists(toml_path):
-            workspace_warnings.append({"type": "orphan_dir", "path": f"instances/{entry.name}"})
-            continue
-        try:
-            with open(toml_path) as f:
-                conf = parse_instance_config(f.read())
-        except Exception:
-            continue
-        h = health_check(entry.name, workspace_root)
-        inst: dict = {"state": h.status}
-        if h.pid:
-            inst["pid"] = h.pid
-        if h.url:
-            inst["url"] = h.url
-        inst["local_url"] = f"http://localhost:{conf.server.http_port}"
-        instances[entry.name] = inst
-        repo_alerts.extend(_repo_alerts(entry.name, conf, workspace_root))
+    with ThreadPoolExecutor() as pool:
+        orphan_future = pool.submit(find_orphaned_processes, workspace_root)
+        instance_futures = [pool.submit(_scan_instance, e, workspace_root) for e in entries]
+        for future in as_completed(instance_futures):
+            name, inst, h, alerts, warning = future.result()
+            if warning:
+                workspace_warnings.append(warning)
+            if inst is not None:
+                instances[name] = inst
+                repo_alerts.extend(alerts)
+                health_by_instance[name] = h
+        unmanaged_odoo = orphan_future.result()
+
+    port_alerts = [
+        _squatter_alert(name, workspace_root)
+        for name, h in health_by_instance.items()
+        if h.status == "unmanaged"
+    ]
 
     return {
         "instances": instances,
         "repo_alerts": repo_alerts,
-        "port_alerts": find_port_squatters(workspace_root),
-        "unmanaged_odoo": find_orphaned_processes(workspace_root),
+        "port_alerts": port_alerts,
+        "unmanaged_odoo": unmanaged_odoo,
         "workspace_warnings": workspace_warnings,
     }
