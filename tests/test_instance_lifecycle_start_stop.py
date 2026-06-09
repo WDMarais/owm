@@ -3,6 +3,7 @@ Tests for instance start, stop, kill, restart, and health checks.
 Covers: Instance lifecycle — start/stop section.
 """
 import json
+import os
 import signal
 import pytest
 from unittest.mock import patch, MagicMock
@@ -100,6 +101,23 @@ def test_start_spawns_and_returns_pid_immediately(tmp_path):
     assert result.status == "spawned"
     assert result.pid is not None
     assert isinstance(result.pid, int)
+
+
+@pytest.mark.instance_lifecycle_start_stop
+def test_start_launches_with_venv_on_path(tmp_path):
+    # Odoo self-reexecs with a basename argv[0] ("python"); the launch env must
+    # carry the instance venv first on PATH so the reexec stays in the venv
+    # rather than falling back to the system python.
+    _make_instance_dir(tmp_path)
+    mock_proc = MagicMock()
+    mock_proc.pid = 1234
+    with patch("owm.instance.subprocess.Popen", return_value=mock_proc) as popen, \
+         patch("owm.instance._read_pid", return_value=None):
+        start_instance("feat-789", str(tmp_path), wait=False)
+    venv = tmp_path / "instances" / "feat-789" / ".venv"
+    env = popen.call_args.kwargs["env"]
+    assert env["PATH"].split(os.pathsep)[0] == str(venv / "bin")
+    assert env["VIRTUAL_ENV"] == str(venv)
 
 
 @pytest.mark.instance_lifecycle_start_stop

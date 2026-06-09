@@ -242,6 +242,17 @@ def _build_start_command(
     return cmd
 
 
+def _start_env(instance: str, workspace_root: str) -> dict[str, str]:
+    """Child env with the instance venv on PATH, so Odoo's basename-argv[0]
+    self-reexec resolves back into the venv rather than the system python."""
+    venv = os.path.join(workspace_root, "instances", instance, ".venv")
+    return {
+        **os.environ,
+        "PATH": os.path.join(venv, "bin") + os.pathsep + os.environ.get("PATH", ""),
+        "VIRTUAL_ENV": venv,
+    }
+
+
 def _wait_for_http(port: int, timeout_seconds: int) -> None:
     # Use /web rather than /web/health: health endpoint only exists in Odoo 16+.
     # Any HTTP response (200, 3xx, 4xx) means the server is accepting connections.
@@ -585,7 +596,9 @@ def start_instance(
     log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
     instance_separator(log_path, f"{instance} started")
     log_fh = open(log_path, "a")
-    proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
+    proc = subprocess.Popen(
+        cmd, stdout=log_fh, stderr=log_fh, env=_start_env(instance, workspace_root)
+    )
     _write_pid(instance, workspace_root, proc.pid)
     workspace_log(workspace_root, "start", instance=instance, pid=proc.pid, status="dispatched")
 
