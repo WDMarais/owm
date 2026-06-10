@@ -723,8 +723,8 @@ owm_ls()
 # running state only — no git, no system scan. Instant.
 
 owm_odoo_ps()
-→ {managed: [{instance, pid, port, url, state}], orphaned: [{pid, instance}], squatters: [{instance, http_port, pid}], foreign: [{pid, cmdline}]}
-# process tiers; live, no git. Supersedes owm_ps.
+→ {managed: [{instance, pid, port, url, state}], orphaned: [{pid, instance}], foreign: [{pid, cmdline}], squatters: [{instance, http_port, pid}]}
+# managed/orphaned/foreign from one cmdline walk; squatters from one socket snapshot. Live, no git. Supersedes owm_ps.
 
 owm_audit()
 → {taken_at, instances: {"feat-789": {repo_alerts: [{repo, issue, ...}]}}} — slow git sweep; writes the audit artifact
@@ -1243,11 +1243,13 @@ owm ls --json
 
 ```
 owm odoo-ps
-→ odoo processes on the host, in tiers:
-   managed   — owm's tracked instances:                                               {instance, pid, port, url, state}
-   orphaned  — owm-shaped odoo (--config under instances_root) not a tracked instance: {pid, instance}
-   squatters — a non-owm process holding a configured instance's port:                 {instance, http_port, pid}
-   foreign   — odoo processes unrelated to this workspace (adjacent installs):          {pid, cmdline}
+→ every odoo process on the host, classified — managed/orphaned/foreign from one cmdline walk,
+  squatters from one socket snapshot:
+   managed   — owm-shaped (--config under instances_root) and a tracked running instance:        {instance, pid, port, url, state}
+   orphaned  — owm-shaped but not tracked (should be managed, isn't):                             {pid, instance}
+   foreign   — an odoo process not owm-shaped at all (adjacent install, another owm workspace):   {pid, cmdline}
+   squatters — a process (odoo or not) holding a configured instance's port owm isn't tracking:   {instance, http_port, pid}
+# a foreign odoo also squatting one of our ports is listed under squatters (more actionable).
 # live; the socket scan is short-TTL at most, never day-cached. Supersedes owm_ps and adds the foreign tier.
 ```
 
