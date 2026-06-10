@@ -3,7 +3,6 @@ Structured output layer — returns JSON-serialisable dicts, no prose, no transp
 Consumed by owm.mcp (MCP tool surface) and owm.cli (--json flag, and prose formatting).
 """
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from owm.config import (
     parse_instance_config,
@@ -14,7 +13,7 @@ from owm.config import (
 from owm.errors import OwmError, format_error
 from owm.instance import health_check, list_running_instances, owm_shaped_processes
 from owm.ports import find_conflicting_process
-from owm.sync import repo_sync_status
+from owm.sync import repo_alert_state
 from owm.worktrees import resolve_worktree_path
 
 
@@ -69,7 +68,7 @@ def _repo_alerts(instance: str, conf, workspace_root: str) -> list:
         if spec.shared:
             continue
         wt = resolve_worktree_path(repo, spec.branch, spec.shared, workspace_root, instance).path
-        s = repo_sync_status(wt, spec.branch, spec.base, spec.shared)
+        s = repo_alert_state(wt, spec.branch, spec.base, spec.shared)
         vob = s["vs_origin_branch"]
         if s["dirty"]:
             alerts.append({"instance": instance, "repo": repo, "issue": "dirty"})
@@ -160,18 +159,16 @@ def workspace_status(workspace_root: str) -> dict:
     except OSError:
         return {"instances": {}, "repo_alerts": [], "port_alerts": [], "unmanaged_odoo": [], "workspace_warnings": []}
 
-    with ThreadPoolExecutor() as pool:
-        orphan_future = pool.submit(find_orphaned_processes, workspace_root)
-        instance_futures = [pool.submit(_scan_instance, e, workspace_root) for e in entries]
-        for future in as_completed(instance_futures):
-            name, inst, h, alerts, warning = future.result()
-            if warning:
-                workspace_warnings.append(warning)
-            if inst is not None:
-                instances[name] = inst
-                repo_alerts.extend(alerts)
-                health_by_instance[name] = h
-        unmanaged_odoo = orphan_future.result()
+    for entry in entries:
+        name, inst, h, alerts, warning = _scan_instance(entry, workspace_root)
+        if warning:
+            workspace_warnings.append(warning)
+        if inst is not None:
+            instances[name] = inst
+            repo_alerts.extend(alerts)
+            health_by_instance[name] = h
+
+    unmanaged_odoo = find_orphaned_processes(workspace_root)
 
     port_alerts = [
         _squatter_alert(name, workspace_root)

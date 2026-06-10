@@ -119,6 +119,26 @@ def repo_sync_status(worktree_path: str, branch: str, base: str | None = None,
             "origin_branch_vs_origin_base": ob_vs_ob}
 
 
+def repo_alert_state(worktree_path: str, branch: str, base: str | None = None,
+                     shared: bool = False) -> dict:
+    """Lean git read for status alerts: dirty flag, ahead/behind vs origin/<branch>,
+    and origin/<branch> vs origin/<base>. Just the fields _repo_alerts acts on, in
+    the fewest subprocess calls (two, or three with a base) — the dashboard's fuller
+    reader is repo_sync_status. _ahead_behind already counts zero when a ref is
+    missing, so no separate remote-existence probe is needed."""
+    zero = {"ahead_by": 0, "behind_by": 0}
+    if not os.path.isdir(worktree_path):
+        return {"dirty": False, "vs_origin_branch": zero,
+                "origin_branch_vs_origin_base": zero}
+    dr = git_run(["status", "--porcelain"], cwd=worktree_path, check=False)
+    dirty = bool(dr.stdout.strip()) if dr.returncode == 0 else False
+    vs_branch = _ahead_behind(worktree_path, "HEAD", f"origin/{branch}")
+    ob_vs_ob = (_ahead_behind(worktree_path, f"origin/{branch}", f"origin/{base}")
+                if base and not shared else zero)
+    return {"dirty": dirty, "vs_origin_branch": vs_branch,
+            "origin_branch_vs_origin_base": ob_vs_ob}
+
+
 def has_local_commits(worktree_path: str) -> bool:
     r = git_run(["rev-list", "--count", "@{u}..HEAD"], cwd=worktree_path, check=False)
     return r.returncode == 0 and int(r.stdout.strip() or "0") > 0
