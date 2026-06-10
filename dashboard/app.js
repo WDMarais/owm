@@ -634,10 +634,10 @@ function renderProcesses(data) {
     const page = document.getElementById("processes-page");
     page.innerHTML = '<div class="page-header"><h2>Processes</h2></div>';
 
-    _renderProcessSection(page, "Managed",                   data.managed,      _managedRow);
-    _renderProcessSection(page, "Orphaned owm processes",    data.orphaned,     _orphanedRow);
-    _renderProcessSection(page, "Unregistered (owm-shaped)", data.unregistered, _unregisteredRow);
-    _renderProcessSection(page, "Port squatters",            data.squatters,    _squatterRow);
+    _renderProcessSection(page, "Managed",                data.managed,   _managedRow);
+    _renderProcessSection(page, "Orphaned owm processes", data.orphaned,  _orphanedRow);
+    _renderProcessSection(page, "Foreign odoo",           data.foreign,   _foreignRow);
+    _renderProcessSection(page, "Port squatters",         data.squatters, _squatterRow);
 }
 
 function _renderProcessSection(page, label, rows, rowFn) {
@@ -716,7 +716,9 @@ function _orphanedRow(p) {
     return el;
 }
 
-function _unregisteredRow(p) {
+function _foreignRow(p) {
+    // An Odoo process configured outside this workspace, on none of our ports.
+    // Nothing to adopt — it isn't owm-shaped; surfaced for awareness only.
     const el = document.createElement("div");
     el.className = "process-row";
     const pills = p.ports.map(n => _pill(n, null)).join("");
@@ -728,7 +730,7 @@ function _unregisteredRow(p) {
         <div class="proc-detail-line">
           <span class="proc-ports">${pills}</span>
           <span class="proc-pid">pid ${_esc(p.pid)}</span>
-          <button class="btn-adopt-flow" data-pid="${_esc(p.pid)}">Adopt…</button>
+          <span class="proc-note">configured outside workspace</span>
         </div>`;
     return el;
 }

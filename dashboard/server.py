@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from owm.api import find_orphaned_processes, find_port_squatters
+from owm.api import odoo_ps
 from owm.archive import archive_instance
 from owm.config import parse_workspace_config, parse_instance_config, load_instance_config
 from owm.errors import OwmError
@@ -429,12 +429,18 @@ def api_processes():
         managed.append({"name": name, "status": status, "pid": pid_int,
                          "http": http, "gevent": gevent, "workers": workers})
 
+    # orphaned/foreign/squatters come from the unified classifier so the dashboard
+    # reports the same tiers as `owm odoo-ps` / `owm_odoo_ps` — squatters here are
+    # already classifier-filtered (owm-shaped holders of their own port read as
+    # orphans, not squatters), and foreign odoo processes get their own tier.
+    ps = odoo_ps(str(WORKSPACE))
     orphaned = [{"name": p["instance"], "pid": p["pid"], "ports": []}
-                for p in find_orphaned_processes(str(WORKSPACE))]
-
+                for p in ps["orphaned"]]
+    foreign  = [{"cmd": p["cmdline"], "pid": p["pid"], "ports": []}
+                for p in ps["foreign"]]
     squatters = [{"cmd": f"{s['instance']} (:{s['http_port']})", "pid": s["pid"], "ports": [s["http_port"]]}
-                 for s in find_port_squatters(str(WORKSPACE))]
-    return {"managed": managed, "orphaned": orphaned, "unregistered": [], "squatters": squatters}
+                 for s in ps["squatters"]]
+    return {"managed": managed, "orphaned": orphaned, "foreign": foreign, "squatters": squatters}
 
 
 @app.get("/api/notifications")
