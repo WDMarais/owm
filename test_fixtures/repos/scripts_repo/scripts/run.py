@@ -1,5 +1,6 @@
 # Minimal script fixture — no Odoo dependency, plain Python
-import json, sys
+import json
+import sys
 
 cases = [
     {"case": "check_a", "status": "OK"},

@@ -38,10 +38,14 @@ def _rel(iso: str | None) -> str | None:
         return None
     dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
     secs = (datetime.now(timezone.utc) - dt).total_seconds()
-    if secs < 0:     return "just now"
-    if secs < 120:   return f"{int(secs)}s ago"
-    if secs < 3600:  return f"{int(secs // 60)}m ago"
-    if secs < 86400: return f"{int(secs // 3600)}h ago"
+    if secs < 0:
+        return "just now"
+    if secs < 120:
+        return f"{int(secs)}s ago"
+    if secs < 3600:
+        return f"{int(secs // 60)}m ago"
+    if secs < 86400:
+        return f"{int(secs // 3600)}h ago"
     return f"{int(secs // 86400)}d ago"
 
 def _read_state(instance_dir: Path) -> dict:
@@ -183,7 +187,7 @@ def api_logs(name: str, log: str, n: int = 50):
         return {"lines": [], "log_path": str(log_path)}
     raw_lines = log_path.read_text().splitlines()[-n:]
     return {
-        "lines":    [{"text": l} for l in raw_lines],
+        "lines":    [{"text": line} for line in raw_lines],
         "log_path": str(log_path),
     }
 
