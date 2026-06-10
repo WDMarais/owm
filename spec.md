@@ -708,23 +708,32 @@ owm fetch introduces DB migration on fast-forward
 ### Workspace tools
 
 ```
-owm_status()
-→ full workspace status: instances, repos/worktrees, ports, unmanaged processes, alerts
-
 owm_status(instance="feat-789")
-→ feat-789 state + any unmanaged processes that look associated (port match, DB name in cmd)
-
-owm_status(include_repos=True, include_ports=False, include_unmanaged=False)
-→ selective mode: only flagged sections returned
+→ everything for one instance: running/health state (live), git/sync (live — single instance is cheap), http_port, url, suspected linked process, log_health: {recent ERROR/CRITICAL count, latest fatal line}
 
 owm_status(instance="feat-789") (not found)
 → {"error": "instance not found", "code": "NOT_FOUND"}
+# owm_status is per-instance only. Workspace views are owm_ls / owm_audit / owm_odoo_ps.
+# (replaces the old workspace-wide owm_status and its include_* selective mode — the split IS the selectivity)
 ```
 
 ```
-owm_ps()
-→ {managed: [{instance, pid, port, url, status}], unmanaged: [{pid, port, cmdline}]}
-# no git calls, no config parsing — instant
+owm_ls()
+→ {instances: [{name, state, pid, http_port, url}]}
+# running state only — no git, no system scan. Instant.
+
+owm_odoo_ps()
+→ {managed: [{instance, pid, port, url, state}], orphaned: [{pid, instance}], squatters: [{instance, http_port, pid}], foreign: [{pid, cmdline}]}
+# process tiers; live, no git. Supersedes owm_ps.
+
+owm_audit()
+→ {taken_at, instances: {"feat-789": {repo_alerts: [{repo, issue, ...}]}}} — slow git sweep; writes the audit artifact
+
+owm_audit(cached=True)
+→ the last computed audit from the artifact; instant
+
+owm_audit(cached=True) (no audit ever run)
+→ {"error": "no cached audit", "code": "NOT_FOUND", "hint": "run owm audit"}
 ```
 
 ```
@@ -1070,7 +1079,7 @@ The following areas were implied by the spec but not fully elaborated. Revisit w
 
 - [ ] **workspace.toml schema** — full field list: repos, clusters, defaults (port range, sync_warn_hours, worker count), patches, compare_pairs, workspace_scripts_dir, proxy config
 - [ ] **instance.toml schema** — full field list: repos (branch/base/shared/readonly/exists flags), database, server (http_port, workers), install (modules), python (version), scripts (runners, compare_target), session context paths
-- [ ] **owm ps (CLI)** — specced as MCP only; needs CLI cases
+- [x] **owm ps (CLI)** — now `owm odoo-ps`; CLI + MCP specced in "Status surface — ls, odoo-ps, audit, status"
 - [ ] **Template DB management** — `owm template-refresh` command; how base template is updated, which modules are pre-installed, how staleness is tracked and surfaced
 - [ ] **owm rollback (CLI + MCP)** — concept specced in fetch/sync section; CLI and MCP surface not elaborated
 - [ ] **owm adopt (MCP)** — CLI specced; MCP tool not listed
@@ -1207,6 +1216,110 @@ owm archive-delete pd-123_archived_2026-01-15
 
 ---
 
+## Status surface — ls, odoo-ps, audit, status
+
+The workspace "what's going on" question is split by cost, not bundled into one call.
+Each command surfaces one specific status; `status` is the per-instance everything-view.
+Running state is always live (a stale "running" is dangerous, and it's cheap anyway);
+git/sync state is slow (git per repo per instance) and lives only in `audit`; process
+anomalies are live (owm can't know when an off-grid process starts or dies, so they are
+never day-cached). `ls`, `audit`, and `odoo-ps` are workspace-scoped — they take no
+instance and ignore cwd inference.
+
+### owm ls
+
+```
+owm ls
+→ every instance with its running state: name, state (healthy|starting|unhealthy|stopped|unmanaged), pid, http_port, url
+# no git, no system scan — cheap, always live. The daily "what's up across the workspace" glance.
+```
+
+```
+owm ls --json
+→ {instances: [{name, state, pid, http_port, url}]}
+```
+
+### owm odoo-ps
+
+```
+owm odoo-ps
+→ odoo processes on the host, in tiers:
+   managed   — owm's tracked instances:                                               {instance, pid, port, url, state}
+   orphaned  — owm-shaped odoo (--config under instances_root) not a tracked instance: {pid, instance}
+   squatters — a non-owm process holding a configured instance's port:                 {instance, http_port, pid}
+   foreign   — odoo processes unrelated to this workspace (adjacent installs):          {pid, cmdline}
+# live; the socket scan is short-TTL at most, never day-cached. Supersedes owm_ps and adds the foreign tier.
+```
+
+```
+owm odoo-ps --json
+→ {managed: [...], orphaned: [...], squatters: [...], foreign: [...]}
+```
+
+### owm audit
+
+```
+owm audit
+→ git/sync state across all instances — the "fix these instances" worklist. Per repo:
+   dirty, behind/diverged vs origin/<branch>, base_behind (origin/<branch> vs origin/<base>).
+→ writes the result to the workspace audit artifact as a side effect.
+# the slow command: git per repo per instance, ~5-30s. Never on a hot path.
+# run a couple times a day, or as a dashboard background process.
+```
+
+```
+owm audit --cached
+→ the last computed audit, read from the artifact, tagged with when it was taken. Instant.
+# for consumers that want the latest worklist without paying the sweep.
+```
+
+```
+owm audit --cached (no audit ever run)
+→ {"error": "no cached audit", "code": "NOT_FOUND", "hint": "run owm audit"}
+```
+
+```
+owm audit --json        (--cached --json is the same shape with an older taken_at)
+→ {
+    "taken_at": "2026-06-10T08:00:00+02:00",
+    "instances": {
+      "feat-789": {"repo_alerts": [{"repo": "product-core", "issue": "base_behind", "behind_by": 4}]}
+    }
+  }
+# stable output contract — the SLA an external consumer pins to. owm does not know or care who reads it.
+```
+
+Exit status: `0` when nothing is flagged, non-zero when any instance has an alert — a scriptable
+gate (`--cached` reports against the cached run). This absorbs the role a separate cheap `check`
+command would have served.
+
+### owm status <instance>
+
+```
+owm status feat-789
+→ everything for one instance — the per-instance "is anything wrong with this one?" check:
+   running/health state (live), git/sync (git x 1, live), http_port, url, any suspected linked process (squatter/orphan),
+   and a log-health signal: recent ERROR/CRITICAL count + the latest fatal line (via the owm logs producer)
+# the log signal is what catches "running but crash-looping" — pid alive and HTTP up yet the log is full of
+#   fatal errors (e.g. a missing dependency surfacing on each reload). health (process + HTTP) alone can't see that.
+# runtime health only; complements owm validate (static/config correctness) and may point at it.
+# the per-instance deep view. No cache: a single instance is cheap to read fresh.
+```
+
+```
+owm status              (cwd inside instances/feat-789/)
+→ infers feat-789 (see CWD inference); per-instance status for feat-789
+```
+
+```
+owm status              (no instance; cwd not inside an instance)
+→ {"error": "status is per-instance; use owm ls / owm audit / owm odoo-ps for workspace views", "code": "NEEDS_INSTANCE"}
+# bare `owm status` with no target errors with a hint naming the workspace commands, rather than
+# aliasing to owm ls — a one-time "oh right, it's ls" reinforces the split instead of re-muddying it.
+```
+
+---
+
 ## CWD inference
 
 All commands walk up from cwd to find workspace.toml (workspace root). Instance-scoped commands additionally infer the target instance if cwd is inside `instances/<name>/`. Applies to: status, start, stop, kill, restart, health, logs, run-script, compare, sync, push, reset, upgrade, shell, env, db-dump, db-restore, db-reset, archive, delete, rename, validate.
@@ -1222,7 +1335,7 @@ owm status
 ```
 cwd = ~/dev-instances/
 owm status
-→ no instance inferred; returns workspace-wide status
+→ no instance inferred; error NEEDS_INSTANCE — status is per-instance; use owm ls / owm audit / owm odoo-ps for workspace views
 ```
 
 ```
@@ -1236,13 +1349,13 @@ owm status review-101
 ## Unmanaged processes and adoption
 
 ```
-owm status (workspace-wide)
-→ surfaces unmanaged Odoo processes: PID, port, command line, whether port matches a configured instance
+owm odoo-ps
+→ surfaces unmanaged Odoo processes: PID, port, command line, whether port matches a configured instance (squatter), plus orphaned and foreign odoo
 ```
 
 ```
 unmanaged process on port 8142, instance feat-789 configured on port 8142
-→ status shows: "feat-789: unmanaged process on configured port — adopt or kill?"
+→ owm odoo-ps (and owm status feat-789) show: "feat-789: unmanaged process on configured port — adopt or kill?"
 ```
 
 ```
@@ -1375,7 +1488,7 @@ script run, abort signal emitted
 
 Layout:
 - **Header**: service-wide health, alerts (port range pressure, stale template warnings), global log toggle, owm-wide actions
-- **Left pane (~400px)**: repos/worktrees card (workspace-level sync state); instances card (name, URL, running state, health — clickable); ports card (owm ps equivalent — optional but low cost)
+- **Left pane (~400px)**: repos/worktrees card (workspace-level sync state); instances card (name, URL, running state, health — clickable); ports card (owm odoo-ps equivalent — optional but low cost)
 - **Right pane (main real estate)**: selected instance — operational state, config/worktree details, ahead/behind triplet per repo, actions (start/stop/kill, run configured scripts, archive), session context markdown (read-only), logs as toggleable card
 
 Happy-path actions exposed from UI: start, stop, force-kill, run configured scripts, view logs, archive. Anything requiring arbitrary input or config changes stays in terminal or agent.
