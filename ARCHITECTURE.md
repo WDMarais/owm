@@ -35,6 +35,7 @@ Stable terms used throughout owm. Reference here to avoid ambiguity.
 <workspace_root>/
   workspace.toml
   owm.log                        — NDJSON audit trail
+  audit.json                     — last `owm audit` result: {taken_at, instances: {<name>: {repo_alerts}}}; served by `owm audit --cached`
   _repos/
     <name>.git/                  — bare clone per repo
   _shared/
@@ -67,9 +68,9 @@ Stable terms used throughout owm. Reference here to avoid ambiguity.
 ```json
 {"status": "running|stopped|starting|unhealthy|unmanaged", "pid": 1234, "http_port": 8142, "started_at": "ISO8601"}
 ```
-Written by owm on start/stop/adopt/kill. Read by `owm_ps`, `health_check`, `owm_status`. Absent = stopped.
+Written by owm on start/stop/adopt/kill. Read by `owm ls`, `owm odoo-ps`, `health_check`, and `owm status <instance>`. Absent = stopped.
 
-**Repo sync state shape** (returned by `owm_status`, `owm_sync`, dashboard API — see INCOMING.md for caching/staleness discussion):
+**Repo sync state shape** (produced by `repo_sync_status` for the dashboard, and by the lean `repo_alert_state` — alerts only, 2-3 git calls — for `owm audit` and `owm status <instance>`):
 ```json
 {
   "dirty": false,
@@ -89,6 +90,27 @@ Opt-in extras (key absent = not applicable/not opted in; key present = active, e
 - `vs_local_base`: present when opted into local base tracking
 
 Display-layer strings ("clean", "behind", "ahead", "diverged", "dirty") are derived from these fields, not stored.
+
+**Status surface: freshness classes (why there is no per-field cache).**
+The workspace "what's going on" question splits by cost, and that split is what removed the
+caching machinery contemplated in INCOMING.md:
+
+- *Running state* (pid-alive + HTTP) is cheap and must be live — a stale "running" is
+  dangerous. `owm ls` reads it fresh; never cached.
+- *Process anomalies* (orphans, squatters, foreign odoo) are live by necessity: owm doesn't
+  mediate off-grid processes, so it can't event-invalidate a cache of them. `owm odoo-ps`
+  scans fresh (short-TTL at most on the socket walk).
+- *Git/sync state* is the only expensive part (git per repo per instance). It lives solely in
+  `owm audit`, which is allowed to be slow and persists its result to `audit.json`;
+  `owm audit --cached` serves that snapshot with its `taken_at`.
+
+The decisive move: the everyday hot paths never pay git x N. The workspace glance is `ls` (no
+git); drilling into one instance is `owm status <instance>` (git x 1, computed live, cheap).
+git x N happens only in `audit`. So there is no per-instance git cache, no TTL, no staleness
+invalidation, no per-field ages on the CLI — the elaborate cache was incidental to a
+workspace-wide hot-path `status` that the per-instance reframe eliminated. The single
+persisted snapshot (`audit.json`) exists only so `--cached` and the dashboard's background
+refresh can serve a recent worklist without re-running the sweep.
 
 **`review/` semantics:** Dated Markdown snapshots from any participant — agent-written reviews,
 received human feedback, pr-ism syncs, discussion notes. Each snapshot is point-in-time and
