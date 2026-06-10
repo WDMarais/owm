@@ -11,8 +11,14 @@ from owm.config import (
     resolve_workspace_root,
 )
 from owm.errors import OwmError, format_error
-from owm.instance import health_check, list_running_instances, owm_shaped_processes
-from owm.ports import find_conflicting_process
+from owm.instance import (
+    health_check,
+    list_running_instances,
+    owm_shaped_processes,
+    scan_odoo_processes,
+    classify_port_holder,
+)
+from owm.ports import find_conflicting_process, listeners_on_ports
 from owm.sync import repo_alert_state
 from owm.worktrees import resolve_worktree_path
 
@@ -41,10 +47,7 @@ def instance_status(instance: str, workspace_root: str) -> dict:
     if h.status in ("stopped", "unmanaged"):
         proc = find_conflicting_process(http_port)
         if proc:
-            if "odoo-bin" in proc.get("cmdline", "") or instance in proc.get("cmdline", ""):
-                classification = "probable_orphan"
-            else:
-                classification = "probable_squatter"
+            classification = classify_port_holder(proc.get("cmdline"), workspace_root)
             suspected_linked = {"classification": classification, **proc}
 
     return {
@@ -84,29 +87,59 @@ def _repo_alerts(instance: str, conf, workspace_root: str) -> list:
     return alerts
 
 
-def _holder_classification(proc: dict | None) -> str:
-    if proc and "odoo-bin" in (proc.get("cmdline") or ""):
-        return "probable_orphan"
-    return "probable_squatter"
-
-
 def _squatter_alert(instance: str, workspace_root: str) -> dict:
     port = load_instance_config(instance, workspace_root).server.http_port
     proc = find_conflicting_process(port)
     return {"instance": instance, "http_port": port,
             "pid": proc.get("pid") if proc else None,
-            "classification": _holder_classification(proc)}
+            "classification": classify_port_holder(proc.get("cmdline") if proc else None,
+                                                   workspace_root)}
 
 
 def find_port_squatters(workspace_root: str) -> list[dict]:
-    """Configured instances whose port a non-owm process holds — adopt-or-kill
-    candidates. health_check is the canonical port+pid check; "unmanaged" means a
-    process owm isn't tracking holds the port. CLI, MCP, and dashboard route here."""
-    return [
-        _squatter_alert(name, workspace_root)
-        for name in list_instances(workspace_root)
-        if health_check(name, workspace_root).status == "unmanaged"
-    ]
+    """Configured instances whose http_port is held by a process that isn't the
+    instance's own tracked one — adopt-or-kill candidates. One net_connections
+    snapshot across all configured ports, not a scan per instance. classification
+    names what the holder is (owm-shaped orphan / foreign odoo / plain squatter)."""
+    port_to_instance: dict[int, str] = {}
+    for name in list_instances(workspace_root):
+        try:
+            port_to_instance[load_instance_config(name, workspace_root).server.http_port] = name
+        except OwmError:
+            continue
+    managed = {m["instance"]: m["pid"] for m in list_running_instances(workspace_root)}
+    squatters = []
+    for port, holder in listeners_on_ports(set(port_to_instance)).items():
+        instance = port_to_instance[port]
+        if managed.get(instance) == holder["pid"]:
+            continue  # the instance's own tracked process holds its port — not a squatter
+        squatters.append({
+            "instance": instance, "http_port": port, "pid": holder["pid"],
+            "classification": classify_port_holder(holder["cmdline"], workspace_root),
+        })
+    return squatters
+
+
+def odoo_ps(workspace_root: str) -> dict:
+    """Every Odoo process on the host, classified for the status surface — managed,
+    orphaned, foreign, squatters. managed/orphaned/foreign come from one cmdline walk
+    (scan_odoo_processes), squatters from one socket snapshot (find_port_squatters).
+
+    Tier precedence: an owm-shaped holder of a configured port is reported as an
+    orphan, not a squatter; a foreign odoo that also squats one of our ports is
+    reported only under squatters (more actionable than a bare foreign listing)."""
+    running = list_running_instances(workspace_root)
+    managed_instances = {r["instance"] for r in running}
+    scan = scan_odoo_processes(workspace_root)
+    orphaned = [p for p in scan["owm_shaped"] if p["instance"] not in managed_instances]
+    squatters = [{"instance": s["instance"], "http_port": s["http_port"], "pid": s["pid"]}
+                 for s in find_port_squatters(workspace_root)
+                 if s["classification"] != "probable_orphan"]
+    squatter_pids = {s["pid"] for s in squatters}
+    foreign = [f for f in scan["foreign"] if f["pid"] not in squatter_pids]
+    managed = [{"instance": r["instance"], "pid": r["pid"], "port": r["port"],
+                "url": r["url"], "state": r["status"]} for r in running]
+    return {"managed": managed, "orphaned": orphaned, "foreign": foreign, "squatters": squatters}
 
 
 def find_orphaned_processes(workspace_root: str) -> list[dict]:

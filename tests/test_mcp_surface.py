@@ -13,6 +13,7 @@ from unittest.mock import patch
 from owm.mcp import (
     owm_status,
     owm_ps,
+    owm_odoo_ps,
     owm_validate,
     owm_env,
     owm_audit_log,
@@ -74,12 +75,24 @@ def test_owm_status_instance_not_found(tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_status_instance_suspected_orphan(standard_instance_toml, tmp_workspace):
-    proc = {"pid": 5678, "name": "python3", "cmdline": "python3 /ws/odoo-bin --config feat-789.conf"}
+    conf = tmp_workspace / "instances" / "feat-789" / "instance.conf"
+    proc = {"pid": 5678, "name": "python3", "cmdline": f"python3 /ws/odoo-bin --config {conf}"}
     with patch("owm.api.health_check", return_value=InstanceInfo(status="stopped")), \
          patch("owm.api.find_conflicting_process", return_value=proc):
         result = owm_status(instance="feat-789")
     assert result["suspected_linked"]["classification"] == "probable_orphan"
     assert result["suspected_linked"]["pid"] == 5678
+
+
+@pytest.mark.mcp_surface
+def test_owm_status_instance_suspected_foreign_odoo(standard_instance_toml, tmp_workspace):
+    # an Odoo process whose --config lives outside this workspace — not ours.
+    proc = {"pid": 4321, "name": "python3", "cmdline": "python3 /opt/odoo/odoo-bin --config /etc/odoo/odoo.conf"}
+    with patch("owm.api.health_check", return_value=InstanceInfo(status="stopped")), \
+         patch("owm.api.find_conflicting_process", return_value=proc):
+        result = owm_status(instance="feat-789")
+    assert result["suspected_linked"]["classification"] == "foreign_odoo"
+    assert result["suspected_linked"]["pid"] == 4321
 
 
 @pytest.mark.mcp_surface
@@ -140,7 +153,8 @@ def test_owm_status_workspace_running_instance(standard_instance_toml, tmp_works
 
 @pytest.mark.mcp_surface
 def test_owm_status_workspace_unmanaged_port_surfaces_in_port_alerts(standard_instance_toml, tmp_workspace):
-    proc = {"pid": 5678, "name": "python3", "cmdline": "python3 /ws/odoo-bin --config feat-789.conf"}
+    conf = tmp_workspace / "instances" / "feat-789" / "instance.conf"
+    proc = {"pid": 5678, "name": "python3", "cmdline": f"python3 /ws/odoo-bin --config {conf}"}
     with patch("owm.api.health_check", return_value=InstanceInfo(status="unmanaged", pid=5678)), \
          patch("owm.api.find_conflicting_process", return_value=proc):
         result = owm_status()
@@ -211,6 +225,62 @@ def test_owm_ps_surfaces_orphan_process(tmp_workspace):
          patch("owm.api.list_running_instances", return_value=[]):
         result = owm_ps()
     assert orphan in result["unmanaged"]
+
+
+# ---------------------------------------------------------------------------
+# Workspace tools — owm_odoo_ps
+# ---------------------------------------------------------------------------
+
+@pytest.mark.mcp_surface
+def test_owm_odoo_ps_four_tiers_present(tmp_workspace):
+    result = owm_odoo_ps()
+    assert set(result) == {"managed", "orphaned", "foreign", "squatters"}
+
+
+@pytest.mark.mcp_surface
+def test_owm_odoo_ps_classifies_each_tier(tmp_workspace):
+    running = [{"instance": "feat-789", "pid": 100, "port": 8142,
+                "url": "https://feat-789.localhost", "status": "healthy"}]
+    scan = {"owm_shaped": [{"pid": 100, "instance": "feat-789"},   # managed (tracked-running)
+                           {"pid": 200, "instance": "old-x"}],     # orphaned (owm-shaped, untracked)
+            "foreign": [{"pid": 300, "cmdline": "/opt/odoo/odoo-bin -c /etc/odoo.conf"}]}
+    squat = [{"instance": "review-9", "http_port": 8150, "pid": 400,
+              "classification": "probable_squatter"}]
+    with patch("owm.api.list_running_instances", return_value=running), \
+         patch("owm.api.scan_odoo_processes", return_value=scan), \
+         patch("owm.api.find_port_squatters", return_value=squat):
+        result = owm_odoo_ps()
+    assert result["managed"] == [{"instance": "feat-789", "pid": 100, "port": 8142,
+                                  "url": "https://feat-789.localhost", "state": "healthy"}]
+    assert result["orphaned"] == [{"pid": 200, "instance": "old-x"}]
+    assert result["foreign"] == [{"pid": 300, "cmdline": "/opt/odoo/odoo-bin -c /etc/odoo.conf"}]
+    assert result["squatters"] == [{"instance": "review-9", "http_port": 8150, "pid": 400}]
+
+
+@pytest.mark.mcp_surface
+def test_owm_odoo_ps_foreign_on_our_port_listed_only_as_squatter(tmp_workspace):
+    # a foreign odoo (pid 300) that also squats a configured port: squatter wins.
+    scan = {"owm_shaped": [], "foreign": [{"pid": 300, "cmdline": "/opt/odoo/odoo-bin"}]}
+    squat = [{"instance": "feat-789", "http_port": 8142, "pid": 300, "classification": "foreign_odoo"}]
+    with patch("owm.api.list_running_instances", return_value=[]), \
+         patch("owm.api.scan_odoo_processes", return_value=scan), \
+         patch("owm.api.find_port_squatters", return_value=squat):
+        result = owm_odoo_ps()
+    assert result["foreign"] == []
+    assert result["squatters"] == [{"instance": "feat-789", "http_port": 8142, "pid": 300}]
+
+
+@pytest.mark.mcp_surface
+def test_owm_odoo_ps_owm_shaped_holder_is_orphan_not_squatter(tmp_workspace):
+    # an owm-shaped orphan holding its own port: orphaned tier, excluded from squatters.
+    scan = {"owm_shaped": [{"pid": 200, "instance": "old-x"}], "foreign": []}
+    squat = [{"instance": "old-x", "http_port": 8142, "pid": 200, "classification": "probable_orphan"}]
+    with patch("owm.api.list_running_instances", return_value=[]), \
+         patch("owm.api.scan_odoo_processes", return_value=scan), \
+         patch("owm.api.find_port_squatters", return_value=squat):
+        result = owm_odoo_ps()
+    assert result["orphaned"] == [{"pid": 200, "instance": "old-x"}]
+    assert result["squatters"] == []
 
 
 # ---------------------------------------------------------------------------

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import click
 
-from owm.api import instance_status, workspace_status
+from owm.api import instance_status, workspace_status, odoo_ps
 from owm.config import (
     ConfOwnership,
     cwd_workspace_conflict,
@@ -523,6 +523,29 @@ def cmd_status(ctx, name):
         for a in r.get("repo_alerts", []):
             extra = f" ({a['behind_by']} behind)" if a.get("behind_by") else ""
             click.echo(f"  alert: {a['instance']}/{a['repo']} {a['issue']}{extra}", err=True)
+
+
+@cli.command("odoo-ps")
+@click.option("--json", "as_json", is_flag=True, help="Emit the full classified result as JSON.")
+@click.pass_context
+def cmd_odoo_ps(ctx, as_json):
+    """Every Odoo process on the host, classified: managed, orphaned, foreign, squatters."""
+    workspace_root = _resolve_workspace(ctx)
+    result = odoo_ps(workspace_root)
+    if as_json:
+        click.echo(json.dumps(result))
+        return
+    if not any(result.values()):
+        click.echo("no odoo processes")
+        return
+    for m in result["managed"]:
+        click.echo(f"managed   {m['instance']}  pid={m['pid']}  port={m['port']}  {m['state']}")
+    for o in result["orphaned"]:
+        click.echo(f"orphaned  {o['instance']}  pid={o['pid']}")
+    for s in result["squatters"]:
+        click.echo(f"squatter  {s['instance']}:{s['http_port']}  pid={s['pid']}")
+    for f in result["foreign"]:
+        click.echo(f"foreign   pid={f['pid']}  {f['cmdline']}")
 
 
 @cli.command("delete")

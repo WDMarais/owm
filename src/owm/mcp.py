@@ -65,7 +65,7 @@ from owm.sync import (
 )
 import dataclasses
 
-from owm.api import default_workspace, health_check, instance_status, find_orphaned_processes, workspace_status
+from owm.api import default_workspace, health_check, instance_status, find_orphaned_processes, workspace_status, odoo_ps
 from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
 from owm.scripts import execute_script, run_script, compare_instances
@@ -96,6 +96,13 @@ def owm_ps() -> dict:
         "managed": list_running_instances(workspace_root),
         "unmanaged": find_orphaned_processes(workspace_root),
     }
+
+
+@mcp.tool()
+def owm_odoo_ps() -> dict:
+    """Every Odoo process on the host, classified: managed, orphaned, foreign, squatters.
+    The workspace process view — supersedes owm_ps and adds the foreign tier."""
+    return odoo_ps(default_workspace())
 
 
 @mcp.tool()

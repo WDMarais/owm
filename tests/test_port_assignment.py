@@ -7,7 +7,15 @@ from unittest.mock import patch, MagicMock
 
 from owm.ports import assign_port, find_conflicting_process, evict_port
 from owm.ports import PortConflict, PortExhaustedError
-from owm.ports import get_eviction_log, eviction_count_in_window
+from owm.ports import get_eviction_log, eviction_count_in_window, listeners_on_ports
+
+
+def _listen_conn(port, pid):
+    conn = MagicMock()
+    conn.laddr.port = port
+    conn.status = "LISTEN"
+    conn.pid = pid
+    return conn
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +313,43 @@ def test_find_conflicting_process_ignores_non_listen_connections():
     with patch("owm.ports.psutil.net_connections", return_value=[mock_conn]):
         result = find_conflicting_process(8142)
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# listeners_on_ports (single-snapshot, many-port form)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.port_assignment
+def test_listeners_on_ports_maps_only_requested_ports_in_listen():
+    conns = [_listen_conn(8142, 100), _listen_conn(8150, 200), _listen_conn(9000, 300)]
+    proc = MagicMock()
+    proc.name.return_value = "python3"
+    proc.cmdline.return_value = ["python3", "odoo-bin"]
+    with patch("owm.ports.psutil.net_connections", return_value=conns), \
+         patch("owm.ports.psutil.Process", return_value=proc):
+        result = listeners_on_ports({8142, 8150})
+    assert set(result) == {8142, 8150}  # 9000 not requested
+    assert result[8142]["pid"] == 100
+    assert result[8150]["cmdline"] == "python3 odoo-bin"
+
+
+@pytest.mark.port_assignment
+def test_listeners_on_ports_skips_non_listen():
+    conn = MagicMock()
+    conn.laddr.port = 8142
+    conn.status = "ESTABLISHED"
+    with patch("owm.ports.psutil.net_connections", return_value=[conn]):
+        result = listeners_on_ports({8142})
+    assert result == {}
+
+
+@pytest.mark.port_assignment
+def test_listeners_on_ports_tolerates_vanished_process():
+    import psutil
+    with patch("owm.ports.psutil.net_connections", return_value=[_listen_conn(8142, 100)]), \
+         patch("owm.ports.psutil.Process", side_effect=psutil.NoSuchProcess(100)):
+        result = listeners_on_ports({8142})
+    assert result[8142] == {"pid": 100, "name": None, "cmdline": None}
 
 
 # ---------------------------------------------------------------------------

@@ -764,17 +764,53 @@ def _configured_instance(cmdline: list[str], root: str) -> str | None:
     return None
 
 
+_ODOO_BIN_NAMES = ("odoo-bin", "odoo", "openerp-server")
+
+
+def _is_odoo_process(cmdline: list[str]) -> bool:
+    """Whether a command line runs an Odoo server (odoo-bin / odoo / openerp-server),
+    matched on the basename of any argument so absolute and bare invocations both count."""
+    return any(os.path.basename(arg) in _ODOO_BIN_NAMES for arg in cmdline)
+
+
+def scan_odoo_processes(workspace_root: str) -> dict:
+    """One /proc walk that splits every Odoo process by its --config fingerprint:
+    owm-shaped (config under instances_root — ours) vs foreign (Odoo, but not ours).
+    The managed/orphaned split among owm-shaped is the caller's to make against the
+    tracked-running set. One pid+cmdline pass, no socket scan — see api.odoo_ps."""
+    root = instances_root(workspace_root)
+    owm_shaped: list[dict] = []
+    foreign: list[dict] = []
+    for p in psutil.process_iter(["pid", "cmdline"]):
+        cmdline = p.info["cmdline"] or []
+        if inst := _configured_instance(cmdline, root):
+            owm_shaped.append({"pid": p.info["pid"], "instance": inst})
+        elif _is_odoo_process(cmdline):
+            foreign.append({"pid": p.info["pid"], "cmdline": " ".join(cmdline)})
+    return {"owm_shaped": owm_shaped, "foreign": foreign}
+
+
 def owm_shaped_processes(workspace_root: str) -> list[dict]:
     """Running processes bearing an owm instance's config fingerprint — those
     whose --config resolves under instances_root, managed and orphaned alike.
-    These are the instance processes owm provisions, not owm's own internals.
-    A cheap /proc walk (pid+cmdline only, no socket scan)."""
-    root = instances_root(workspace_root)
-    return [
-        {"pid": p.info["pid"], "instance": inst}
-        for p in psutil.process_iter(["pid", "cmdline"])
-        if (inst := _configured_instance(p.info["cmdline"] or [], root))
-    ]
+    These are the instance processes owm provisions, not owm's own internals."""
+    return scan_odoo_processes(workspace_root)["owm_shaped"]
+
+
+def classify_port_holder(cmdline: str | None, workspace_root: str) -> str:
+    """Classify a process holding a configured instance's port by its --config
+    fingerprint, not a bare 'odoo-bin in cmdline' guess:
+      probable_orphan   — owm-shaped (--config under instances_root): one of ours, off-grid
+      foreign_odoo      — an Odoo server, but configured outside this workspace
+      probable_squatter — not an Odoo process at all
+    The cmdline arrives space-joined (from find_conflicting_process); instance dirs
+    carry no spaces, so a plain split recovers the --config argument."""
+    args = (cmdline or "").split()
+    if _configured_instance(args, instances_root(workspace_root)):
+        return "probable_orphan"
+    if _is_odoo_process(args):
+        return "foreign_odoo"
+    return "probable_squatter"
 
 
 def generate_instance_conf(

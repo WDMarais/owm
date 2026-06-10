@@ -174,6 +174,25 @@ def find_conflicting_process(port: int) -> dict | None:
     return None
 
 
+def listeners_on_ports(ports: set[int]) -> dict[int, dict]:
+    """One net_connections snapshot → {port: {pid, name, cmdline}} for each given
+    port currently in LISTEN. The many-port form of find_conflicting_process, for
+    when a whole set of ports is checked at once (odoo-ps squatter detection) rather
+    than one scan per port — one table read instead of N."""
+    holders: dict[int, dict] = {}
+    for conn in psutil.net_connections(kind="tcp"):
+        port = conn.laddr.port
+        if conn.status != "LISTEN" or port not in ports or port in holders:
+            continue
+        try:
+            proc = psutil.Process(conn.pid)
+            holders[port] = {"pid": conn.pid, "name": proc.name(),
+                             "cmdline": " ".join(proc.cmdline())}
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            holders[port] = {"pid": conn.pid, "name": None, "cmdline": None}
+    return holders
+
+
 def find_port_for_pid(pid: int) -> int | None:
     for conn in psutil.net_connections(kind="tcp"):
         if conn.pid == pid and conn.status == "LISTEN":

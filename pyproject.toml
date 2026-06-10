@@ -56,6 +56,7 @@ markers = [
     "owm_env",
     "port_assignment",
     "ports_gevent",
+    "process_scan",
     "requirements_patching",
     "safety_invariants",
     "script_runner",
