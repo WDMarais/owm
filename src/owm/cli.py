@@ -26,6 +26,7 @@ from owm.instance import (
     list_running_instances,
     start_instance,
     stop_instance,
+    pin_web_base_url,
     kill_instance,
     health_check,
     generate_instance_conf,
@@ -352,6 +353,10 @@ def cmd_install(ctx, name, modules, timeout, no_save):
         stop_instance(instance, workspace_root, wait=True)
     else:
         click.echo("  nothing to install")
+
+    # the DB schema now exists — pin web.base.url to this instance's own URL so
+    # first boot advertises the right address rather than Odoo's install default.
+    pin_web_base_url(instance, workspace_root)
 
     if modules and not no_save:
         toml_path = instance_config_path(instance, workspace_root)

@@ -288,6 +288,59 @@ def _create_instance_db(db_name: str, pg_port: int) -> None:
     )
 
 
+def _instance_web_base_url(name: str, http_port: int, ws_conf) -> str:
+    """The URL Odoo should advertise for an instance: the proxy subdomain when a
+    proxy backend is configured, else the raw localhost port. The scheme follows
+    the backend — nginx serves http (listen 80), Caddy https (tls internal) — so
+    web.base.url never claims a scheme the proxy doesn't answer on."""
+    backend = get_proxy_backend(ws_conf.proxy)
+    if backend:
+        return f"{backend.scheme}://{name}.{ws_conf.proxy.domain_suffix}"
+    return f"http://localhost:{http_port}"
+
+
+def _set_web_base_url(db_name: str, pg_port: int, url: str) -> bool:
+    """Upsert web.base.url to `url` (keeping web.base.url.freeze on) directly, so
+    Odoo stops advertising a port inherited from a cloned template or written on a
+    stray admin login. Returns whether the row was set.
+
+    Tolerant by design: a freshly created instance DB has no Odoo schema yet, so
+    the table is absent and the upsert errors out harmlessly — the value is pinned
+    later, once an install/start has initialised the DB."""
+    literal = "'" + url.replace("'", "''") + "'"
+    sql = (
+        "INSERT INTO ir_config_parameter (key, value) "
+        f"VALUES ('web.base.url', {literal}) "
+        "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value; "
+        "INSERT INTO ir_config_parameter (key, value) "
+        "VALUES ('web.base.url.freeze', 'True') "
+        "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;"
+    )
+    try:
+        r = subprocess.run(
+            ["psql", "-h", "/var/run/postgresql", "-p", str(pg_port), "-d", db_name,
+             "-v", "ON_ERROR_STOP=1", "-c", sql],
+            capture_output=True, text=True,
+        )
+    except FileNotFoundError:
+        return False  # psql not installed — pinning is best-effort, never fatal
+    return r.returncode == 0
+
+
+def pin_web_base_url(instance: str, workspace_root: str) -> bool:
+    """Pin an instance's web.base.url to its own canonical URL. Called pre-boot on
+    every start (so a serving boot reads the right value past the freeze) and after
+    install (the moment the DB schema first exists). A no-op on a not-yet-initialised
+    DB; the next start pins it once the schema is there. Best-effort throughout —
+    without a workspace.toml to derive the URL from, there is nothing to pin."""
+    ws_path = os.path.join(workspace_root, "workspace.toml")
+    if not os.path.exists(ws_path):
+        return False
+    conf = load_instance_config(instance, workspace_root)
+    with open(ws_path) as f:
+        ws_conf = parse_workspace_config(f.read())
+    url = _instance_web_base_url(instance, conf.server.http_port, ws_conf)
+    return _set_web_base_url(conf.database.name, conf.database.pg_port, url)
 
 
 def _collect_occupied_ports(workspace_root: str, exclude_instance: str) -> set[int]:
@@ -592,6 +645,7 @@ def start_instance(
                     port=port,
                 )
 
+    pin_web_base_url(instance, workspace_root)
     cmd = _build_start_command(instance, workspace_root, conf, init_modules=init_modules)
     log_path = os.path.join(workspace_root, "instances", instance, "instance.log")
     instance_separator(log_path, f"{instance} started")

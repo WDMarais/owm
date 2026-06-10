@@ -5,6 +5,11 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class ProxyBackend(Protocol):
+    # The scheme this backend serves instances over — nginx terminates plain
+    # http (listen 80), Caddy serves https (tls internal). web.base.url must
+    # match, or Odoo advertises a scheme the proxy doesn't answer on.
+    scheme: str
+
     def write_instance(
         self, name: str, http_port: int, gevent_port: int,
         domain_suffix: str, workspace_root: str,
@@ -14,6 +19,8 @@ class ProxyBackend(Protocol):
 
 
 class NginxBackend:
+    scheme = "http"
+
     def write_instance(
         self, name: str, http_port: int, gevent_port: int,
         domain_suffix: str, workspace_root: str,
@@ -49,6 +56,8 @@ class NginxBackend:
 
 
 class CaddyBackend:
+    scheme = "https"
+
     def __init__(self, caddy_config: str | None = None) -> None:
         raw = caddy_config or "~/.config/caddy/Caddyfile"
         self._caddy_config = os.path.expanduser(raw)

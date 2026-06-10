@@ -62,6 +62,7 @@ markers = [
     "script_runner",
     "session_context",
     "venv_management",
+    "web_base_url",
     "workspace_init",
     "worktrees",
     "permanently_green: tests that were green before any implementation and must stay green throughout; see TODO comment for intended rework direction",
