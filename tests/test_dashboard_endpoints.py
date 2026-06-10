@@ -117,6 +117,42 @@ def test_pull_base_owm_error_is_shaped(client):
     assert "uncommitted changes" in body["error"]
 
 
+# ── processes ─────────────────────────────────────────────────────────────────
+
+def test_processes_serves_the_four_odoo_ps_tiers(client):
+    """/api/processes composes from odoo_ps() and maps each tier onto the field
+    names app.js's row renderers read. Patches the classifier so the assertion is
+    about the endpoint's shaping, not host process state.
+
+    Contract under test — what dashboard/app.js relies on:
+      - top-level tiers are managed/orphaned/foreign/squatters (the dead
+        `unregistered` section is gone)
+      - orphaned rows carry {name, pid, ports}      (_orphanedRow)
+      - foreign rows carry  {cmd, pid, ports}       (_foreignRow)
+      - squatter rows carry {cmd, pid, ports} with the instance and port in cmd
+        (_squatterRow); squatters are already classifier-filtered upstream
+    """
+    fake = {
+        "managed":   [{"instance": "feat-789", "pid": 1, "port": 8069, "url": "u", "state": "running"}],
+        "orphaned":  [{"pid": 222, "instance": "old-feat"}],
+        "foreign":   [{"pid": 333, "cmdline": "/opt/odoo/odoo-bin --config /etc/odoo/odoo.conf"}],
+        "squatters": [{"instance": "pd-479", "http_port": 8102, "pid": 444}],
+    }
+    with patch("dashboard.server.odoo_ps", return_value=fake):
+        resp = client.get("/api/processes")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert set(data) == {"managed", "orphaned", "foreign", "squatters"}
+    assert "unregistered" not in data
+
+    assert data["orphaned"] == [{"name": "old-feat", "pid": 222, "ports": []}]
+    assert data["foreign"] == [
+        {"cmd": "/opt/odoo/odoo-bin --config /etc/odoo/odoo.conf", "pid": 333, "ports": []}
+    ]
+    assert data["squatters"] == [{"cmd": "pd-479 (:8102)", "pid": 444, "ports": [8102]}]
+
+
 # ── missing instance ────────────────────────────────────────────────────────
 
 def test_action_on_missing_instance_is_not_found(client):
