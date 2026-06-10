@@ -3,7 +3,7 @@ Tests for instance creation and workspace initialisation.
 Covers: Instance lifecycle — create, Workspace init sections.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from owm.instance import new_instance, create_instance
 from owm.workspace import init_workspace

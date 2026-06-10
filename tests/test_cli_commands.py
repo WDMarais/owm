@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from owm.operations import delete_instance, rename_instance, show_logs
 from owm.operations import db_dump, db_restore, validate_instance
-from owm.operations import adopt_instance, infer_instance_from_cwd
+from owm.operations import infer_instance_from_cwd
 from owm.log_rotation import check_rotation_needed, rotate_log
 
 
@@ -171,7 +171,7 @@ def test_logs_level_filter_returns_only_matching_levels(tmp_path):
         {"level": "ERROR", "msg": "crash2"},
     ]
     (inst_dir / "instance.log").write_text(
-        "\n".join(json.dumps(l) for l in lines) + "\n"
+        "\n".join(json.dumps(line) for line in lines) + "\n"
     )
     result = show_logs(instance="feat-789", n=100, follow=False, level="ERROR",
                        workspace_root=str(tmp_path))

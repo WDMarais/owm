@@ -58,7 +58,7 @@ def test_smoke_generate_instance_conf_documents_addons_order():
                                   addons_path=["/ws/instances/feat-789/customer-config",
                                                "/ws/_shared/odoo/19.0/addons"])
     lines = conf.splitlines()
-    addons_idx = next(i for i, l in enumerate(lines) if l.startswith("addons_path ="))
+    addons_idx = next(i for i, line in enumerate(lines) if line.startswith("addons_path ="))
     preceding = "\n".join(lines[:addons_idx])
     assert "first path wins" in preceding
     assert "repo_priority" in preceding

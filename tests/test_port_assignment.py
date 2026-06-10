@@ -6,8 +6,9 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from owm.ports import assign_port, find_conflicting_process, evict_port
-from owm.ports import PortConflict, PortExhaustedError
 from owm.ports import get_eviction_log, eviction_count_in_window, listeners_on_ports
+from owm.ports import honour_pinned_port, check_port_at_start
+from owm.instance import generate_instance_conf
 
 
 def _listen_conn(port, pid):
@@ -93,8 +94,6 @@ def test_assign_port_respects_owm_internal_range_exclusion():
 # Pinned port in instance.toml
 # ---------------------------------------------------------------------------
 
-from owm.ports import honour_pinned_port
-
 
 @pytest.mark.port_assignment
 def test_pinned_port_no_conflict_assigned():
@@ -139,8 +138,6 @@ def test_pinned_port_conflicts_with_running_instance_hard_error():
 # ---------------------------------------------------------------------------
 # Start-time port conflict with unrelated process
 # ---------------------------------------------------------------------------
-
-from owm.ports import check_port_at_start
 
 
 @pytest.mark.port_assignment
@@ -221,8 +218,6 @@ def test_eviction_threshold_configurable():
 # ---------------------------------------------------------------------------
 # Gevent / workers
 # ---------------------------------------------------------------------------
-
-from owm.instance import generate_instance_conf
 
 
 @pytest.mark.port_assignment

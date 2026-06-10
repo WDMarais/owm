@@ -2,7 +2,6 @@
 Smoke tests for owm init — real git subprocesses, no mocks.
 Covers: Workspace init section.
 """
-import os
 import subprocess
 import pytest
 from unittest.mock import patch

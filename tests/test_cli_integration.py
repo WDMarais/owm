@@ -296,7 +296,7 @@ def test_logs_prints_lines(runner, tmp_workspace):
     inst_dir = tmp_workspace / "instances" / "feat-789"
     inst_dir.mkdir(parents=True, exist_ok=True)
     lines = [{"level": "INFO", "msg": "started"}, {"level": "ERROR", "msg": "crash"}]
-    (inst_dir / "instance.log").write_text("\n".join(json.dumps(l) for l in lines) + "\n")
+    (inst_dir / "instance.log").write_text("\n".join(json.dumps(line) for line in lines) + "\n")
     result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "logs", "feat-789"])
     assert result.exit_code == 0
     assert "started" in result.output
@@ -309,7 +309,7 @@ def test_logs_level_filter(runner, tmp_workspace):
     inst_dir = tmp_workspace / "instances" / "feat-789"
     inst_dir.mkdir(parents=True, exist_ok=True)
     lines = [{"level": "INFO", "msg": "started"}, {"level": "ERROR", "msg": "crash"}]
-    (inst_dir / "instance.log").write_text("\n".join(json.dumps(l) for l in lines) + "\n")
+    (inst_dir / "instance.log").write_text("\n".join(json.dumps(line) for line in lines) + "\n")
     result = runner.invoke(cli, [
         "--workspace", str(tmp_workspace), "logs", "feat-789", "--level", "ERROR",
     ])
@@ -826,7 +826,7 @@ def test_regen_conf_honors_repo_priority(runner, standard_instance_toml, tmp_wor
     result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "regen-conf", "feat-789"])
     assert result.exit_code == 0
     conf = (tmp_workspace / "instances" / "feat-789" / "instance.conf").read_text()
-    addons_line = next(l for l in conf.splitlines() if l.startswith("addons_path ="))
+    addons_line = next(line for line in conf.splitlines() if line.startswith("addons_path ="))
     # priority order wins over the odoo-first declaration order
     assert addons_line.index("customer_config") < addons_line.index("product_core") < addons_line.index("odoo_like")
 

@@ -145,7 +145,6 @@ def test_archive_already_archived_raises(tmp_workspace):
 @pytest.mark.archive
 def test_archive_db_dump_calls_pg_dump(standard_instance_toml, tmp_workspace):
     """pg_dump is called with correct db_name and pg_port from instance.toml."""
-    import subprocess
     with patch("owm.archive._capture_head_shas", return_value={}), \
          patch("owm.archive._remove_worktrees"), \
          patch("owm.archive._remove_proxy_block", return_value=True), \

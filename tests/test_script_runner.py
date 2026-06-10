@@ -3,7 +3,6 @@ Tests for the script runner: NDJSON format, failure tiers, and compare pairs.
 Covers: Script runner section.
 """
 import pytest
-import json
 
 from owm.scripts import run_script, parse_ndjson_output
 from owm.scripts import compare_instances, scaffold_script

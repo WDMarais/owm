@@ -4,7 +4,7 @@ Covers: Module install and upgrade section.
 """
 import pytest
 
-from owm.modules import install_modules, upgrade_modules, check_modules_present
+from owm.modules import install_modules, upgrade_modules
 
 
 # ---------------------------------------------------------------------------

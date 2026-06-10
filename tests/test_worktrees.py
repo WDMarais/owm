@@ -10,7 +10,7 @@ from owm.worktrees import (
     push_branch,
     check_shared_commit_warning,
 )
-from owm.worktrees import create_worktree, WorktreeConfig
+from owm.worktrees import create_worktree, check_edit_allowed
 
 
 # ---------------------------------------------------------------------------
@@ -253,8 +253,6 @@ def test_per_instance_worktree_commit_no_warning():
 # ---------------------------------------------------------------------------
 # Local edits in readonly worktree
 # ---------------------------------------------------------------------------
-
-from owm.worktrees import check_edit_allowed
 
 
 @pytest.mark.worktrees

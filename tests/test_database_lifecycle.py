@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from owm.database import create_db, reset_db, sync_db_from_template
 from owm.database import check_template_staleness, check_pg_reachability
-from owm.database import DatabaseConfig, TemplateStatus, SeedScriptState
+from owm.database import SeedScriptState
 from owm.instance import generate_instance_conf
 from owm.workspace import init_workspace
 

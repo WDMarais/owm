@@ -8,11 +8,11 @@ from owm.config import (
     parse_workspace_config,
     parse_instance_config,
     load_instance_config,
+    parse_repo_spec,
 )
 from owm.config import ConfOwnership
-from owm.config import WorkspaceConfig, InstanceConfig, RepoSpec, ClusterConfig
-from owm.config import WorkspaceDefaults, WorkspaceRepo
-from owm.errors import OwmError, ConfigError, NOT_FOUND
+from owm.errors import OwmError, ConfigError, NOT_FOUND, OWM_CONFIG_INVALID
+from owm.venv import resolve_patches
 
 # ---------------------------------------------------------------------------
 # Workspace.toml — integration: parse full valid config
@@ -149,8 +149,6 @@ odoo = "git@github.com:odoo/odoo.git"
 # ---------------------------------------------------------------------------
 # Repo spec string parsing: "branch:base+flags"
 # ---------------------------------------------------------------------------
-
-from owm.config import parse_repo_spec
 
 
 @pytest.mark.config_schemas
@@ -507,8 +505,6 @@ pg_port = 5432
 # Requirements patching
 # ---------------------------------------------------------------------------
 
-from owm.venv import resolve_patches
-
 
 @pytest.mark.config_schemas
 @pytest.mark.requirements_patching
@@ -567,8 +563,6 @@ def test_resolve_patches_major_version_key_matches():
 # Structured config errors: parse failures raise ConfigError (OWM_CONFIG_INVALID)
 # with a message naming the offending field, not a leaked TypeError/KeyError.
 # ---------------------------------------------------------------------------
-
-from owm.errors import ConfigError, OWM_CONFIG_INVALID
 
 
 @pytest.mark.config_schemas
