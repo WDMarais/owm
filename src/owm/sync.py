@@ -1,7 +1,7 @@
 import json
 import os
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from owm.config import (
@@ -172,7 +172,7 @@ def git_fetch_bare(bare_path: str, *, branches: list[str] | None = None, timeout
         raise OwmError(f"fetch timed out after {timeout}s", code=FETCH_TIMEOUT)
     if r.returncode != 0:
         return False
-    ref_lines = [l for l in r.stdout.splitlines() if "FETCH_HEAD" not in l]
+    ref_lines = [line for line in r.stdout.splitlines() if "FETCH_HEAD" not in line]
     return bool(ref_lines)
 
 
@@ -483,7 +483,7 @@ def push_instance(
     if not owned:
         raise OwmError(f"repo {repo!r} is not owned by {instance!r}", code=NOT_OWNED)
     if branch_status == "diverged":
-        raise OwmError(f"branch has diverged from origin; rebase before pushing", code=DIVERGED)
+        raise OwmError("branch has diverged from origin; rebase before pushing", code=DIVERGED)
 
     return {"status": "pushed", "repo": repo}
 
