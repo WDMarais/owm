@@ -4,7 +4,6 @@ import shutil
 import subprocess
 import sys
 import webbrowser
-from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -48,7 +47,6 @@ from owm.operations import (
     show_logs,
     db_dump,
     db_restore,
-    validate_instance,
 )
 from owm.ports import find_port_for_pid
 from owm.database import reset_db
@@ -353,7 +351,7 @@ def cmd_install(ctx, name, modules, timeout, no_save):
             sys.exit(1)
         stop_instance(instance, workspace_root, wait=True)
     else:
-        click.echo(f"  nothing to install")
+        click.echo("  nothing to install")
 
     if modules and not no_save:
         toml_path = instance_config_path(instance, workspace_root)
@@ -854,7 +852,7 @@ def cmd_unarchive(ctx, name, discard):
         click.echo(f"error: no archive found for {name!r}", err=True)
         sys.exit(1)
     if not os.path.exists(archived_toml):
-        click.echo(f"error: archive is missing instance.toml", err=True)
+        click.echo("error: archive is missing instance.toml", err=True)
         sys.exit(1)
 
     instance_dir = os.path.join(workspace_root, "instances", name)
@@ -868,7 +866,7 @@ def cmd_unarchive(ctx, name, discard):
     shutil.copy2(archived_toml, dest_toml)
     _strip_archived_sections(dest_toml)
     try:
-        result = create_instance(name, workspace_root)
+        create_instance(name, workspace_root)
     except OwmError as e:
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
@@ -885,13 +883,13 @@ def cmd_unarchive(ctx, name, discard):
         except OwmError as e:
             click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
             sys.exit(1)
-        click.echo(f"  restored DB from archive dump")
+        click.echo("  restored DB from archive dump")
     else:
-        click.echo(f"  note: no db.dump in archive — DB not restored")
+        click.echo("  note: no db.dump in archive — DB not restored")
 
     if discard:
         shutil.rmtree(archive_dir)
-        click.echo(f"  archive removed")
+        click.echo("  archive removed")
 
     click.echo(f"{name}  unarchived")
 
@@ -906,7 +904,7 @@ def cmd_upgrade(ctx, name, modules, reinstall):
 
     With no MODULES: upgrades all. With MODULES: upgrades only the listed ones.
     """
-    workspace_root = _resolve_workspace(ctx)
+    _resolve_workspace(ctx)  # validates we're in a workspace before upgrading
     modules_list = list(modules) if modules else None
     result = upgrade_modules(instance=name, modules=modules_list, reinstall=reinstall)
     label = "reinstalled" if reinstall else "upgraded"

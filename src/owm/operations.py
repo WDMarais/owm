@@ -250,7 +250,7 @@ def show_logs(
     except FileNotFoundError:
         warning = "no log file yet; instance may not have been started"
     if level:
-        lines = [l for l in lines if l.get("level") in (level, "CRITICAL")]
+        lines = [line for line in lines if line.get("level") in (level, "CRITICAL")]
     return LogsResult(lines=lines[-n:], log_path=log_path, warning=warning)
 
 

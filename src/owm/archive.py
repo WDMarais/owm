@@ -144,8 +144,8 @@ def _patch_archived_toml(toml_path: str, shas: dict[str, str]) -> None:
         return
     with open(toml_path) as f:
         lines = f.readlines()
-    stripped = [l for l in lines
-                if not l.strip().startswith(("http_port", "gevent_port"))]
+    stripped = [line for line in lines
+                if not line.strip().startswith(("http_port", "gevent_port"))]
     with open(toml_path, "w") as f:
         f.writelines(stripped)
         f.write("\n[archived]\n")

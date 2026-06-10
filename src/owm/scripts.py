@@ -54,8 +54,8 @@ class ScaffoldResult:
 
 
 def parse_ndjson_output(raw: str) -> list[dict]:
-    lines = [l.strip() for l in raw.strip().split("\n") if l.strip()]
-    return [json.loads(l) for l in lines]
+    lines = [line.strip() for line in raw.strip().split("\n") if line.strip()]
+    return [json.loads(line) for line in lines]
 
 
 def run_script(
