@@ -129,14 +129,16 @@ def test_processes_serves_the_four_odoo_ps_tiers(client):
         `unregistered` section is gone)
       - orphaned rows carry {name, pid, ports}      (_orphanedRow)
       - foreign rows carry  {cmd, pid, ports}       (_foreignRow)
-      - squatter rows carry {cmd, pid, ports} with the instance and port in cmd
-        (_squatterRow); squatters are already classifier-filtered upstream
+      - squatter rows carry {cmd, instance, pid, ports} where cmd is the
+        *squatting process's* identity and instance is the owm victim whose port
+        is held (_squatterRow); squatters are already classifier-filtered upstream
     """
     fake = {
         "managed":   [{"instance": "feat-789", "pid": 1, "port": 8069, "url": "u", "state": "running"}],
         "orphaned":  [{"pid": 222, "instance": "old-feat"}],
         "foreign":   [{"pid": 333, "cmdline": "/opt/odoo/odoo-bin --config /etc/odoo/odoo.conf"}],
-        "squatters": [{"instance": "pd-479", "http_port": 8102, "pid": 444}],
+        "squatters": [{"instance": "pd-479", "http_port": 8102, "pid": 444,
+                       "name": "next-server", "cmdline": "node /srv/web/server.js"}],
     }
     with patch("dashboard.server.odoo_ps", return_value=fake):
         resp = client.get("/api/processes")
@@ -150,7 +152,11 @@ def test_processes_serves_the_four_odoo_ps_tiers(client):
     assert data["foreign"] == [
         {"cmd": "/opt/odoo/odoo-bin --config /etc/odoo/odoo.conf", "pid": 333, "ports": []}
     ]
-    assert data["squatters"] == [{"cmd": "pd-479 (:8102)", "pid": 444, "ports": [8102]}]
+    # the squatter is identified by the process holding the port (next-server),
+    # not by pd-479 — pd-479 is the victim, carried as `instance` for the note
+    assert data["squatters"] == [
+        {"cmd": "next-server", "instance": "pd-479", "pid": 444, "ports": [8102]}
+    ]
 
 
 # ── missing instance ────────────────────────────────────────────────────────

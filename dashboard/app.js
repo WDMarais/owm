@@ -736,6 +736,9 @@ function _foreignRow(p) {
 }
 
 function _squatterRow(p) {
+    // p.cmd is the squatting process's own identity; p.instance is the owm
+    // instance whose port it's holding (the victim) — surfaced as the note so
+    // the row answers "what is this, and which of my ports does it block".
     const el = document.createElement("div");
     el.className = "process-row";
     const pills = p.ports.map(n => _pill(n, null)).join("");
@@ -747,7 +750,7 @@ function _squatterRow(p) {
         <div class="proc-detail-line">
           <span class="proc-ports">${pills}</span>
           <span class="proc-pid">pid ${_esc(p.pid)}</span>
-          <span class="proc-note">not owm-managed</span>
+          <span class="proc-note">squatting ${_esc(p.instance)}</span>
         </div>`;
     return el;
 }

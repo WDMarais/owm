@@ -438,7 +438,8 @@ def api_processes():
                 for p in ps["orphaned"]]
     foreign  = [{"cmd": p["cmdline"], "pid": p["pid"], "ports": []}
                 for p in ps["foreign"]]
-    squatters = [{"cmd": f"{s['instance']} (:{s['http_port']})", "pid": s["pid"], "ports": [s["http_port"]]}
+    squatters = [{"cmd": s["name"] or s["cmdline"] or f"pid {s['pid']}",
+                  "instance": s["instance"], "pid": s["pid"], "ports": [s["http_port"]]}
                  for s in ps["squatters"]]
     return {"managed": managed, "orphaned": orphaned, "foreign": foreign, "squatters": squatters}
 

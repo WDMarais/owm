@@ -245,6 +245,7 @@ def test_owm_odoo_ps_classifies_each_tier(tmp_workspace):
                            {"pid": 200, "instance": "old-x"}],     # orphaned (owm-shaped, untracked)
             "foreign": [{"pid": 300, "cmdline": "/opt/odoo/odoo-bin -c /etc/odoo.conf"}]}
     squat = [{"instance": "review-9", "http_port": 8150, "pid": 400,
+              "name": "node", "cmdline": "node /srv/app/server.js",
               "classification": "probable_squatter"}]
     with patch("owm.api.list_running_instances", return_value=running), \
          patch("owm.api.scan_odoo_processes", return_value=scan), \
@@ -254,20 +255,24 @@ def test_owm_odoo_ps_classifies_each_tier(tmp_workspace):
                                   "url": "https://feat-789.localhost", "state": "healthy"}]
     assert result["orphaned"] == [{"pid": 200, "instance": "old-x"}]
     assert result["foreign"] == [{"pid": 300, "cmdline": "/opt/odoo/odoo-bin -c /etc/odoo.conf"}]
-    assert result["squatters"] == [{"instance": "review-9", "http_port": 8150, "pid": 400}]
+    # squatter carries the holder's own identity (name/cmdline), not just the victim
+    assert result["squatters"] == [{"instance": "review-9", "http_port": 8150, "pid": 400,
+                                    "name": "node", "cmdline": "node /srv/app/server.js"}]
 
 
 @pytest.mark.mcp_surface
 def test_owm_odoo_ps_foreign_on_our_port_listed_only_as_squatter(tmp_workspace):
     # a foreign odoo (pid 300) that also squats a configured port: squatter wins.
     scan = {"owm_shaped": [], "foreign": [{"pid": 300, "cmdline": "/opt/odoo/odoo-bin"}]}
-    squat = [{"instance": "feat-789", "http_port": 8142, "pid": 300, "classification": "foreign_odoo"}]
+    squat = [{"instance": "feat-789", "http_port": 8142, "pid": 300,
+              "name": "odoo-bin", "cmdline": "/opt/odoo/odoo-bin", "classification": "foreign_odoo"}]
     with patch("owm.api.list_running_instances", return_value=[]), \
          patch("owm.api.scan_odoo_processes", return_value=scan), \
          patch("owm.api.find_port_squatters", return_value=squat):
         result = owm_odoo_ps()
     assert result["foreign"] == []
-    assert result["squatters"] == [{"instance": "feat-789", "http_port": 8142, "pid": 300}]
+    assert result["squatters"] == [{"instance": "feat-789", "http_port": 8142, "pid": 300,
+                                    "name": "odoo-bin", "cmdline": "/opt/odoo/odoo-bin"}]
 
 
 @pytest.mark.mcp_surface

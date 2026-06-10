@@ -541,7 +541,8 @@ def cmd_odoo_ps(ctx, as_json):
     for o in result["orphaned"]:
         click.echo(f"orphaned  {o['instance']}  pid={o['pid']}")
     for s in result["squatters"]:
-        click.echo(f"squatter  {s['instance']}:{s['http_port']}  pid={s['pid']}")
+        who = s["name"] or s["cmdline"] or f"pid {s['pid']}"
+        click.echo(f"squatter  {who}  pid={s['pid']}  squatting {s['instance']}:{s['http_port']}")
     for f in result["foreign"]:
         click.echo(f"foreign   pid={f['pid']}  {f['cmdline']}")
 

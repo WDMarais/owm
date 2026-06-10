@@ -99,8 +99,10 @@ def _squatter_alert(instance: str, workspace_root: str) -> dict:
 def find_port_squatters(workspace_root: str) -> list[dict]:
     """Configured instances whose http_port is held by a process that isn't the
     instance's own tracked one — adopt-or-kill candidates. One net_connections
-    snapshot across all configured ports, not a scan per instance. classification
-    names what the holder is (owm-shaped orphan / foreign odoo / plain squatter)."""
+    snapshot across all configured ports, not a scan per instance. `instance` is
+    the victim (the configured owm instance whose port is taken); `name`/`cmdline`
+    identify the holder doing the squatting; `classification` names what the holder
+    is (owm-shaped orphan / foreign odoo / plain squatter)."""
     port_to_instance: dict[int, str] = {}
     for name in list_instances(workspace_root):
         try:
@@ -115,6 +117,7 @@ def find_port_squatters(workspace_root: str) -> list[dict]:
             continue  # the instance's own tracked process holds its port — not a squatter
         squatters.append({
             "instance": instance, "http_port": port, "pid": holder["pid"],
+            "name": holder["name"], "cmdline": holder["cmdline"],
             "classification": classify_port_holder(holder["cmdline"], workspace_root),
         })
     return squatters
@@ -132,7 +135,8 @@ def odoo_ps(workspace_root: str) -> dict:
     managed_instances = {r["instance"] for r in running}
     scan = scan_odoo_processes(workspace_root)
     orphaned = [p for p in scan["owm_shaped"] if p["instance"] not in managed_instances]
-    squatters = [{"instance": s["instance"], "http_port": s["http_port"], "pid": s["pid"]}
+    squatters = [{"instance": s["instance"], "http_port": s["http_port"], "pid": s["pid"],
+                  "name": s["name"], "cmdline": s["cmdline"]}
                  for s in find_port_squatters(workspace_root)
                  if s["classification"] != "probable_orphan"]
     squatter_pids = {s["pid"] for s in squatters}
