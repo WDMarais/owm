@@ -240,9 +240,9 @@ function _syncListDot(name, status) {
 }
 
 // Degraded centre for an instance whose toml won't parse (or is missing): the
-// detail endpoint returns a bare {error, code} shape with no name/health/repos,
-// which would otherwise feed renderNavbar a `https://undefined.localhost` url
-// and crash the card renders. We still have `name` from the caller.
+// detail endpoint returns a bare {error, code} shape with no name/url/health/repos,
+// which would otherwise feed renderNavbar an undefined url and crash the card
+// renders. We still have `name` from the caller.
 function renderCentreError(name, data) {
     const dock = document.getElementById("instance-dock");
     dock.classList.remove("hidden");
@@ -293,7 +293,7 @@ function renderNavbar(inst) {
     statusEl.className = `status-badge ${inst.status}`;
 
     const urlEl = document.getElementById("dock-url");
-    const url = `https://${inst.name}.localhost`;
+    const url = inst.url;
     urlEl.href = url;
     urlEl.textContent = url;
 

@@ -16,7 +16,7 @@ from owm.config import (
 from owm.errors import OwmError, INSTANCE_RUNNING, NOT_FOUND
 from owm.archive import _remove_proxy_block, _remove_worktrees, _dropdb_archive
 from owm.adoption import adopt_process, AdoptResult
-from owm.instance import _write_pid
+from owm.instance import _write_pid, _instance_public_url, _load_workspace_config
 from owm.proxy import get_proxy_backend
 
 
@@ -210,6 +210,7 @@ def rename_instance(
         [new_name if p == instance else p for p in pair]
         for pair in (workspace_compare_pairs or [])
     ]
+    ws_conf = _load_workspace_config(workspace_root)
     return RenameResult(
         status="renamed",
         old_name=instance,
@@ -217,8 +218,8 @@ def rename_instance(
         db_renamed=True,
         nginx_block_updated=True,
         port_unchanged=True,
-        old_url=f"https://{instance}.localhost",
-        new_url=f"https://{new_name}.localhost",
+        old_url=_instance_public_url(instance, http_port, ws_conf),
+        new_url=_instance_public_url(new_name, http_port, ws_conf),
         remaining_compare_pairs=remaining,
     )
 

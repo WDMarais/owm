@@ -233,7 +233,7 @@ def owm_start(instance: str, wait: bool = False) -> dict:
         result = start_instance(instance, workspace_root, wait=wait)
     except OwmError as e:
         return _e(e)
-    return {"status": result.status, "pid": result.pid, "url": f"https://{instance}.localhost"}
+    return {"status": result.status, "pid": result.pid, "url": result.url}
 
 
 @mcp.tool()
@@ -270,7 +270,7 @@ def owm_restart(instance: str, wait: bool = False) -> dict:
         if e.code == STOP_TIMEOUT:
             err["hint"] = "run owm kill to force-stop the instance first"
         return err
-    return {"status": "restarted", "pid": result.pid, "url": f"https://{instance}.localhost"}
+    return {"status": "restarted", "pid": result.pid, "url": result.url}
 
 
 @mcp.tool()
@@ -325,10 +325,10 @@ def owm_delete(instance: str, force: bool = True, running: bool = False) -> dict
 def owm_rename(instance: str, new_name: str, running: bool = False) -> dict:
     workspace_root = default_workspace()
     try:
-        rename_instance(instance=instance, new_name=new_name, running=running,
-                        workspace_root=workspace_root)
+        result = rename_instance(instance=instance, new_name=new_name, running=running,
+                                 workspace_root=workspace_root)
         return {"status": "renamed", "old": instance, "new": new_name,
-                "url": f"https://{new_name}.localhost"}
+                "url": result.new_url}
     except OwmError as e:
         return _e(e)
 

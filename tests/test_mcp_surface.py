@@ -107,12 +107,12 @@ def test_owm_status_instance_suspected_squatter(standard_instance_toml, tmp_work
 
 @pytest.mark.mcp_surface
 def test_owm_status_instance_running(standard_instance_toml, tmp_workspace):
-    with patch("owm.api.health_check", return_value=InstanceInfo(status="healthy", pid=1234, url="https://feat-789.localhost")), \
+    with patch("owm.api.health_check", return_value=InstanceInfo(status="healthy", pid=1234, url="http://feat-789.localhost")), \
          patch("owm.api.find_conflicting_process", return_value=None):
         result = owm_status(instance="feat-789")
     assert result["state"] == "healthy"
     assert result["pid"] == 1234
-    assert result["url"] == "https://feat-789.localhost"
+    assert result["url"] == "http://feat-789.localhost"
     assert result["local_url"] == "http://localhost:18142"
     assert result["suspected_linked"] is None
 
@@ -142,13 +142,13 @@ def test_owm_status_workspace_stopped_instance(standard_instance_toml, tmp_works
 
 @pytest.mark.mcp_surface
 def test_owm_status_workspace_running_instance(standard_instance_toml, tmp_workspace):
-    with patch("owm.api.health_check", return_value=InstanceInfo(status="healthy", pid=1234, url="https://feat-789.localhost")), \
+    with patch("owm.api.health_check", return_value=InstanceInfo(status="healthy", pid=1234, url="http://feat-789.localhost")), \
          patch("owm.api.find_conflicting_process", return_value=None):
         result = owm_status()
     inst = result["instances"]["feat-789"]
     assert inst["state"] == "healthy"
     assert inst["pid"] == 1234
-    assert inst["url"] == "https://feat-789.localhost"
+    assert inst["url"] == "http://feat-789.localhost"
 
 
 @pytest.mark.mcp_surface
@@ -193,7 +193,7 @@ def test_owm_ps_returns_managed_and_unmanaged():
 
 @pytest.mark.mcp_surface
 def test_owm_ps_managed_entry_shape():
-    fake = [{"instance": "feat-789", "pid": 1234, "port": 8142, "url": "https://feat-789.localhost", "status": "healthy"}]
+    fake = [{"instance": "feat-789", "pid": 1234, "port": 8142, "url": "http://feat-789.localhost", "status": "healthy"}]
     with patch("owm.mcp.list_running_instances", return_value=fake):
         result = owm_ps()
     entry = result["managed"][0]
@@ -240,7 +240,7 @@ def test_owm_odoo_ps_four_tiers_present(tmp_workspace):
 @pytest.mark.mcp_surface
 def test_owm_odoo_ps_classifies_each_tier(tmp_workspace):
     running = [{"instance": "feat-789", "pid": 100, "port": 8142,
-                "url": "https://feat-789.localhost", "status": "healthy"}]
+                "url": "http://feat-789.localhost", "status": "healthy"}]
     scan = {"owm_shaped": [{"pid": 100, "instance": "feat-789"},   # managed (tracked-running)
                            {"pid": 200, "instance": "old-x"}],     # orphaned (owm-shaped, untracked)
             "foreign": [{"pid": 300, "cmdline": "/opt/odoo/odoo-bin -c /etc/odoo.conf"}]}
@@ -252,7 +252,7 @@ def test_owm_odoo_ps_classifies_each_tier(tmp_workspace):
          patch("owm.api.find_port_squatters", return_value=squat):
         result = owm_odoo_ps()
     assert result["managed"] == [{"instance": "feat-789", "pid": 100, "port": 8142,
-                                  "url": "https://feat-789.localhost", "state": "healthy"}]
+                                  "url": "http://feat-789.localhost", "state": "healthy"}]
     assert result["orphaned"] == [{"pid": 200, "instance": "old-x"}]
     assert result["foreign"] == [{"pid": 300, "cmdline": "/opt/odoo/odoo-bin -c /etc/odoo.conf"}]
     # squatter carries the holder's own identity (name/cmdline), not just the victim
@@ -422,11 +422,12 @@ def test_owm_create_dirty_worktree_error(standard_instance_toml, tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_start_returns_spawned():
-    with patch("owm.mcp.start_instance", return_value=StartResult(status="spawned", pid=1234)):
+    with patch("owm.mcp.start_instance",
+               return_value=StartResult(status="spawned", pid=1234, url="http://feat-789.localhost")):
         result = owm_start(instance="feat-789")
     assert result["status"] == "spawned"
     assert result["pid"] is not None
-    assert result["url"] == "https://feat-789.localhost"
+    assert result["url"] == "http://feat-789.localhost"
 
 
 @pytest.mark.mcp_surface
@@ -504,11 +505,12 @@ def test_owm_kill_not_running():
 
 @pytest.mark.mcp_surface
 def test_owm_restart_returns_new_pid():
-    with patch("owm.mcp.restart_instance", return_value=RestartResult(status="restarted", pid=1235)):
+    with patch("owm.mcp.restart_instance",
+               return_value=RestartResult(status="restarted", pid=1235, url="http://feat-789.localhost")):
         result = owm_restart(instance="feat-789")
     assert result["status"] == "restarted"
     assert result["pid"] == 1235
-    assert result["url"] == "https://feat-789.localhost"
+    assert result["url"] == "http://feat-789.localhost"
 
 
 @pytest.mark.mcp_surface
@@ -526,9 +528,9 @@ def test_owm_restart_stop_timeout_returns_error():
 
 @pytest.mark.mcp_surface
 def test_owm_health_healthy():
-    with patch("owm.mcp.health_check", return_value=InstanceInfo(status="healthy", pid=1234, http_alive=True, url="https://feat-789.localhost")):
+    with patch("owm.mcp.health_check", return_value=InstanceInfo(status="healthy", pid=1234, http_alive=True, url="http://feat-789.localhost")):
         result = owm_health(instance="feat-789")
-    assert result == {"status": "healthy", "pid": 1234, "http_alive": True, "url": "https://feat-789.localhost"}
+    assert result == {"status": "healthy", "pid": 1234, "http_alive": True, "url": "http://feat-789.localhost"}
 
 
 @pytest.mark.mcp_surface
@@ -610,7 +612,7 @@ def test_owm_rename_stopped_instance(standard_instance_toml, tmp_workspace):
             instance="feat-789",
             new_name="pd-789",
         )
-    assert result == {"status": "renamed", "old": "feat-789", "new": "pd-789", "url": "https://pd-789.localhost"}
+    assert result == {"status": "renamed", "old": "feat-789", "new": "pd-789", "url": "http://pd-789.localhost"}
 
 
 @pytest.mark.mcp_surface

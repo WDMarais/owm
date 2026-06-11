@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from owm.config import parse_workspace_config
-from owm.instance import _instance_web_base_url, _set_web_base_url, pin_web_base_url
+from owm.instance import _instance_public_url, _set_web_base_url, pin_web_base_url
 
 pytestmark = pytest.mark.web_base_url
 
@@ -38,18 +38,18 @@ _WS_NO_PROXY = (
 def test_web_base_url_is_http_subdomain_under_nginx():
     # nginx listens on :80 — the URL must be http, not https
     ws_conf = parse_workspace_config(_WS_NGINX)
-    assert _instance_web_base_url("feat-789", 8142, ws_conf) == "http://feat-789.dev.local"
+    assert _instance_public_url("feat-789", 8142, ws_conf) == "http://feat-789.dev.local"
 
 
 def test_web_base_url_is_https_subdomain_under_caddy():
     # Caddy serves tls internal — the URL must be https
     ws_conf = parse_workspace_config(_WS_CADDY)
-    assert _instance_web_base_url("feat-789", 8142, ws_conf) == "https://feat-789.dev.local"
+    assert _instance_public_url("feat-789", 8142, ws_conf) == "https://feat-789.dev.local"
 
 
 def test_web_base_url_falls_back_to_localhost_port_without_proxy():
     ws_conf = parse_workspace_config(_WS_NO_PROXY)
-    assert _instance_web_base_url("feat-789", 8142, ws_conf) == "http://localhost:8142"
+    assert _instance_public_url("feat-789", 8142, ws_conf) == "http://localhost:8142"
 
 
 # ── psql upsert ───────────────────────────────────────────────────────────────

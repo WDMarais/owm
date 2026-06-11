@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from dashboard.fixtures import REPO_FETCH_AGES, INSTANCE_REPOS_SYNC, INSTANCE_SCRIPTS, PROCESSES, WORKSPACE_ALERTS
 from owm.config import parse_repo_spec
+from owm.instance import _instance_public_url, _load_workspace_config
 
 WORKSPACE = Path(__file__).parent.parent / "test_fixtures" / "workspace"
 DASHBOARD = Path(__file__).parent
@@ -89,14 +90,16 @@ def api_instance(name: str):
     srv      = cfg["server"]
     db       = cfg["database"]
     gevent   = srv["gevent_port"]
-    proxy_host = f"{name}.localhost"
+    ws_conf    = _load_workspace_config(str(WORKSPACE))
+    has_proxy  = bool(ws_conf and ws_conf.proxy)
+    public_url = _instance_public_url(name, srv["http_port"], ws_conf)
 
     health = {
         "http":   {"ok": state["status"] == "running", "value": f":{srv['http_port']}"},
         "gevent": {"ok": state["status"] == "running", "value": f":{gevent}"},
         "db":     {"ok": True, "value": db["name"]},
         "venv":   {"ok": True, "value": "ok"},
-        "proxy":  {"ok": True, "value": proxy_host},
+        "proxy":  {"ok": has_proxy, "value": f"{name}.{ws_conf.proxy.domain_suffix}" if has_proxy else "none"},
     }
 
     FIXTURE_PR_URLS = {
@@ -134,6 +137,7 @@ def api_instance(name: str):
         "name":       name,
         "status":     state["status"],
         "pid":        state.get("pid"),
+        "url":        public_url,
         "http_port":  srv["http_port"],
         "gevent_port": gevent,
         "started_at": _rel(state.get("started_at")),

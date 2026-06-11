@@ -297,7 +297,8 @@ def test_restart_stops_and_starts_returning_new_pid(tmp_path):
         result = restart_instance("feat-789", str(tmp_path), wait=False)
     assert result.status == "restarted"
     assert result.pid == 1235
-    assert result.url == "https://feat-789.localhost"
+    # no workspace.toml in this fixture → public URL falls back to the localhost port
+    assert result.url == "http://localhost:18142"
 
 
 @pytest.mark.instance_lifecycle_start_stop
@@ -324,7 +325,8 @@ def test_health_running_and_http_alive(tmp_path):
          patch("owm.instance._process_alive", return_value=True), \
          patch("owm.instance._probe_http", return_value=True):
         result = health_check("feat-789", str(tmp_path))
-    assert result == InstanceInfo(status="healthy", pid=1234, http_alive=True, url="https://feat-789.localhost")
+    # no workspace.toml in this fixture → public URL falls back to the localhost port
+    assert result == InstanceInfo(status="healthy", pid=1234, http_alive=True, url="http://localhost:18142")
 
 
 @pytest.mark.instance_lifecycle_start_stop
@@ -389,5 +391,5 @@ def test_health_is_process_and_http_only_not_db_or_venv(tmp_path):
 #   on owm start if stamp changed; timing relative to spawn is not specified (before or after?).
 # test_start_module_install_triggered: spec says modules installed on start if missing;
 #   whether this blocks spawn or runs asynchronously is not stated.
-# test_health_url_scheme: spec implies https://feat-789.localhost; whether http:// is
-#   returned during "starting" phase (before TLS proxy is active) is not specified.
+# test_health_url_scheme: resolved — the public URL scheme follows the proxy backend
+#   (nginx http / Caddy https), else the localhost port. Covered in test_web_base_url.py.

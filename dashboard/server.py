@@ -31,6 +31,8 @@ from owm.instance import (
     restart_instance,
     start_instance,
     stop_instance,
+    _instance_public_url,
+    _load_workspace_config,
 )
 from owm.operations import delete_instance, rename_instance
 from owm.sync import (
@@ -229,12 +231,17 @@ def api_instance(name: str):
     status = _ui_status(name)
     live   = status == "running"
 
+    ws_conf    = _load_workspace_config(str(WORKSPACE))
+    has_proxy  = bool(ws_conf and ws_conf.proxy)
+    public_url = _instance_public_url(name, cfg.server.http_port, ws_conf)
+
     health = {
         "http":   {"ok": live,  "value": f":{cfg.server.http_port}"},
         "gevent": {"ok": live,  "value": f":{cfg.server.gevent_port}"},
         "db":     {"ok": True,  "value": cfg.database.name},
         "venv":   {"ok": (instance_dir / ".venv").exists(), "value": "ok"},
-        "proxy":  {"ok": True,  "value": f"{name}.localhost"},
+        # no proxy configured → report that, rather than inventing a <name>.localhost host
+        "proxy":  {"ok": has_proxy, "value": f"{name}.{ws_conf.proxy.domain_suffix}" if has_proxy else "none"},
     }
 
     repos = []
@@ -259,6 +266,7 @@ def api_instance(name: str):
         "name":        name,
         "status":      status,
         "pid":         pid if pid and pid != "UNSET" else None,
+        "url":         public_url,
         "http_port":   cfg.server.http_port,
         "gevent_port": cfg.server.gevent_port,
         "started_at":  _rel(state.get("started_at")),

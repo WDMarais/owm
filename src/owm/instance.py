@@ -288,15 +288,33 @@ def _create_instance_db(db_name: str, pg_port: int) -> None:
     )
 
 
-def _instance_web_base_url(name: str, http_port: int, ws_conf) -> str:
-    """The URL Odoo should advertise for an instance: the proxy subdomain when a
-    proxy backend is configured, else the raw localhost port. The scheme follows
-    the backend — nginx serves http (listen 80), Caddy https (tls internal) — so
-    web.base.url never claims a scheme the proxy doesn't answer on."""
-    backend = get_proxy_backend(ws_conf.proxy)
+def _load_workspace_config(workspace_root: str):
+    """Parse workspace.toml, or None when absent — degraded/minimal workspaces still
+    resolve a usable (localhost) URL rather than erroring."""
+    ws_path = os.path.join(workspace_root, "workspace.toml")
+    if not os.path.exists(ws_path):
+        return None
+    with open(ws_path) as f:
+        return parse_workspace_config(f.read())
+
+
+def _instance_public_url(name: str, http_port: int, ws_conf) -> str:
+    """The public URL for an instance: the proxy subdomain when a backend is
+    configured, else the direct localhost port. The scheme follows the backend —
+    nginx serves http (listen 80), Caddy https (tls internal) — so the URL (and
+    web.base.url, which uses this) never claims a scheme the proxy doesn't answer on."""
+    backend = get_proxy_backend(ws_conf.proxy) if ws_conf else None
     if backend:
         return f"{backend.scheme}://{name}.{ws_conf.proxy.domain_suffix}"
     return f"http://localhost:{http_port}"
+
+
+def instance_public_url(instance: str, workspace_root: str) -> str:
+    """An instance's public URL resolved from its own config — the single source for
+    every surface that shows an instance address (start/restart/health/rename, the
+    CLI, the MCP tools)."""
+    conf = load_instance_config(instance, workspace_root)
+    return _instance_public_url(instance, conf.server.http_port, _load_workspace_config(workspace_root))
 
 
 def _set_web_base_url(db_name: str, pg_port: int, url: str) -> bool:
@@ -333,13 +351,11 @@ def pin_web_base_url(instance: str, workspace_root: str) -> bool:
     install (the moment the DB schema first exists). A no-op on a not-yet-initialised
     DB; the next start pins it once the schema is there. Best-effort throughout —
     without a workspace.toml to derive the URL from, there is nothing to pin."""
-    ws_path = os.path.join(workspace_root, "workspace.toml")
-    if not os.path.exists(ws_path):
+    ws_conf = _load_workspace_config(workspace_root)
+    if ws_conf is None:
         return False
     conf = load_instance_config(instance, workspace_root)
-    with open(ws_path) as f:
-        ws_conf = parse_workspace_config(f.read())
-    url = _instance_web_base_url(instance, conf.server.http_port, ws_conf)
+    url = _instance_public_url(instance, conf.server.http_port, ws_conf)
     return _set_web_base_url(conf.database.name, conf.database.pg_port, url)
 
 
@@ -631,6 +647,7 @@ def start_instance(
         return StartResult(
             status="already_running",
             pid=pid,
+            url=instance_public_url(instance, workspace_root),
             message=f"{instance} is already running (pid {pid})",
         )
 
@@ -657,6 +674,7 @@ def start_instance(
     workspace_log(workspace_root, "start", instance=instance, pid=proc.pid, status="dispatched")
 
     events = ["instance_starting"]
+    url = _instance_public_url(instance, conf.server.http_port, _load_workspace_config(workspace_root))
 
     if wait:
         try:
@@ -664,9 +682,9 @@ def start_instance(
         except OwmError as e:
             raise OwmError(str(e.args[0]), code=e.code, pid=proc.pid) from e
         events.append("instance_healthy")
-        return StartResult(status="healthy", pid=proc.pid, events_emitted=events)
+        return StartResult(status="healthy", pid=proc.pid, url=url, events_emitted=events)
 
-    return StartResult(status="spawned", pid=proc.pid, events_emitted=events)
+    return StartResult(status="spawned", pid=proc.pid, url=url, events_emitted=events)
 
 
 def stop_instance(
@@ -726,7 +744,7 @@ def restart_instance(
             code=STOP_TIMEOUT,
         )
     start_result = start_instance(instance, workspace_root, wait=wait, timeout_seconds=timeout_seconds)
-    return RestartResult(status="restarted", pid=start_result.pid, url=f"https://{instance}.localhost")
+    return RestartResult(status="restarted", pid=start_result.pid, url=instance_public_url(instance, workspace_root))
 
 
 HealthStatus = Literal["healthy", "starting", "unhealthy", "unmanaged", "stopped"]
@@ -750,6 +768,7 @@ def health_check(
 ) -> InstanceInfo:
     conf = load_instance_config(instance, workspace_root)
     port = conf.server.http_port
+    ws_conf = _load_workspace_config(workspace_root)
 
     pid = _read_pid(instance, workspace_root)
     if pid is None or not _process_alive(pid):
@@ -759,14 +778,16 @@ def health_check(
         return InstanceInfo(status="stopped")
 
     if _probe_http(port):
-        return InstanceInfo(status="healthy", pid=pid, http_alive=True, url=f"https://{instance}.localhost")
+        return InstanceInfo(status="healthy", pid=pid, http_alive=True,
+                            url=_instance_public_url(instance, port, ws_conf))
 
     if not wait:
         return InstanceInfo(status="starting", pid=pid, http_alive=False)
 
     try:
         _wait_for_http(port, timeout_seconds)
-        return InstanceInfo(status="healthy", pid=pid, http_alive=True, url=f"https://{instance}.localhost")
+        return InstanceInfo(status="healthy", pid=pid, http_alive=True,
+                            url=_instance_public_url(instance, port, ws_conf))
     except OwmError:
         return InstanceInfo(status="unhealthy", pid=pid, http_alive=False)
 

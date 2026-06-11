@@ -131,8 +131,8 @@ def test_rename_updates_proxy_subdomain(standard_instance_toml, tmp_workspace):
             running=False,
             workspace_root=str(tmp_workspace),
         )
-    assert result.old_url == "https://feat-789.localhost"
-    assert result.new_url == "https://pd-789.localhost"
+    assert result.old_url == "http://feat-789.localhost"
+    assert result.new_url == "http://pd-789.localhost"
 
 
 # ---------------------------------------------------------------------------

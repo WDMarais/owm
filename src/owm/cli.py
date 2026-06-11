@@ -27,6 +27,7 @@ from owm.instance import (
     start_instance,
     stop_instance,
     pin_web_base_url,
+    instance_public_url,
     kill_instance,
     health_check,
     generate_instance_conf,
@@ -245,7 +246,7 @@ def cmd_create(ctx, name, repos, force, toml_only):
     if result.status == "up_to_date":
         click.echo(f"{instance}  up to date")
     elif result.status == "created":
-        click.echo(f"{instance}  created  https://{instance}.localhost")
+        click.echo(f"{instance}  created  {instance_public_url(instance, workspace_root)}")
     else:
         click.echo(f"{instance}  {result.status}")
 
@@ -468,11 +469,7 @@ def cmd_open(ctx, name):
     """Open the instance URL in the default browser."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    ws_toml_path = os.path.join(workspace_root, "workspace.toml")
-    with open(ws_toml_path) as f:
-        ws_conf = parse_workspace_config(f.read())
-    domain = ws_conf.proxy.domain_suffix if ws_conf.proxy else "localhost"
-    url = f"https://{instance}.{domain}"
+    url = instance_public_url(instance, workspace_root)
     webbrowser.open(url)
     click.echo(url)
 
