@@ -36,6 +36,7 @@ from owm.errors import (
     ODOO_CONFIG_UNMARKED,
     ODOO_CONFIG_NO_ADDONS,
 )
+from owm.database import create_db
 from owm.oplog import workspace_log, instance_separator
 from owm.ports import assign_port, find_conflicting_process
 from owm.proxy import get_proxy_backend
@@ -59,6 +60,7 @@ class CreateResult:
     conflicts: list = field(default_factory=list)
     worktrees_created: bool = False
     db_created: bool = False
+    full_install_required: bool = True
     port_reserved: bool = False
     proxy_block_written: bool = False
     odoo_conf_generated: bool = False
@@ -581,7 +583,12 @@ def _materialise_instance(name: str, workspace_root: str) -> CreateResult:
     _provision_worktrees(conf, workspace_root, name)
     addons_paths = _resolve_instance_addons(conf, ws_conf, workspace_root, name)
     _provision_venv(conf, workspace_root, name)
-    _create_instance_db(conf.database.name, conf.database.pg_port)
+    db_result = create_db(
+        name=conf.database.name,
+        odoo_version="",
+        template=conf.database.template,
+        pg_port=conf.database.pg_port,
+    )
     proxy = _configure_proxy(ws_conf, name, http_port, gevent_port, workspace_root)
     conf_written = _write_instance_odoo_conf(
         name, http_port, gevent_port, conf, ws_conf, addons_paths, workspace_root,
@@ -590,6 +597,7 @@ def _materialise_instance(name: str, workspace_root: str) -> CreateResult:
         status="created",
         worktrees_created=True,
         db_created=True,
+        full_install_required=db_result.full_install_required,
         port_reserved=True,
         proxy_block_written=proxy is not None,
         odoo_conf_generated=conf_written,

@@ -3,7 +3,7 @@ Tests for instance creation and workspace initialisation.
 Covers: Instance lifecycle — create, Workspace init sections.
 """
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from owm.instance import new_instance, create_instance
 from owm.workspace import init_workspace
@@ -73,7 +73,7 @@ def test_new_instance_already_exists_returns_error(tmp_path):
 def test_create_instance_materialises_all_resources(standard_instance_toml, tmp_workspace):
     """Fresh create: worktrees created, DB cloned, port reserved, nginx block written, odoo.conf generated."""
     with patch("owm.instance.create_worktree"), \
-         patch("owm.instance._create_instance_db"):
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
         result = create_instance(
             name="feat-789",
             workspace_root=str(tmp_workspace),
@@ -90,7 +90,7 @@ def test_create_instance_materialises_all_resources(standard_instance_toml, tmp_
 def test_create_instance_writes_proxy_block_and_conf(standard_instance_toml, tmp_workspace):
     """create_instance writes _proxy/{name}.conf and instance.conf to disk."""
     with patch("owm.instance.create_worktree"), \
-         patch("owm.instance._create_instance_db"):
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
         create_instance(
             name="feat-789",
             workspace_root=str(tmp_workspace),
@@ -109,6 +109,51 @@ def test_create_instance_writes_proxy_block_and_conf(standard_instance_toml, tmp
 
 
 # ---------------------------------------------------------------------------
+# owm create — template-based DB clone
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def template_instance_toml(tmp_workspace):
+    """instance.toml with database.template set — triggers clone path."""
+    inst_dir = tmp_workspace / "instances" / "feat-789"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    content = (
+        "[repos]\n"
+        'odoo_like = "main:shared"\n'
+        'product_core = "feat-789-dev:main"\n\n'
+        "[database]\n"
+        'name = "owm_test_feat789"\n'
+        "pg_port = 5432\n"
+        'template = "owm_template_19"\n\n'
+        "[server]\n"
+        "http_port = 18142\n"
+        "gevent_port = 18143\n"
+        "workers = 2\n"
+    )
+    (inst_dir / "instance.toml").write_text(content)
+
+
+@pytest.mark.instance_lifecycle_create
+def test_create_instance_with_template_calls_create_db_with_template(template_instance_toml, tmp_workspace):
+    """When database.template is set, create_db is called with that template name."""
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=False)) as mock_create_db:
+        create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=False)
+    mock_create_db.assert_called_once()
+    _, kwargs = mock_create_db.call_args
+    assert kwargs.get("template") == "owm_template_19"
+
+
+@pytest.mark.instance_lifecycle_create
+def test_create_instance_with_template_skips_module_install(template_instance_toml, tmp_workspace):
+    """Template clone sets full_install_required=False — no Odoo boot install needed."""
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=False)):
+        result = create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=False)
+    assert result.full_install_required is False
+
+
+# ---------------------------------------------------------------------------
 # owm create — instance.conf ownership guard
 # ---------------------------------------------------------------------------
 
@@ -116,7 +161,7 @@ def test_create_instance_writes_proxy_block_and_conf(standard_instance_toml, tmp
 def test_create_instance_conf_carries_managed_marker(standard_instance_toml, tmp_workspace):
     """A freshly generated instance.conf is stamped owm-managed so later regen is allowed."""
     with patch("owm.instance.create_worktree"), \
-         patch("owm.instance._create_instance_db"):
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
         create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=False)
     conf_path = tmp_workspace / "instances" / "feat-789" / "instance.conf"
     assert ConfOwnership.detect(str(conf_path)) is ConfOwnership.MANAGED
@@ -130,7 +175,7 @@ def test_create_instance_leaves_manual_conf_untouched(standard_instance_toml, tm
     original = f"{ConfOwnership.MANUAL}\n[options]\nhttp_port = 9999\n"
     conf_path.write_text(original)
     with patch("owm.instance.create_worktree"), \
-         patch("owm.instance._create_instance_db"):
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
         result = create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=True)
     assert result.odoo_conf_generated is False
     assert conf_path.read_text() == original
@@ -144,7 +189,7 @@ def test_create_instance_refuses_unmarked_conf(standard_instance_toml, tmp_works
     original = "[options]\nhttp_port = 9999\n"
     conf_path.write_text(original)
     with patch("owm.instance.create_worktree"), \
-         patch("owm.instance._create_instance_db"):
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
         with pytest.raises(OwmError) as exc:
             create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=True)
     assert exc.value.code == ODOO_CONFIG_UNMARKED
@@ -165,7 +210,7 @@ def test_create_instance_refuses_empty_addons_path(standard_instance_toml, tmp_w
     )
     conf_path = tmp_workspace / "instances" / "feat-789" / "instance.conf"
     with patch("owm.instance.create_worktree"), \
-         patch("owm.instance._create_instance_db"):
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
         with pytest.raises(OwmError) as exc:
             create_instance(name="feat-789", workspace_root=str(tmp_workspace), instance_exists=False)
     assert exc.value.code == ODOO_CONFIG_NO_ADDONS
@@ -183,7 +228,7 @@ def test_create_instance_port_conflict_reassigns(standard_instance_toml, tmp_wor
         "[server]\nhttp_port = 18142\ngevent_port = 18143\nworkers = 2\n"
     )
     with patch("owm.instance.create_worktree"), \
-         patch("owm.instance._create_instance_db"):
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
         create_instance(
             name="feat-789",
             workspace_root=str(tmp_workspace),
