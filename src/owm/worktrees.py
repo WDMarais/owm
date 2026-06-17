@@ -35,6 +35,12 @@ class EditResult:
     allowed: bool
 
 
+def _is_worktree(path: str) -> bool:
+    """True only if path exists AND contains a .git file (worktree pointer, not a dir)."""
+    git = os.path.join(path, ".git")
+    return os.path.isfile(git)
+
+
 def resolve_worktree_path(
     repo: str,
     branch: str,
@@ -97,7 +103,7 @@ def create_worktree(
 
     # Shared repos always check out an existing branch — skip branch-intent checks
     if shared:
-        if os.path.exists(cfg.path):
+        if _is_worktree(cfg.path):
             return WorktreeResult(action="linked", path=cfg.path)
         _git_worktree_add(bare_repo, cfg.path, branch)
         return WorktreeResult(action="linked", path=cfg.path)

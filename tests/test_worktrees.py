@@ -262,6 +262,47 @@ def test_edit_in_readonly_worktree_is_allowed():
     assert result.allowed is True
 
 
+# ---------------------------------------------------------------------------
+# Worktree existence — .git file required
+# ---------------------------------------------------------------------------
+
+@pytest.mark.worktrees
+def test_plain_dir_at_worktree_path_is_not_treated_as_existing(tmp_path):
+    """A directory without a .git file is not a worktree — creation proceeds."""
+    stray = tmp_path / "_shared" / "odoo" / "19.0"
+    stray.mkdir(parents=True)
+
+    with patch("owm.worktrees._git_worktree_add") as mock_add:
+        result = create_worktree(
+            repo="odoo",
+            branch="19.0",
+            shared=True,
+            workspace_root=str(tmp_path),
+            instance_name="feat-789",
+        )
+    mock_add.assert_called_once()
+    assert result.action == "linked"
+
+
+@pytest.mark.worktrees
+def test_dir_with_git_file_is_treated_as_existing_worktree(tmp_path):
+    """A directory with a .git file is a valid worktree — creation is skipped."""
+    wt = tmp_path / "_shared" / "odoo" / "19.0"
+    wt.mkdir(parents=True)
+    (wt / ".git").write_text("gitdir: ../../../_repos/odoo.git/worktrees/19.0\n")
+
+    with patch("owm.worktrees._git_worktree_add") as mock_add:
+        result = create_worktree(
+            repo="odoo",
+            branch="19.0",
+            shared=True,
+            workspace_root=str(tmp_path),
+            instance_name="feat-789",
+        )
+    mock_add.assert_not_called()
+    assert result.action == "linked"
+
+
 # === SPEC GAPS ===
 # test_push_override_flag_location: spec says "override flag explicitly set in instance config"
 #   but does not specify the exact config key name or section in instance.toml.
