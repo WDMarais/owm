@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 dist/
 .pytest_cache/
+.claude/
+graphify-out/
