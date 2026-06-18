@@ -6,9 +6,10 @@ import subprocess
 import pytest
 from unittest.mock import patch
 
-from owm.database import create_db, reset_db, sync_db_from_template
+from owm.database import create_db, reset_db, sync_db_from_template, create_template_from_instance
 from owm.database import check_template_staleness, check_pg_reachability
 from owm.database import SeedScriptState
+from owm.errors import INSTANCE_RUNNING, DB_HAS_CONNECTIONS
 from owm.instance import generate_instance_conf
 from owm.workspace import init_workspace
 
@@ -247,6 +248,60 @@ def test_init_superuser_already_exists_is_idempotent(tmp_path):
         result = init_workspace(str(tmp_path), operator_user="devuser")
     assert result.postgres.superuser_created is False
     assert result.postgres.skipped is True
+
+
+# ---------------------------------------------------------------------------
+# create_template_from_instance — stop-guard + happy path
+# ---------------------------------------------------------------------------
+
+@pytest.mark.database_lifecycle
+def test_create_template_refuses_when_instance_running():
+    """Stop-guard: refuses immediately if is_running=True, before any DB call."""
+
+    with patch("owm.database._createdb") as mock_createdb:
+        with pytest.raises(Exception) as exc_info:
+            create_template_from_instance(
+                instance_db="owm_feat789",
+                template_name="owm_template_19",
+                pg_port=5432,
+                is_running=True,
+            )
+    mock_createdb.assert_not_called()
+    assert INSTANCE_RUNNING in str(exc_info.value)
+
+
+@pytest.mark.database_lifecycle
+def test_create_template_refuses_when_db_has_active_connections():
+    """Stop-guard: refuses if active connections exist even when instance is stopped."""
+
+    with patch("owm.database._has_active_connections", return_value=True), \
+         patch("owm.database._createdb") as mock_createdb:
+        with pytest.raises(Exception) as exc_info:
+            create_template_from_instance(
+                instance_db="owm_feat789",
+                template_name="owm_template_19",
+                pg_port=5432,
+                is_running=False,
+            )
+    mock_createdb.assert_not_called()
+    assert DB_HAS_CONNECTIONS in str(exc_info.value)
+
+
+@pytest.mark.database_lifecycle
+def test_create_template_happy_path_clones_db():
+    """Happy path: no active connections, not running → createdb called, result returned."""
+    from owm.database import create_template_from_instance
+    with patch("owm.database._has_active_connections", return_value=False), \
+         patch("owm.database._createdb") as mock_createdb:
+        result = create_template_from_instance(
+            instance_db="owm_feat789",
+            template_name="owm_template_19",
+            pg_port=5432,
+            is_running=False,
+        )
+    mock_createdb.assert_called_once_with("owm_template_19", "/var/run/postgresql", 5432, template="owm_feat789")
+    assert result.template_name == "owm_template_19"
+    assert result.source_db == "owm_feat789"
 
 
 # === SPEC GAPS ===

@@ -52,7 +52,7 @@ from owm.operations import (
     db_restore,
 )
 from owm.ports import find_port_for_pid
-from owm.database import reset_db
+from owm.database import reset_db, create_template_from_instance
 from owm.sync import (
     fetch_active_branches,
     sync_worktrees,
@@ -599,6 +599,47 @@ def owm_agent_context(instance: str, role: str | None = None, has_instance_notes
             "instance":      f"instances/{instance}/context.md" if has_instance_notes else None,
         },
     }
+
+
+@mcp.tool()
+def owm_template_create(instance: str, template_name: str) -> dict:
+    """Clone instance's DB into template_name for use as a create template. Refuses if running or DB has active connections."""
+    workspace_root = default_workspace()
+    try:
+        conf = load_instance_config(instance, workspace_root)
+    except OwmError as e:
+        return _e(e)
+    running = any(r["instance"] == instance for r in list_running_instances(workspace_root))
+    try:
+        result = create_template_from_instance(
+            instance_db=conf.database.name,
+            template_name=template_name,
+            pg_port=conf.database.pg_port,
+            is_running=running,
+        )
+    except OwmError as e:
+        return _e(e)
+    return {"template_name": result.template_name, "source_db": result.source_db}
+
+
+@mcp.tool()
+def owm_template_list() -> dict:
+    """List template database names referenced across all instance configs."""
+    workspace_root = default_workspace()
+    instances_dir = os.path.join(workspace_root, "instances")
+    templates: dict[str, list[str]] = {}
+    if os.path.isdir(instances_dir):
+        for inst_name in sorted(os.listdir(instances_dir)):
+            toml_path = os.path.join(instances_dir, inst_name, "instance.toml")
+            if not os.path.exists(toml_path):
+                continue
+            try:
+                conf = load_instance_config(inst_name, workspace_root)
+                if conf.database.template:
+                    templates.setdefault(conf.database.template, []).append(inst_name)
+            except Exception:
+                continue
+    return {"templates": {t: instances for t, instances in sorted(templates.items())}}
 
 
 def main() -> None:

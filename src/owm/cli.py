@@ -51,7 +51,7 @@ from owm.operations import (
     db_restore,
 )
 from owm.ports import find_port_for_pid
-from owm.database import reset_db
+from owm.database import reset_db, create_template_from_instance
 from owm.oplog import workspace_log
 from owm.sync import (
     fetch_active_branches,
@@ -1400,3 +1400,59 @@ def cmd_pull_base(ctx, name, repo):
 
     if any_conflict:
         sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# owm template
+# ---------------------------------------------------------------------------
+
+@cli.group("template")
+def cmd_template():
+    """Manage template databases for fast instance cloning."""
+
+
+@cmd_template.command("create")
+@click.argument("instance")
+@click.argument("template_name")
+@click.pass_context
+def cmd_template_create(ctx, instance, template_name):
+    """Clone INSTANCE's database into TEMPLATE_NAME for use as a create template."""
+    workspace_root = _resolve_workspace(ctx)
+    conf = load_instance_config(instance, workspace_root)
+    running = _is_running(instance, workspace_root)
+    try:
+        result = create_template_from_instance(
+            instance_db=conf.database.name,
+            template_name=template_name,
+            pg_port=conf.database.pg_port,
+            is_running=running,
+        )
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    click.echo(f"template: {result.template_name}  (source: {result.source_db})")
+
+
+@cmd_template.command("list")
+@click.pass_context
+def cmd_template_list(ctx):
+    """List template database names referenced across all instance configs."""
+    workspace_root = _resolve_workspace(ctx)
+    instances_dir = os.path.join(workspace_root, "instances")
+    templates: dict[str, list[str]] = {}
+    if os.path.isdir(instances_dir):
+        for inst_name in sorted(os.listdir(instances_dir)):
+            toml_path = os.path.join(instances_dir, inst_name, "instance.toml")
+            if not os.path.exists(toml_path):
+                continue
+            try:
+                conf = load_instance_config(inst_name, workspace_root)
+                if conf.database.template:
+                    templates.setdefault(conf.database.template, []).append(inst_name)
+            except Exception:
+                continue
+    if not templates:
+        click.echo("no templates configured")
+        return
+    for tmpl, instances in sorted(templates.items()):
+        click.echo(f"{tmpl}  (used by: {', '.join(instances)})")

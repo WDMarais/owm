@@ -55,6 +55,7 @@ class ErrorCode(StrEnum):
     OWM_CONFIG_INVALID   = "OWM_CONFIG_INVALID"
     ODOO_CONFIG_UNMARKED = "ODOO_CONFIG_UNMARKED"
     ODOO_CONFIG_NO_ADDONS = "ODOO_CONFIG_NO_ADDONS"
+    DB_HAS_CONNECTIONS   = "DB_HAS_CONNECTIONS"
 
     def __new__(cls, value, default_severity=Severity.BLOCKING):
         # Codes default to BLOCKING (raised as OwmError). A code emitted as a
@@ -92,6 +93,7 @@ FETCH_TIMEOUT         = ErrorCode.FETCH_TIMEOUT
 OWM_CONFIG_INVALID    = ErrorCode.OWM_CONFIG_INVALID
 ODOO_CONFIG_UNMARKED  = ErrorCode.ODOO_CONFIG_UNMARKED
 ODOO_CONFIG_NO_ADDONS = ErrorCode.ODOO_CONFIG_NO_ADDONS
+DB_HAS_CONNECTIONS    = ErrorCode.DB_HAS_CONNECTIONS
 
 
 class OwmError(Exception):

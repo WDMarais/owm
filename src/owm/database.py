@@ -3,7 +3,7 @@ import subprocess
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from owm.errors import OwmError, DB_UNAVAILABLE
+from owm.errors import OwmError, DB_UNAVAILABLE, INSTANCE_RUNNING, DB_HAS_CONNECTIONS
 
 
 class SeedScriptState(StrEnum):
@@ -201,3 +201,49 @@ def check_template_staleness(
 
 def check_pg_reachability(pg_host: str, pg_port: int) -> ReachabilityResult:
     return ReachabilityResult(method="pg_isready", host=pg_host, port=pg_port)
+
+
+@dataclass
+class CreateTemplateResult:
+    template_name: str
+    source_db: str
+
+
+def _has_active_connections(db_name: str, pg_host: str, pg_port: int) -> bool:
+    r = subprocess.run(
+        ["psql", "-h", pg_host, "-p", str(pg_port), "-d", "postgres", "-tAc",
+         f"SELECT count(*) FROM pg_stat_activity WHERE datname='{db_name}' AND pid <> pg_backend_pid()"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return False
+    try:
+        return int(r.stdout.strip()) > 0
+    except ValueError:
+        return False
+
+
+def create_template_from_instance(
+    instance_db: str,
+    template_name: str,
+    pg_port: int,
+    is_running: bool = False,
+) -> CreateTemplateResult:
+    """Clone instance_db into template_name via createdb --template.
+
+    Refuses if the instance is running or if active connections exist on
+    instance_db — createdb --template requires the source DB to be idle.
+    """
+    pg_host = "/var/run/postgresql"
+    if is_running:
+        raise OwmError(
+            f"instance is running — run `owm stop` first",
+            code=INSTANCE_RUNNING,
+        )
+    if _has_active_connections(instance_db, pg_host, pg_port):
+        raise OwmError(
+            f"database '{instance_db}' has active connections — run `owm stop` first",
+            code=DB_HAS_CONNECTIONS,
+        )
+    _createdb(template_name, pg_host, pg_port, template=instance_db)
+    return CreateTemplateResult(template_name=template_name, source_db=instance_db)
