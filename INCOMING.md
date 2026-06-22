@@ -32,3 +32,32 @@ is at the per-instance derivation layer. Classified better / different / worse:
 *adopt* owm-created instances until (a) `env` reads config instead of re-deriving, and (b) there's
 an adoption path for the env-var + conf-format + log-name contracts. The core (config, ports,
 db-ops) is sound — the rough edges are the `env` stub and contract-aliasing.
+
+---
+
+## Script env injection — `[scripts.env]` + `env_file` (2026-06-22)
+
+re-owm has no script-env concept at all yet. `execute_script` (`scripts.py`) runs the
+runner subprocess with the bare instance venv and inherited process env — no per-instance
+env merge — and `InstanceScripts` (`config.py`) has no `env`/`env_file` field. owm grew an
+`env_file` feature (gitignored dotenv merged into the script env, on top of inline
+`[scripts.env]`) on 2026-06-22; re-owm should spec the whole concept, with `env_file` as its
+first form, rather than port owm's implementation.
+
+Use case: script credentials (service users, API tokens, host endpoints) that shouldn't sit
+in a TOML that tools read or logs capture. Put them in a gitignored file instead.
+
+Design questions to resolve in spec.md (Script tools / instance config schema):
+- **Merge order + precedence.** owm's is: process env → `[scripts.env]` (inline) → `env_file`
+  (file keys override inline). Confirm that's the right precedence for re-owm.
+- **Reserved namespace.** owm rejects any `OWM_*` key from either source so script env can't
+  shadow the injected `OWM_*` contract. re-owm's contract vars differ (`DB_NAME`/`HTTP_PORT`/…)
+  — decide which prefix(es) are reserved and whether the guard is an error or a warning.
+- **File format.** owm uses a minimal hand-rolled dotenv (`KEY=VALUE`, `#` comments, optional
+  `export `, quoted values, no interpolation) to avoid a python-dotenv dep. Match, or adopt a
+  library? Define resolution (relative-to-instance vs absolute) and missing-file behaviour
+  (owm: hard error).
+- **Surface scope.** Applies to `owm_run_script` and `owm_compare` (both spawn runners). Does
+  it also touch any other subprocess surface (seed scripts on `db-reset`)?
+- **Spec a second shape?** The original idea also floated `env_from = "<shell expr>"` (source
+  the output of a command, for keychains/vaults). Deferred in owm; decide if re-owm specs it.
