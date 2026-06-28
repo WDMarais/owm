@@ -6,6 +6,7 @@ the real file handoff: run_instance_script writes the dumps, compare_instance
 reads them back and diffs for real. Guards the regression where run-script wrote
 <script>-latest.ndjson while compare read latest.ndjson and found nothing.
 """
+import os
 from unittest.mock import patch
 
 from owm.api import run_instance_script, compare_instance
@@ -20,12 +21,32 @@ def _run(instance, output, tmp_workspace):
         return run_instance_script(instance, str(tmp_workspace), "smoke")
 
 
-def test_run_script_writes_both_per_script_and_latest_pointer(tmp_workspace):
+def test_run_script_writes_timestamped_record_and_latest_symlinks(tmp_workspace):
     result = _run("feat-1", FEAT_OUT, tmp_workspace)
     dumps = tmp_workspace / "_dumps" / "feat-1"
+
+    # ndjson_path is the immutable timestamped record, not a latest pointer
+    assert os.path.basename(result["ndjson_path"]).startswith("smoke-")
+    assert result["ndjson_path"].endswith(".ndjson")
+    assert "latest" not in os.path.basename(result["ndjson_path"])
+    assert os.path.realpath(result["ndjson_path"]) == str(dumps / os.path.basename(result["ndjson_path"]))
+
+    # both latest pointers are symlinks resolving to that record's content
+    assert (dumps / "smoke-latest.ndjson").is_symlink()
+    assert (dumps / "latest.ndjson").is_symlink()
     assert (dumps / "smoke-latest.ndjson").read_text() == FEAT_OUT
     assert (dumps / "latest.ndjson").read_text() == FEAT_OUT
-    assert result["ndjson_path"].endswith("smoke-latest.ndjson")
+
+
+def test_new_run_repoints_latest_keeping_prior_record(tmp_workspace):
+    first = _run("feat-1", FEAT_OUT, tmp_workspace)
+    second = _run("feat-1", BASE_OUT, tmp_workspace)
+    dumps = tmp_workspace / "_dumps" / "feat-1"
+
+    # the older record is preserved verbatim; latest follows the newest run
+    assert first["ndjson_path"] != second["ndjson_path"]
+    assert open(first["ndjson_path"]).read() == FEAT_OUT
+    assert (dumps / "latest.ndjson").read_text() == BASE_OUT
 
 
 def test_compare_reads_latest_pointer_run_script_wrote(tmp_workspace):

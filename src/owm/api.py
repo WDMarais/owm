@@ -4,6 +4,7 @@ Consumed by owm.mcp (MCP tool surface) and owm.cli (--json flag, and prose forma
 """
 import json
 import os
+from datetime import datetime, timezone
 
 from owm.config import (
     parse_instance_config,
@@ -281,25 +282,49 @@ def instance_diff(instance: str, workspace_root: str, mode: str = "patch") -> di
     return {"instance": instance, "repos": repos}
 
 
+def _point_latest(directory: str, link_name: str, target_name: str) -> None:
+    """(Re)point a `latest`-style symlink at target_name within the same directory.
+
+    Relative target so the dumps dir stays relocatable; replaces any existing
+    link (including a broken one) atomically enough for single-user tooling.
+    """
+    link = os.path.join(directory, link_name)
+    if os.path.lexists(link):
+        os.unlink(link)
+    os.symlink(target_name, link)
+
+
 def run_instance_script(instance: str, workspace_root: str, script: str) -> dict:
     """Execute a script for an instance, persist its NDJSON, and tally results.
 
-    Writes the output to both ``_dumps/<instance>/<script>-latest.ndjson`` (the
-    per-script record) and ``_dumps/<instance>/latest.ndjson`` (the "last run"
-    pointer that `compare_instance` reads when no explicit script is named).
+    Each run is written to an immutable, timestamped record
+    ``_dumps/<instance>/<script>-<ts>.ndjson``; two symlinks are then repointed
+    at it — ``<script>-latest.ndjson`` (newest run of this script) and
+    ``latest.ndjson`` (newest run of any script, what `compare_instance` reads
+    when no explicit script is named). The returned ``ndjson_path`` is the
+    timestamped file, so a later `owm_get_script_failures(ndjson_path)` still
+    resolves to this exact run rather than whatever ran most recently.
 
     Returns {status, summary, failures, ndjson_path} on completion, or
     {status: "abort", reason, rows_run, ndjson_path} when the script signals abort.
     """
     ndjson_dir = os.path.join(workspace_root, "_dumps", instance)
-    ndjson_path = os.path.join(ndjson_dir, f"{script}-latest.ndjson")
+    os.makedirs(ndjson_dir, exist_ok=True)
 
     stdout = execute_script(instance, script, workspace_root)
-    os.makedirs(ndjson_dir, exist_ok=True)
+
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%S")
+    stem = f"{script}-{ts}"
+    ndjson_name = f"{stem}.ndjson"
+    n = 2
+    while os.path.exists(os.path.join(ndjson_dir, ndjson_name)):  # >1 run in the same second
+        ndjson_name = f"{stem}-{n}.ndjson"
+        n += 1
+    ndjson_path = os.path.join(ndjson_dir, ndjson_name)
     with open(ndjson_path, "w") as f:
         f.write(stdout)
-    with open(os.path.join(ndjson_dir, "latest.ndjson"), "w") as f:
-        f.write(stdout)
+    _point_latest(ndjson_dir, f"{script}-latest.ndjson", ndjson_name)
+    _point_latest(ndjson_dir, "latest.ndjson", ndjson_name)
 
     result = run_script(instance, script, ndjson_output=stdout)
 
@@ -333,9 +358,10 @@ def compare_instance(instance: str, workspace_root: str, base: str | None = None
     The comparison is symmetric — `base` is just the other instance to diff
     against (feature-vs-base is the common case, not a requirement), and it
     defaults to the partner named in workspace.toml's compare_pairs. `script`
-    selects which run to diff: when given, reads each instance's
-    ``<script>-latest.ndjson`` (the same file `run_instance_script` writes); when
-    omitted, reads ``latest.ndjson`` (each instance's most recent run). Returns
+    selects which run to diff: when given, follows each instance's
+    ``<script>-latest.ndjson`` symlink to that script's newest run; when omitted,
+    follows ``latest.ndjson`` (each instance's most recent run of any script).
+    Both symlinks are maintained by `run_instance_script`. Returns
     {status, base, feat, unexpected, summary}, or an ErrorResponse dict when no
     compare target is configured or an instance's NDJSON is missing.
     """
