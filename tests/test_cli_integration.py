@@ -538,10 +538,13 @@ def test_install_saves_new_module_to_toml(runner, standard_instance_toml, tmp_wo
     # to [install].modules in the on-disk instance.toml. The odoo spawn is mocked
     # (not under test); the toml-path derivation + append run for real — so this
     # would catch a regression of the `toml_path` NameError the path had.
-    with patch("owm.cli._is_running", return_value=False), \
-         patch("owm.cli._query_installed_modules", return_value=[]), \
-         patch("owm.cli.start_instance"), \
-         patch("owm.cli.stop_instance"):
+    # cmd_install delegates to instance.install_instance_modules, so the odoo
+    # spawn + DB query are patched at the owm.instance level; the toml-path
+    # derivation + append still run for real (the point of this test).
+    with patch("owm.instance._query_installed_modules", return_value=[]), \
+         patch("owm.instance.start_instance"), \
+         patch("owm.instance.stop_instance"), \
+         patch("owm.instance.pin_web_base_url"):
         result = runner.invoke(cli, [
             "--workspace", str(tmp_workspace), "install", "feat-789", "test_brand_new",
         ])

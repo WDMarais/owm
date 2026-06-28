@@ -740,8 +740,8 @@ def test_owm_reset_force_discards(standard_instance_toml, tmp_workspace):
 
 @pytest.mark.mcp_surface
 def test_owm_run_script_ok_result(tmp_path):
-    with patch("owm.mcp.execute_script", return_value=""), \
-         patch("owm.mcp.run_script", return_value=ScriptResult(
+    with patch("owm.api.execute_script", return_value=""), \
+         patch("owm.api.run_script", return_value=ScriptResult(
              status="ok",
              summary=ScriptSummary(ok=8, fail=0, warn=0, none=2, total=10),
              rows=[],
@@ -756,8 +756,8 @@ def test_owm_run_script_ok_result(tmp_path):
 @pytest.mark.mcp_surface
 def test_owm_run_script_fail_result_includes_failures(tmp_path):
     failure_row = {"case": "test_x", "status": "FAIL", "result": "error", "expected": "ok"}
-    with patch("owm.mcp.execute_script", return_value=""), \
-         patch("owm.mcp.run_script", return_value=ScriptResult(
+    with patch("owm.api.execute_script", return_value=""), \
+         patch("owm.api.run_script", return_value=ScriptResult(
              status="fail",
              summary=ScriptSummary(ok=7, fail=1, warn=0, none=2, total=10),
              rows=[failure_row],
@@ -770,8 +770,8 @@ def test_owm_run_script_fail_result_includes_failures(tmp_path):
 
 @pytest.mark.mcp_surface
 def test_owm_run_script_abort_includes_rows_run_and_reason(tmp_path):
-    with patch("owm.mcp.execute_script", return_value=""), \
-         patch("owm.mcp.run_script", return_value=ScriptResult(
+    with patch("owm.api.execute_script", return_value=""), \
+         patch("owm.api.run_script", return_value=ScriptResult(
              status="abort",
              summary=ScriptSummary(ok=3, fail=0, warn=0, none=0, total=3),
              rows=[],
@@ -788,8 +788,8 @@ def test_owm_run_script_abort_includes_rows_run_and_reason(tmp_path):
 @pytest.mark.mcp_surface
 def test_owm_run_script_full_stdout_not_returned(tmp_path):
     """Only failures surfaced; full stdout goes to ndjson file only."""
-    with patch("owm.mcp.execute_script", return_value=""), \
-         patch("owm.mcp.run_script", return_value=ScriptResult(
+    with patch("owm.api.execute_script", return_value=""), \
+         patch("owm.api.run_script", return_value=ScriptResult(
              status="ok",
              summary=ScriptSummary(ok=10, fail=0, warn=0, none=0, total=10),
              rows=[],
@@ -828,7 +828,7 @@ def _write_workspace_toml(ws_path, compare_pairs=None):
 @pytest.mark.mcp_surface
 def test_owm_compare_ok_result(tmp_workspace):
     _write_workspace_toml(tmp_workspace, compare_pairs=[("feat-789", "main")])
-    with patch("owm.mcp.compare_instances", return_value=CompareResult(
+    with patch("owm.api.compare_instances", return_value=CompareResult(
         status="ok", base_instance="main", feat_instance="feat-789",
         summary=ScriptSummary(ok=9, fail=0, warn=0, none=0, total=9),
         unexpected=[],
@@ -841,7 +841,7 @@ def test_owm_compare_ok_result(tmp_workspace):
 @pytest.mark.mcp_surface
 def test_owm_compare_has_unexpected_changes(tmp_workspace):
     _write_workspace_toml(tmp_workspace, compare_pairs=[("feat-789", "main")])
-    with patch("owm.mcp.compare_instances", return_value=CompareResult(
+    with patch("owm.api.compare_instances", return_value=CompareResult(
         status="unexpected_changes", base_instance="main", feat_instance="feat-789",
         summary=ScriptSummary(ok=0, fail=0, warn=0, none=0, total=9, unexpected_changes=1),
         unexpected=[{"case": "test_x", "base": "OK", "feat": "FAIL", "result_diff": "..."}],
@@ -862,7 +862,7 @@ def test_owm_compare_no_compare_pair_configured(tmp_workspace):
 @pytest.mark.mcp_surface
 def test_owm_compare_ad_hoc_base(tmp_workspace):
     _write_workspace_toml(tmp_workspace)
-    with patch("owm.mcp.compare_instances", return_value=CompareResult(
+    with patch("owm.api.compare_instances", return_value=CompareResult(
         status="ok", base_instance="main", feat_instance="feat-789",
         summary=ScriptSummary(ok=0, fail=0, warn=0, none=0, total=0),
         unexpected=[],

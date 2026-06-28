@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from owm.api import instance_status, workspace_status, odoo_ps, check_modules, instance_diff
+from owm.api import instance_status, workspace_status, odoo_ps, check_modules, instance_diff, run_instance_script, compare_instance
 from owm.config import (
     ConfOwnership,
     cwd_workspace_conflict,
@@ -28,6 +28,7 @@ from owm.instance import (
     stop_instance,
     pin_web_base_url,
     instance_public_url,
+    install_instance_modules,
     kill_instance,
     health_check,
     generate_instance_conf,
@@ -315,55 +316,25 @@ def cmd_install(ctx, name, modules, timeout, no_save):
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
 
-    try:
-        conf = load_instance_config(instance, workspace_root)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]}", err=True)
-        sys.exit(1)
-
     if modules:
-        install_modules = list(modules)
-    else:
-        install_modules = conf.install.modules if conf.install else []
-        if not install_modules:
-            click.echo("error: no modules specified and none declared in [install].modules", err=True)
-            sys.exit(1)
-
-    if _is_running(instance, workspace_root):
-        click.echo("error: stop the instance first", err=True)
+        click.echo(f"installing {','.join(modules)} into {instance} …")
+    try:
+        result = install_instance_modules(
+            instance, workspace_root,
+            list(modules) or None,
+            save=not no_save,
+            timeout=timeout,
+        )
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
 
-    already_in_db = _query_installed_modules(conf.database.name, conf.database.pg_port, install_modules)
-    to_install = [m for m in install_modules if m not in already_in_db]
-
-    if already_in_db:
-        click.echo(f"  note: {', '.join(already_in_db)} already installed in DB — use `owm upgrade` to update")
-
-    if to_install:
-        click.echo(f"installing {','.join(to_install)} into {instance} …")
-        try:
-            start_instance(
-                instance, workspace_root,
-                wait=True,
-                timeout_seconds=timeout,
-                init_modules=to_install,
-            )
-        except OwmError as e:
-            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-            sys.exit(1)
-        stop_instance(instance, workspace_root, wait=True)
-    else:
+    if result.already_installed:
+        click.echo(f"  note: {', '.join(result.already_installed)} already installed in DB — use `owm upgrade` to update")
+    if result.status == "nothing_to_install":
         click.echo("  nothing to install")
-
-    # the DB schema now exists — pin web.base.url to this instance's own URL so
-    # first boot advertises the right address rather than Odoo's install default.
-    pin_web_base_url(instance, workspace_root)
-
-    if modules and not no_save:
-        toml_path = instance_config_path(instance, workspace_root)
-        added, _ = _append_modules_to_toml(toml_path, install_modules)
-        if added:
-            click.echo(f"  manifest: added {', '.join(added)}")
+    if result.saved:
+        click.echo(f"  manifest: added {', '.join(result.saved)}")
     click.echo(f"{instance}  install complete")
 
 
@@ -708,6 +679,73 @@ def cmd_shell(ctx, name, script, json_out):
         if result.stderr:
             click.echo(result.stderr, nl=False, err=True)
         sys.exit(result.returncode)
+
+
+@cli.command("run-script")
+@click.argument("name", required=False)
+@click.argument("script", required=False)
+@click.option("--json", "json_out", is_flag=True, help="Output result as JSON.")
+@click.pass_context
+def cmd_run_script(ctx, name, script, json_out):
+    """Run a script for an instance and report OK/FAIL counts.
+
+    Scripts live at scripts/<instance>/<script>.py and emit NDJSON rows.
+
+    \b
+      owm run-script smoke           # instance inferred from cwd
+      owm run-script feat-789 smoke  # explicit instance
+    """
+    if script is None:
+        name, script = None, name  # single positional is the script name
+    if not script:
+        raise click.UsageError("SCRIPT is required.")
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    try:
+        result = run_instance_script(instance, workspace_root, script)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    if json_out:
+        click.echo(json.dumps(result))
+        return
+    if result["status"] == "abort":
+        click.echo(f"{instance}  {script}: aborted — {result['reason']} (after {result['rows_run']} rows)", err=True)
+        sys.exit(1)
+    s = result["summary"]
+    click.echo(f"{instance}  {script}: {s['ok']} ok, {s['fail']} fail, {s['warn']} warn, {s['none']} none  ({s['total']} total)")
+    for f in result["failures"]:
+        click.echo(f"  FAIL  {f.get('case', '?')}")
+    if result["status"] == "fail":
+        sys.exit(1)
+
+
+@cli.command("compare")
+@click.argument("name", required=False)
+@click.option("--base", default=None, metavar="INSTANCE",
+              help="Base instance to compare against (default: partner in workspace.toml compare_pairs).")
+@click.option("--json", "json_out", is_flag=True, help="Output result as JSON.")
+@click.pass_context
+def cmd_compare(ctx, name, base, json_out):
+    """Compare a feature instance's latest script run against its base instance's."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    try:
+        result = compare_instance(instance, workspace_root, base)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    if json_out:
+        click.echo(json.dumps(result))
+        return
+    if result.get("error"):
+        click.echo(f"error: {result['error']} [{result.get('code', '')}]", err=True)
+        sys.exit(1)
+    click.echo(f"{result['feat']}  vs  {result['base']}: {result['status']}")
+    for u in result["unexpected"]:
+        click.echo(f"  {u['case']}: base={u['base']}  feat={u['feat']}")
+    if result["status"] == "unexpected_changes":
+        sys.exit(1)
 
 
 @cli.command("db-dump")

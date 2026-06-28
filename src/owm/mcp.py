@@ -32,13 +32,13 @@ from owm.instance import (
     stop_instance,
     kill_instance,
     restart_instance,
+    install_instance_modules,
     list_running_instances,
     odoo_bin_path,
     find_odoo_repo,
 )
 from owm.archive import archive_instance
 from owm.config import (
-    parse_workspace_config,
     parse_instance_config,
     parse_repo_spec,
     load_instance_config,
@@ -65,10 +65,9 @@ from owm.sync import (
 )
 import dataclasses
 
-from owm.api import default_workspace, health_check, instance_status, find_orphaned_processes, workspace_status, odoo_ps, check_modules, instance_diff
+from owm.api import default_workspace, health_check, instance_status, find_orphaned_processes, workspace_status, odoo_ps, check_modules, instance_diff, run_instance_script, compare_instance
 from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
-from owm.scripts import execute_script, run_script, compare_instances
 
 mcp = FastMCP("owm")
 
@@ -429,38 +428,7 @@ def owm_reset(instance: str, repo: str, force: bool = False) -> dict:
 
 @mcp.tool()
 def owm_run_script(instance: str, script: str) -> dict:
-    workspace_root = default_workspace()
-    ndjson_dir = os.path.join(workspace_root, "_dumps", instance)
-    ndjson_path = os.path.join(ndjson_dir, f"{script}-latest.ndjson")
-
-    stdout = execute_script(instance, script, workspace_root)
-    os.makedirs(ndjson_dir, exist_ok=True)
-    with open(ndjson_path, "w") as f:
-        f.write(stdout)
-
-    result = run_script(instance, script, ndjson_output=stdout)
-
-    if result.status == "abort":
-        return {
-            "status": "abort",
-            "reason": result.abort_reason,
-            "rows_run": result.rows_run,
-            "ndjson_path": ndjson_path,
-        }
-
-    failures = [r for r in result.rows if r.get("status") == "FAIL" and not r.get("_non_conforming")]
-    return {
-        "status": result.status,
-        "summary": {
-            "ok": result.summary.ok,
-            "fail": result.summary.fail,
-            "warn": result.summary.warn,
-            "none": result.summary.none,
-            "total": result.summary.total,
-        },
-        "failures": failures,
-        "ndjson_path": ndjson_path,
-    }
+    return run_instance_script(instance, default_workspace(), script)
 
 
 @mcp.tool()
@@ -475,54 +443,28 @@ def owm_get_script_failures(ndjson_path: str) -> list:
 
 @mcp.tool()
 def owm_compare(instance: str, base: str | None = None) -> dict:
-    workspace_root = default_workspace()
-    with open(os.path.join(workspace_root, "workspace.toml")) as f:
-        ws = parse_workspace_config(f.read())
+    return compare_instance(instance, default_workspace(), base)
 
-    base_instance = base
-    if not base_instance:
-        for pair in ws.compare_pairs:
-            if instance in pair:
-                base_instance = next(p for p in pair if p != instance)
-                break
 
-    if not base_instance:
-        return format_error("no compare target configured", NO_COMPARE_TARGET,
-                            hint="add compare_pairs to workspace.toml or pass --base")
+@mcp.tool()
+def owm_install(instance: str, modules: list[str] | None = None,
+                save: bool = True, timeout: int = 600) -> dict:
+    """Install Odoo modules into an instance DB (Odoo -i), then stop.
 
-    def _read_ndjson(inst):
-        path = os.path.join(workspace_root, "_dumps", inst, "latest.ndjson")
-        if not os.path.exists(path):
-            return None
-        with open(path) as fh:
-            return [json.loads(line) for line in fh if line.strip()]
-
-    result = compare_instances(
-        instance=instance,
-        base=base_instance,
-        workspace_root=workspace_root,
-        workspace_compare_pairs=ws.compare_pairs,
-        base_rows=_read_ndjson(base_instance),
-        feat_rows=_read_ndjson(instance),
-    )
-
-    if result.status == "error":
-        return format_error(result.error or "compare failed", NOT_FOUND,
-                            instance=result.missing_instance)
-
-    out = {
+    With `modules`: installs those and (when save) appends them to [install].modules.
+    Without `modules`: installs from the existing manifest. Modules already present
+    in the DB are skipped — use owm_upgrade for those. The instance must be stopped."""
+    try:
+        result = install_instance_modules(instance, default_workspace(), modules,
+                                          save=save, timeout=timeout)
+    except OwmError as e:
+        return _e(e)
+    return {
         "status": result.status,
-        "base": result.base_instance,
-        "feat": result.feat_instance,
-        "unexpected": result.unexpected,
-        "summary": {},
+        "installed": result.installed,
+        "already_installed": result.already_installed,
+        "saved": result.saved,
     }
-    if result.summary:
-        out["summary"] = {
-            "total": result.summary.total,
-            "unexpected_changes": result.summary.unexpected_changes,
-        }
-    return out
 
 
 @mcp.tool()

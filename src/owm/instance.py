@@ -29,6 +29,7 @@ from owm.errors import (
     Finding,
     Severity,
     ALREADY_EXISTS,
+    INSTANCE_RUNNING,
     START_TIMEOUT,
     STOP_TIMEOUT,
     NO_ODOO_REPO,
@@ -445,6 +446,68 @@ def _append_modules_to_toml(toml_path: str, new_modules: list[str]) -> tuple[lis
     with open(toml_path, "w") as f:
         f.write(content)
     return added, already_present
+
+
+@dataclass
+class InstallModulesResult:
+    requested: list
+    already_installed: list
+    installed: list
+    saved: list
+    status: Literal["installed", "nothing_to_install"]
+
+
+def install_instance_modules(
+    instance: str,
+    workspace_root: str,
+    modules: list[str] | None = None,
+    *,
+    save: bool = True,
+    timeout: int = 600,
+) -> InstallModulesResult:
+    """Install Odoo modules into an instance DB (Odoo -i), then stop.
+
+    With explicit `modules`: installs those; with save=True also appends them to
+    [install].modules. Without `modules`: installs from the existing manifest.
+    Modules already present in the DB are skipped (use upgrade for those). Pins
+    web.base.url once the schema exists. Raises OwmError if nothing resolves to
+    install, or if the instance is currently running.
+
+    The shared orchestration behind `owm install` (CLI) and `owm_install` (MCP).
+    """
+    conf = load_instance_config(instance, workspace_root)
+    explicit = bool(modules)
+    requested = list(modules) if modules else (conf.install.modules if conf.install else [])
+    if not requested:
+        raise OwmError("no modules specified and none declared in [install].modules", code="NO_MODULES")
+
+    pid = _read_pid(instance, workspace_root)
+    if pid is not None and _process_alive(pid):
+        raise OwmError("stop the instance first", code=INSTANCE_RUNNING)
+
+    already = _query_installed_modules(conf.database.name, conf.database.pg_port, requested)
+    to_install = [m for m in requested if m not in already]
+
+    if to_install:
+        start_instance(instance, workspace_root, wait=True, timeout_seconds=timeout, init_modules=to_install)
+        stop_instance(instance, workspace_root, wait=True)
+
+    # The DB schema now exists — pin web.base.url to this instance's own URL so
+    # first boot advertises the right address rather than Odoo's install default.
+    pin_web_base_url(instance, workspace_root)
+
+    saved = []
+    if explicit and save:
+        toml_path = instance_config_path(instance, workspace_root)
+        saved, _ = _append_modules_to_toml(toml_path, requested)
+
+    return InstallModulesResult(
+        requested=requested,
+        already_installed=already,
+        installed=to_install,
+        saved=saved,
+        status="installed" if to_install else "nothing_to_install",
+    )
 
 
 def _rewrite_ports_in_toml(toml_path: str, http_port: int, gevent_port: int) -> None:

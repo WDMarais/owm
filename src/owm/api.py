@@ -2,15 +2,17 @@
 Structured output layer — returns JSON-serialisable dicts, no prose, no transport concerns.
 Consumed by owm.mcp (MCP tool surface) and owm.cli (--json flag, and prose formatting).
 """
+import json
 import os
 
 from owm.config import (
     parse_instance_config,
+    parse_workspace_config,
     load_instance_config,
     list_instances,
     resolve_workspace_root,
 )
-from owm.errors import OwmError, format_error
+from owm.errors import OwmError, format_error, NO_COMPARE_TARGET, NOT_FOUND
 from owm.instance import (
     health_check,
     list_running_instances,
@@ -21,6 +23,7 @@ from owm.instance import (
 )
 from owm.ports import find_conflicting_process, listeners_on_ports
 from owm.sync import repo_alert_state, git_run
+from owm.scripts import execute_script, run_script, compare_instances
 from owm.worktrees import resolve_worktree_path
 
 
@@ -276,3 +279,98 @@ def instance_diff(instance: str, workspace_root: str, mode: str = "patch") -> di
             entry["stat"] = git_run(["diff", "--stat", rng], cwd=wt, check=False).stdout
         repos[repo_name] = entry
     return {"instance": instance, "repos": repos}
+
+
+def run_instance_script(instance: str, workspace_root: str, script: str) -> dict:
+    """Execute a script for an instance, persist its NDJSON, and tally results.
+
+    Returns {status, summary, failures, ndjson_path} on completion, or
+    {status: "abort", reason, rows_run, ndjson_path} when the script signals abort.
+    """
+    ndjson_dir = os.path.join(workspace_root, "_dumps", instance)
+    ndjson_path = os.path.join(ndjson_dir, f"{script}-latest.ndjson")
+
+    stdout = execute_script(instance, script, workspace_root)
+    os.makedirs(ndjson_dir, exist_ok=True)
+    with open(ndjson_path, "w") as f:
+        f.write(stdout)
+
+    result = run_script(instance, script, ndjson_output=stdout)
+
+    if result.status == "abort":
+        return {
+            "status": "abort",
+            "reason": result.abort_reason,
+            "rows_run": result.rows_run,
+            "ndjson_path": ndjson_path,
+        }
+
+    failures = [r for r in result.rows if r.get("status") == "FAIL" and not r.get("_non_conforming")]
+    return {
+        "status": result.status,
+        "summary": {
+            "ok": result.summary.ok,
+            "fail": result.summary.fail,
+            "warn": result.summary.warn,
+            "none": result.summary.none,
+            "total": result.summary.total,
+        },
+        "failures": failures,
+        "ndjson_path": ndjson_path,
+    }
+
+
+def compare_instance(instance: str, workspace_root: str, base: str | None = None) -> dict:
+    """Diff a feature instance's latest script run against its base instance's.
+
+    `base` defaults to the partner named in workspace.toml's compare_pairs. Returns
+    {status, base, feat, unexpected, summary}, or an ErrorResponse dict when no
+    compare target is configured or an instance's NDJSON is missing.
+    """
+    with open(os.path.join(workspace_root, "workspace.toml")) as f:
+        ws = parse_workspace_config(f.read())
+
+    base_instance = base
+    if not base_instance:
+        for pair in ws.compare_pairs:
+            if instance in pair:
+                base_instance = next(p for p in pair if p != instance)
+                break
+
+    if not base_instance:
+        return format_error("no compare target configured", NO_COMPARE_TARGET,
+                            hint="add compare_pairs to workspace.toml or pass --base")
+
+    def _read_ndjson(inst):
+        path = os.path.join(workspace_root, "_dumps", inst, "latest.ndjson")
+        if not os.path.exists(path):
+            return None
+        with open(path) as fh:
+            return [json.loads(line) for line in fh if line.strip()]
+
+    result = compare_instances(
+        instance=instance,
+        base=base_instance,
+        workspace_root=workspace_root,
+        workspace_compare_pairs=ws.compare_pairs,
+        base_rows=_read_ndjson(base_instance),
+        feat_rows=_read_ndjson(instance),
+    )
+
+    if result.status == "error":
+        return format_error(result.error or "compare failed", NOT_FOUND,
+                            instance=result.missing_instance)
+
+    out = {
+        "status": result.status,
+        "base": result.base_instance,
+        "feat": result.feat_instance,
+        "unexpected": result.unexpected,
+        "summary": {},
+    }
+    if result.summary:
+        out["summary"] = {
+            "total": result.summary.total,
+            "unexpected_changes": result.summary.unexpected_changes,
+        }
+    return out
