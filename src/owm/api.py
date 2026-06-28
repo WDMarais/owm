@@ -284,6 +284,10 @@ def instance_diff(instance: str, workspace_root: str, mode: str = "patch") -> di
 def run_instance_script(instance: str, workspace_root: str, script: str) -> dict:
     """Execute a script for an instance, persist its NDJSON, and tally results.
 
+    Writes the output to both ``_dumps/<instance>/<script>-latest.ndjson`` (the
+    per-script record) and ``_dumps/<instance>/latest.ndjson`` (the "last run"
+    pointer that `compare_instance` reads when no explicit script is named).
+
     Returns {status, summary, failures, ndjson_path} on completion, or
     {status: "abort", reason, rows_run, ndjson_path} when the script signals abort.
     """
@@ -293,6 +297,8 @@ def run_instance_script(instance: str, workspace_root: str, script: str) -> dict
     stdout = execute_script(instance, script, workspace_root)
     os.makedirs(ndjson_dir, exist_ok=True)
     with open(ndjson_path, "w") as f:
+        f.write(stdout)
+    with open(os.path.join(ndjson_dir, "latest.ndjson"), "w") as f:
         f.write(stdout)
 
     result = run_script(instance, script, ndjson_output=stdout)
@@ -320,10 +326,16 @@ def run_instance_script(instance: str, workspace_root: str, script: str) -> dict
     }
 
 
-def compare_instance(instance: str, workspace_root: str, base: str | None = None) -> dict:
-    """Diff a feature instance's latest script run against its base instance's.
+def compare_instance(instance: str, workspace_root: str, base: str | None = None,
+                     script: str | None = None) -> dict:
+    """Diff one instance's script run against another instance's.
 
-    `base` defaults to the partner named in workspace.toml's compare_pairs. Returns
+    The comparison is symmetric — `base` is just the other instance to diff
+    against (feature-vs-base is the common case, not a requirement), and it
+    defaults to the partner named in workspace.toml's compare_pairs. `script`
+    selects which run to diff: when given, reads each instance's
+    ``<script>-latest.ndjson`` (the same file `run_instance_script` writes); when
+    omitted, reads ``latest.ndjson`` (each instance's most recent run). Returns
     {status, base, feat, unexpected, summary}, or an ErrorResponse dict when no
     compare target is configured or an instance's NDJSON is missing.
     """
@@ -341,8 +353,10 @@ def compare_instance(instance: str, workspace_root: str, base: str | None = None
         return format_error("no compare target configured", NO_COMPARE_TARGET,
                             hint="add compare_pairs to workspace.toml or pass --base")
 
+    ndjson_name = f"{script}-latest.ndjson" if script else "latest.ndjson"
+
     def _read_ndjson(inst):
-        path = os.path.join(workspace_root, "_dumps", inst, "latest.ndjson")
+        path = os.path.join(workspace_root, "_dumps", inst, ndjson_name)
         if not os.path.exists(path):
             return None
         with open(path) as fh:

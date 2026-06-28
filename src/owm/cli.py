@@ -723,15 +723,22 @@ def cmd_run_script(ctx, name, script, json_out):
 @cli.command("compare")
 @click.argument("name", required=False)
 @click.option("--base", default=None, metavar="INSTANCE",
-              help="Base instance to compare against (default: partner in workspace.toml compare_pairs).")
+              help="Instance to compare against (default: partner in workspace.toml compare_pairs). The comparison is symmetric.")
+@click.option("--script", default=None, metavar="SCRIPT",
+              help="Which run to diff: reads <script>-latest.ndjson (default: each instance's latest run).")
 @click.option("--json", "json_out", is_flag=True, help="Output result as JSON.")
 @click.pass_context
-def cmd_compare(ctx, name, base, json_out):
-    """Compare a feature instance's latest script run against its base instance's."""
+def cmd_compare(ctx, name, base, script, json_out):
+    """Compare one instance's script run against another instance's.
+
+    Symmetric: `owm compare feat-789` and `owm compare main` produce the same
+    diff. --base picks the other instance (ad-hoc); without it, the compare_pairs
+    partner is used.
+    """
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     try:
-        result = compare_instance(instance, workspace_root, base)
+        result = compare_instance(instance, workspace_root, base, script)
     except OwmError as e:
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)

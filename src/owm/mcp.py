@@ -442,8 +442,12 @@ def owm_get_script_failures(ndjson_path: str) -> list:
 
 
 @mcp.tool()
-def owm_compare(instance: str, base: str | None = None) -> dict:
-    return compare_instance(instance, default_workspace(), base)
+def owm_compare(instance: str, base: str | None = None, script: str | None = None) -> dict:
+    """Diff one instance's script run against another instance's. `base` is the instance
+    to compare against (defaults to the symmetric compare_pairs partner; the comparison
+    is direction-agnostic). `script` selects which run (reads <script>-latest.ndjson);
+    omit to diff each instance's latest run."""
+    return compare_instance(instance, default_workspace(), base, script)
 
 
 @mcp.tool()
