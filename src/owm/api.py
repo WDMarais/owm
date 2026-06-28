@@ -17,9 +17,10 @@ from owm.instance import (
     owm_shaped_processes,
     scan_odoo_processes,
     classify_port_holder,
+    module_install_status,
 )
 from owm.ports import find_conflicting_process, listeners_on_ports
-from owm.sync import repo_alert_state
+from owm.sync import repo_alert_state, git_run
 from owm.worktrees import resolve_worktree_path
 
 
@@ -220,3 +221,58 @@ def workspace_status(workspace_root: str) -> dict:
         "unmanaged_odoo": unmanaged_odoo,
         "workspace_warnings": workspace_warnings,
     }
+
+
+def check_modules(instance: str, workspace_root: str) -> dict:
+    """Which configured [install] modules are actually installed in the instance DB.
+
+    {instance, installed, missing} on success; {instance, note} when no modules
+    are declared; {instance, error: "db_unreachable"} when the DB can't be queried.
+    """
+    conf = load_instance_config(instance, workspace_root)
+    modules = conf.install.modules if conf.install else []
+    if not modules:
+        return {"instance": instance, "installed": [], "missing": [], "note": "no modules in [install]"}
+    status = module_install_status(conf.database.name, conf.database.pg_port, modules)
+    if status is None:
+        return {"instance": instance, "error": "db_unreachable"}
+    installed, missing = status
+    return {"instance": instance, "installed": installed, "missing": missing}
+
+
+def instance_diff(instance: str, workspace_root: str, mode: str = "patch") -> dict:
+    """Per-repo diff (base...branch) for an instance's feature worktrees.
+
+    `mode` selects the heavy payload, but every repo entry always carries the
+    cheap {branch, base, files, modules} (top-level dir of each changed path =
+    the affected addon) so callers can summarise regardless of mode:
+      - "patch"     (default): adds "diff", the full unified patch
+      - "name-only": files/modules only, no extra git call
+      - "stat"      : adds "stat", the diffstat text
+    Repos with no base configured or a missing worktree are reported with a
+    "skipped" reason; git failures with an "error".
+    """
+    conf = load_instance_config(instance, workspace_root)
+    repos: dict = {}
+    for repo_name, spec in conf.repos.items():
+        if not spec.base:
+            repos[repo_name] = {"branch": spec.branch, "base": None, "skipped": "no base configured"}
+            continue
+        wt = resolve_worktree_path(repo_name, spec.branch, spec.shared, workspace_root, instance).path
+        if not os.path.isdir(wt):
+            repos[repo_name] = {"branch": spec.branch, "base": spec.base, "skipped": "worktree not found"}
+            continue
+        rng = f"{spec.base}...{spec.branch}"
+        name_only = git_run(["diff", "--name-only", rng], cwd=wt, check=False)
+        if name_only.returncode != 0:
+            repos[repo_name] = {"branch": spec.branch, "base": spec.base, "error": name_only.stderr.strip()}
+            continue
+        files = [line for line in name_only.stdout.splitlines() if line]
+        modules = sorted({f.split("/")[0] for f in files if f})
+        entry = {"branch": spec.branch, "base": spec.base, "files": files, "modules": modules}
+        if mode == "patch":
+            entry["diff"] = git_run(["diff", rng], cwd=wt, check=False).stdout
+        elif mode == "stat":
+            entry["stat"] = git_run(["diff", "--stat", rng], cwd=wt, check=False).stdout
+        repos[repo_name] = entry
+    return {"instance": instance, "repos": repos}

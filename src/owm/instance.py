@@ -398,6 +398,30 @@ def _query_installed_modules(db_name: str, pg_port: int, module_names: list[str]
     return [line.strip() for line in r.stdout.splitlines() if line.strip()]
 
 
+def module_install_status(
+    db_name: str, pg_port: int, configured_modules: list[str]
+) -> tuple[list[str], list[str]] | None:
+    """Split configured_modules into (installed, missing) against the live DB.
+
+    Returns None when the DB is unreachable, so callers can distinguish "no
+    modules installed" from "could not check". Unlike _query_installed_modules
+    (which collapses both cases to []), this preserves that distinction.
+    """
+    if not configured_modules:
+        return ([], [])
+    names_sql = ", ".join(f"'{m}'" for m in configured_modules)
+    r = subprocess.run(
+        ["psql", "-h", "/var/run/postgresql", "-p", str(pg_port), "-d", db_name,
+         "-tAc", f"SELECT name FROM ir_module_module WHERE state='installed' AND name IN ({names_sql})"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return None
+    installed = [line.strip() for line in r.stdout.splitlines() if line.strip()]
+    missing = [m for m in configured_modules if m not in installed]
+    return (installed, missing)
+
+
 def _append_modules_to_toml(toml_path: str, new_modules: list[str]) -> tuple[list[str], list[str]]:
     """Add new_modules to [install].modules in place, deduplicating and preserving order.
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from owm.api import instance_status, workspace_status, odoo_ps
+from owm.api import instance_status, workspace_status, odoo_ps, check_modules, instance_diff
 from owm.config import (
     ConfOwnership,
     cwd_workspace_conflict,
@@ -1149,6 +1149,79 @@ def cmd_branches(ctx, repo, instance_name):
         click.echo(f"{name}:")
         for b in branches:
             click.echo(f"  {b}")
+
+
+@cli.command("diff")
+@click.argument("name", required=False)
+@click.option("--name-only", "--files", "name_only", is_flag=True,
+              help="List changed files and affected modules only — no patch.")
+@click.option("--stat", "stat", is_flag=True, help="Show a diffstat summary instead of the full patch.")
+@click.option("--json", "json_out", is_flag=True, help="Output result as JSON.")
+@click.pass_context
+def cmd_diff(ctx, name, name_only, stat, json_out):
+    """Show the diff per repo (base...branch) for an instance.
+
+    Defaults to the full patch, like `git diff`. Narrow it with --name-only
+    (changed files + modules) or --stat (diffstat summary).
+    """
+    if name_only and stat:
+        raise click.UsageError("--name-only and --stat are mutually exclusive.")
+    mode = "name-only" if name_only else "stat" if stat else "patch"
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    try:
+        result = instance_diff(instance, workspace_root, mode=mode)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    if json_out:
+        click.echo(json.dumps(result))
+        return
+    for repo_name, r in result["repos"].items():
+        if r.get("skipped"):
+            continue
+        if r.get("error"):
+            click.echo(f"  [{repo_name}] error: {r['error']}", err=True)
+            continue
+        click.echo(f"  [{repo_name}] {r['base']}...{r['branch']}")
+        if mode == "name-only":
+            if r["modules"]:
+                click.echo(f"    modules: {', '.join(r['modules'])}")
+            for f in r["files"]:
+                click.echo(f"    {f}")
+        elif mode == "stat":
+            for line in r["stat"].splitlines():
+                click.echo(f"    {line}")
+        else:
+            click.echo(r["diff"])
+
+
+@cli.command("check-modules")
+@click.argument("name", required=False)
+@click.option("--json", "json_out", is_flag=True, help="Output result as JSON.")
+@click.pass_context
+def cmd_check_modules(ctx, name, json_out):
+    """Check which [install] modules are installed in the instance DB."""
+    instance = _resolve_instance(ctx, name)
+    workspace_root = _resolve_workspace(ctx)
+    try:
+        result = check_modules(instance, workspace_root)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
+    if json_out:
+        click.echo(json.dumps(result))
+        return
+    if result.get("error"):
+        click.echo(f"error: {result['error']} — could not query {instance} DB", err=True)
+        sys.exit(1)
+    if result.get("note"):
+        click.echo(result["note"])
+        return
+    for m in result["installed"]:
+        click.echo(f"  ✓ {m}")
+    for m in result["missing"]:
+        click.echo(f"  ✗ {m}  (not installed)")
 
 
 @cli.command("regen-conf")

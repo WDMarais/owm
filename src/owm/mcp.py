@@ -65,7 +65,7 @@ from owm.sync import (
 )
 import dataclasses
 
-from owm.api import default_workspace, health_check, instance_status, find_orphaned_processes, workspace_status, odoo_ps
+from owm.api import default_workspace, health_check, instance_status, find_orphaned_processes, workspace_status, odoo_ps, check_modules, instance_diff
 from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
 from owm.scripts import execute_script, run_script, compare_instances
@@ -103,6 +103,26 @@ def owm_odoo_ps() -> dict:
     """Every Odoo process on the host, classified: managed, orphaned, foreign, squatters.
     The workspace process view — supersedes owm_ps and adds the foreign tier."""
     return odoo_ps(default_workspace())
+
+
+@mcp.tool()
+def owm_check_modules(instance: str) -> dict:
+    """Which configured [install] modules are actually installed in the instance DB.
+    Returns {installed, missing}, or {error: "db_unreachable"} when the DB can't be queried."""
+    try:
+        return check_modules(instance, default_workspace())
+    except OwmError as e:
+        return _e(e)
+
+
+@mcp.tool()
+def owm_diff(instance: str, mode: str = "patch") -> dict:
+    """Per-repo diff (base...branch) for an instance's feature worktrees.
+    mode: "patch" (full unified patch, default), "name-only" (files + modules), or "stat" (diffstat)."""
+    try:
+        return instance_diff(instance, default_workspace(), mode=mode)
+    except OwmError as e:
+        return _e(e)
 
 
 @mcp.tool()
