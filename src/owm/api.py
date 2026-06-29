@@ -22,7 +22,7 @@ from owm.instance import (
     classify_port_holder,
     module_install_status,
 )
-from owm.ports import find_conflicting_process, listeners_on_ports
+from owm.ports import find_conflicting_process, listeners_on_ports, plan_ports
 from owm.sync import repo_alert_state, git_run
 from owm.scripts import execute_script, run_script, compare_instances
 from owm.worktrees import resolve_worktree_path
@@ -126,6 +126,38 @@ def find_port_squatters(workspace_root: str) -> list[dict]:
             "classification": classify_port_holder(holder["cmdline"], workspace_root),
         })
     return squatters
+
+
+def next_ports(workspace_root: str, count: int = 1) -> dict:
+    """Lowest free http/gevent port pair(s) in the workspace range — a read-only
+    preview of what create/start would grab. Scans instances/ for occupied ports,
+    reads the range from workspace defaults, and reports the next pair(s) plus
+    warnings on odd or colliding allocations. No process scan; config-derived only."""
+    with open(os.path.join(workspace_root, "workspace.toml")) as f:
+        ws = parse_workspace_config(f.read())
+    port_range = ws.defaults.http_port_range
+
+    allocations = []
+    for name in list_instances(workspace_root):
+        try:
+            conf = load_instance_config(name, workspace_root)
+        except OwmError:
+            continue
+        allocations.append({"instance": name,
+                            "http_port": conf.server.http_port,
+                            "gevent_port": conf.server.gevent_port})
+
+    plan = plan_ports(allocations, port_range, count=count)
+    nxt = plan.candidates[0] if plan.candidates else None
+    return {
+        "range": list(port_range),
+        "next": {"http_port": nxt.http_port, "gevent_port": nxt.gevent_port} if nxt else None,
+        "candidates": [{"http_port": p.http_port, "gevent_port": p.gevent_port}
+                       for p in plan.candidates],
+        "free_pairs": plan.free_pairs,
+        "nominal_pairs": plan.nominal_pairs,
+        "warnings": plan.warnings,
+    }
 
 
 def odoo_ps(workspace_root: str) -> dict:

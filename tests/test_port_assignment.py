@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 from owm.ports import assign_port, find_conflicting_process, evict_port
 from owm.ports import get_eviction_log, eviction_count_in_window, listeners_on_ports
-from owm.ports import honour_pinned_port, check_port_at_start
+from owm.ports import honour_pinned_port, check_port_at_start, plan_ports
 from owm.instance import generate_instance_conf
 
 
@@ -88,6 +88,75 @@ def test_assign_port_respects_owm_internal_range_exclusion():
     result = assign_port(pool=pool)
     assert result.http_port >= 8100
     assert result.gevent_port >= 8100
+
+
+# ---------------------------------------------------------------------------
+# plan_ports — next free pair(s) preview + allocation warnings (pure)
+# ---------------------------------------------------------------------------
+
+def _alloc(instance, http):
+    return {"instance": instance, "http_port": http, "gevent_port": http + 1}
+
+
+@pytest.mark.port_assignment
+def test_plan_ports_returns_lowest_free_pair():
+    allocations = [_alloc("a", 8100), _alloc("b", 8102)]
+    plan = plan_ports(allocations, [8100, 8299])
+    assert plan.candidates[0].http_port == 8104
+    assert plan.candidates[0].gevent_port == 8105
+
+
+@pytest.mark.port_assignment
+def test_plan_ports_count_returns_distinct_ascending_pairs():
+    allocations = [_alloc("a", 8100), _alloc("b", 8102)]
+    plan = plan_ports(allocations, [8100, 8299], count=3)
+    assert [(p.http_port, p.gevent_port) for p in plan.candidates] == [
+        (8104, 8105), (8106, 8107), (8108, 8109)
+    ]
+
+
+@pytest.mark.port_assignment
+def test_plan_ports_flags_odd_http_base():
+    """An instance pinned to an odd http_port sits off the even pair lattice."""
+    plan = plan_ports([_alloc("weird", 8101)], [8100, 8299])
+    odd = [w for w in plan.warnings if w["type"] == "odd_http_base"]
+    assert odd and odd[0]["instance"] == "weird" and odd[0]["http_port"] == 8101
+
+
+@pytest.mark.port_assignment
+def test_plan_ports_flags_collision_between_instances():
+    """A occupies 8100/8101, B pinned to 8101 → 8101 claimed by both."""
+    allocations = [_alloc("a", 8100), _alloc("b", 8101)]
+    plan = plan_ports(allocations, [8100, 8299])
+    coll = [w for w in plan.warnings if w["type"] == "collision"]
+    assert coll and coll[0]["port"] == 8101
+    assert coll[0]["instances"] == ["a", "b"]
+
+
+@pytest.mark.port_assignment
+def test_plan_ports_capacity_on_empty_range():
+    plan = plan_ports([], [8100, 8299])
+    assert plan.nominal_pairs == 100
+    assert plan.free_pairs == 100
+    assert plan.candidates[0].http_port == 8100
+
+
+@pytest.mark.port_assignment
+def test_plan_ports_low_capacity_warning():
+    """Only three pairs left → low_capacity surfaced."""
+    allocations = [_alloc(f"i{n}", n) for n in range(8100, 8294, 2)]
+    plan = plan_ports(allocations, [8100, 8299])
+    assert plan.free_pairs == 3
+    assert any(w["type"] == "low_capacity" for w in plan.warnings)
+
+
+@pytest.mark.port_assignment
+def test_plan_ports_exhausted_range_yields_no_candidate():
+    allocations = [_alloc(f"i{n}", n) for n in range(8100, 8300, 2)]
+    plan = plan_ports(allocations, [8100, 8299])
+    assert plan.candidates == []
+    assert plan.exhausted is True
+    assert any(w["type"] == "range_exhausted" for w in plan.warnings)
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from owm.api import instance_status, workspace_status, odoo_ps, check_modules, instance_diff, run_instance_script, compare_instance
+from owm.api import instance_status, workspace_status, odoo_ps, check_modules, instance_diff, run_instance_script, compare_instance, next_ports
 from owm.config import (
     ConfOwnership,
     cwd_workspace_conflict,
@@ -518,6 +518,45 @@ def cmd_odoo_ps(ctx, as_json):
         click.echo(f"squatter  {who}  pid={s['pid']}  squatting {s['instance']}:{s['http_port']}")
     for f in result["foreign"]:
         click.echo(f"foreign   pid={f['pid']}  {f['cmdline']}")
+
+
+def _format_port_warning(w: dict) -> str:
+    t = w["type"]
+    if t == "collision":
+        return f"port {w['port']} claimed by {', '.join(w['instances'])}"
+    if t == "odd_http_base":
+        return f"{w['instance']} has odd http_port {w['http_port']} (off the even pair lattice)"
+    if t == "low_capacity":
+        return f"only {w['free_pairs']} pair(s) left; consider widening http_port_range"
+    if t == "range_exhausted":
+        return f"range {w['range'][0]}-{w['range'][1]} exhausted; archive or delete instances"
+    return t
+
+
+@cli.command("next-ports")
+@click.option("--count", "-n", "count", default=1, type=int, help="How many free pairs to suggest.")
+@click.option("--json", "as_json", is_flag=True, help="Emit the full result as JSON.")
+@click.pass_context
+def cmd_next_ports(ctx, count, as_json):
+    """Lowest free http/gevent port pair(s) in the workspace range, with allocation warnings.
+
+    Read-only preview of what create/start would grab: scans instances/ for occupied
+    ports and reports the next free pair(s), plus warnings on odd or colliding
+    allocations. Pairs go to stdout (scriptable); the summary and warnings to stderr."""
+    workspace_root = _resolve_workspace(ctx)
+    result = next_ports(workspace_root, count=count)
+    if as_json:
+        click.echo(json.dumps(result))
+        return
+    if result["next"] is None:
+        click.echo(f"no free port pair in range {result['range'][0]}-{result['range'][1]}", err=True)
+    else:
+        for c in result["candidates"]:
+            click.echo(f"{c['http_port']} {c['gevent_port']}")
+    click.echo(f"  {result['free_pairs']}/{result['nominal_pairs']} pairs free in "
+               f"{result['range'][0]}-{result['range'][1]}", err=True)
+    for w in result["warnings"]:
+        click.echo(f"  warning: {_format_port_warning(w)}", err=True)
 
 
 @cli.command("delete")

@@ -65,7 +65,7 @@ from owm.sync import (
 )
 import dataclasses
 
-from owm.api import default_workspace, health_check, instance_status, find_orphaned_processes, workspace_status, odoo_ps, check_modules, instance_diff, run_instance_script, compare_instance
+from owm.api import default_workspace, health_check, instance_status, find_orphaned_processes, workspace_status, odoo_ps, check_modules, instance_diff, run_instance_script, compare_instance, next_ports
 from owm.worktrees import resolve_worktree_path
 from owm.modules import upgrade_modules
 
@@ -102,6 +102,14 @@ def owm_odoo_ps() -> dict:
     """Every Odoo process on the host, classified: managed, orphaned, foreign, squatters.
     The workspace process view — supersedes owm_ps and adds the foreign tier."""
     return odoo_ps(default_workspace())
+
+
+@mcp.tool()
+def owm_next_ports(count: int = 1) -> dict:
+    """Lowest free http/gevent port pair(s) in the workspace range, with warnings on
+    odd or colliding allocations. Read-only preview of what create/start would grab —
+    config-derived, no process scan."""
+    return next_ports(default_workspace(), count=count)
 
 
 @mcp.tool()

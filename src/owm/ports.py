@@ -70,6 +70,89 @@ def assign_port(pool: dict) -> PortPair:
     )
 
 
+@dataclass
+class PortPlan:
+    candidates: list[PortPair]
+    free_pairs: int
+    nominal_pairs: int
+    warnings: list[dict]
+    exhausted: bool
+
+
+# Below this many free pairs remaining, plan_ports flags low_capacity so the
+# range can be widened before allocation starts failing.
+_LOW_PORT_CAPACITY = 5
+
+
+def _greedy_pair_count(occupied: set[int], low: int, high: int) -> int:
+    """How many more non-overlapping http/gevent pairs the allocator could place in
+    [low, high) given `occupied` — i.e. how many more instances fit. Mirrors
+    assign_port's stride-1 scan: take a pair at n and skip n+1, else advance by one."""
+    count = 0
+    n = low
+    while n < high:
+        if n not in occupied and (n + 1) not in occupied:
+            count += 1
+            n += 2
+        else:
+            n += 1
+    return count
+
+
+def plan_ports(allocations: list[dict], port_range: list[int], count: int = 1) -> PortPlan:
+    """Pure preview of the next free port pair(s) plus allocation-health warnings.
+
+    `allocations` is one dict per configured instance: {instance, http_port,
+    gevent_port}. No I/O — the caller gathers allocations from the instances dir and
+    the range from workspace config. Warnings surfaced:
+      - collision: a port claimed by more than one instance
+      - odd_http_base: an instance whose http_port is odd, off the even pair lattice
+      - low_capacity / range_exhausted: capacity running out
+    """
+    low, high = port_range
+    occupied: set[int] = set()
+    owners: dict[int, list[str]] = {}
+    for a in allocations:
+        for p in (a.get("http_port"), a.get("gevent_port")):
+            if p:
+                occupied.add(p)
+                owners.setdefault(p, []).append(a["instance"])
+
+    warnings: list[dict] = []
+    for port in sorted(owners):
+        if len(owners[port]) > 1:
+            warnings.append({"type": "collision", "port": port,
+                             "instances": sorted(owners[port])})
+    for a in allocations:
+        http = a.get("http_port")
+        if http and http % 2 == 1:
+            warnings.append({"type": "odd_http_base", "instance": a["instance"],
+                             "http_port": http})
+
+    candidates: list[PortPair] = []
+    work = set(occupied)
+    exhausted = False
+    for _ in range(max(count, 1)):
+        try:
+            pair = assign_port({"range": [low, high], "occupied": work})
+        except PortExhaustedError:
+            exhausted = True
+            break
+        candidates.append(pair)
+        work.add(pair.http_port)
+        work.add(pair.gevent_port)
+
+    free_pairs = _greedy_pair_count(occupied, low, high)
+    nominal_pairs = _greedy_pair_count(set(), low, high)
+    if exhausted:
+        warnings.append({"type": "range_exhausted", "range": [low, high]})
+    elif free_pairs <= _LOW_PORT_CAPACITY:
+        warnings.append({"type": "low_capacity", "free_pairs": free_pairs})
+
+    return PortPlan(candidates=candidates, free_pairs=free_pairs,
+                    nominal_pairs=nominal_pairs, warnings=warnings, exhausted=exhausted)
+
+
 def honour_pinned_port(
     pinned_http: int,
     occupied: set[int],
