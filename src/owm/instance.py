@@ -527,6 +527,52 @@ def _rewrite_ports_in_toml(toml_path: str, http_port: int, gevent_port: int) -> 
         f.write(content)
 
 
+# Removing the create flag from a repo's value once its branch exists. Ordered so the
+# comma is consumed with the key regardless of position: not-first, first, then only-key.
+_STRIP_CREATE_TABLE = (
+    re.compile(r',\s*create\s*=\s*true'),
+    re.compile(r'create\s*=\s*true\s*,\s*'),
+    re.compile(r'create\s*=\s*true'),
+)
+
+
+def _strip_create_flag_in_toml(toml_path: str, repos_with_create: list[str]) -> None:
+    """Drop the create flag from the named repo entries after materialise.
+
+    create asserts a NEW branch; once it has been made the branch is real, so a
+    lingering create would make the next materialise (e.g. unarchive) fail with
+    BRANCH_ALREADY_EXISTS. Strips '+create' from the string form and 'create = true'
+    from the table form, leaving branch/base and other flags intact. Line-based so
+    comments and layout in the rest of the toml survive untouched."""
+    if not repos_with_create:
+        return
+    targets = set(repos_with_create)
+    in_repos = False
+    out = []
+    with open(toml_path) as f:
+        lines = f.readlines()
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_repos = stripped == "[repos]"
+        elif in_repos and "=" in line:
+            key = line.split("=", 1)[0].strip().strip('"')
+            if key in targets:
+                left, _, val = line.partition("=")
+                if "{" in val:
+                    for pat in _STRIP_CREATE_TABLE:
+                        new = pat.sub("", val, count=1)
+                        if new != val:
+                            val = new
+                            break
+                else:
+                    val = re.sub(r'\+create\b', '', val)
+                line = left + "=" + val
+        out.append(line)
+    with open(toml_path, "w") as f:
+        f.writelines(out)
+
+
 def new_instance(name: str, repos: dict, workspace_root: str, *, force: bool = False) -> NewResult:
     toml_path = os.path.join(workspace_root, "instances", name, "instance.toml")
     if os.path.exists(toml_path) and not force:
@@ -671,6 +717,9 @@ def _materialise_instance(name: str, workspace_root: str) -> CreateResult:
         conf, workspace_root, name, toml_path, ws_conf.defaults.http_port_range,
     )
     _provision_worktrees(conf, workspace_root, name)
+    _strip_create_flag_in_toml(
+        toml_path, [n for n, s in conf.repos.items() if s.create],
+    )
     addons_paths = _resolve_instance_addons(conf, ws_conf, workspace_root, name)
     _provision_venv(conf, workspace_root, name)
     db_result = create_db(

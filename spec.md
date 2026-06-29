@@ -86,6 +86,14 @@ create = true: the branch is asserted to be new, made from base
 ```
 
 ```
+after a successful materialise, create is dropped from instance.toml
+→ the branch now exists, so the steady-state config is plain branch:base
+# leaving create would make the next materialise (e.g. unarchive) assert "must be new"
+# against a branch that now exists, failing BRANCH_ALREADY_EXISTS. create is a one-shot
+# bootstrap intent, consumed once the branch is real.
+```
+
+```
 exists = true: assert the branch already exists (a louder default)
   same as default, but absence is always a hard error — never falls through to anything else
 # create and exists are mutually exclusive (INVALID_REPO_SPEC).

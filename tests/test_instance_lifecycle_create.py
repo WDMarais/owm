@@ -5,10 +5,84 @@ Covers: Instance lifecycle — create, Workspace init sections.
 import pytest
 from unittest.mock import patch, MagicMock
 
-from owm.instance import new_instance, create_instance
+from owm.instance import new_instance, create_instance, _strip_create_flag_in_toml
 from owm.workspace import init_workspace
-from owm.config import ConfOwnership
+from owm.config import ConfOwnership, parse_instance_config
 from owm.errors import OwmError, ODOO_CONFIG_UNMARKED, ODOO_CONFIG_NO_ADDONS
+
+
+# ---------------------------------------------------------------------------
+# Dropping the create flag after materialise (so re-materialise / unarchive
+# doesn't fail BRANCH_ALREADY_EXISTS on a branch create already made)
+# ---------------------------------------------------------------------------
+
+def _write_toml(tmp_path, repos_block):
+    p = tmp_path / "instance.toml"
+    p.write_text(
+        repos_block
+        + '\n[database]\nname = "x"\npg_port = 5432\n\n[server]\nhttp_port = 8100\n'
+    )
+    return str(p)
+
+
+@pytest.mark.instance_lifecycle_create
+def test_strip_create_flag_string_form(tmp_path):
+    path = _write_toml(tmp_path, '[repos]\ntaskflow = "PD-490_dev:main+create"\n')
+    _strip_create_flag_in_toml(path, ["taskflow"])
+    spec = parse_instance_config(open(path).read()).repos["taskflow"]
+    assert spec.create is False
+    assert spec.branch == "PD-490_dev"
+    assert spec.base == "main"
+
+
+@pytest.mark.instance_lifecycle_create
+def test_strip_create_flag_string_form_keeps_other_flags(tmp_path):
+    path = _write_toml(tmp_path, '[repos]\ntaskflow = "PD-490_dev:main+create+readonly"\n')
+    _strip_create_flag_in_toml(path, ["taskflow"])
+    spec = parse_instance_config(open(path).read()).repos["taskflow"]
+    assert spec.create is False
+    assert spec.readonly is True
+
+
+@pytest.mark.instance_lifecycle_create
+def test_strip_create_flag_table_form(tmp_path):
+    path = _write_toml(
+        tmp_path,
+        '[repos]\ntaskflow = {branch = "PD-490_dev", base = "main", create = true}\n',
+    )
+    _strip_create_flag_in_toml(path, ["taskflow"])
+    spec = parse_instance_config(open(path).read()).repos["taskflow"]
+    assert spec.create is False
+    assert spec.branch == "PD-490_dev"
+    assert spec.base == "main"
+
+
+@pytest.mark.instance_lifecycle_create
+def test_strip_create_flag_table_form_first_key(tmp_path):
+    path = _write_toml(
+        tmp_path,
+        '[repos]\ntaskflow = {create = true, branch = "PD-490_dev", base = "main"}\n',
+    )
+    _strip_create_flag_in_toml(path, ["taskflow"])
+    spec = parse_instance_config(open(path).read()).repos["taskflow"]
+    assert spec.create is False
+    assert spec.branch == "PD-490_dev"
+
+
+@pytest.mark.instance_lifecycle_create
+def test_strip_create_flag_leaves_other_repos_untouched(tmp_path):
+    path = _write_toml(
+        tmp_path,
+        '[repos]\n'
+        'odoo = "19.0:shared"\n'
+        'taskflow = "PD-490_dev:main+create"\n'
+        'other = "x:main+create"\n',
+    )
+    _strip_create_flag_in_toml(path, ["taskflow"])
+    repos = parse_instance_config(open(path).read()).repos
+    assert repos["taskflow"].create is False
+    assert repos["other"].create is True  # not in the target list — untouched
+    assert repos["odoo"].shared is True
 
 
 # ---------------------------------------------------------------------------
