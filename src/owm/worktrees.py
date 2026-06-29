@@ -3,7 +3,10 @@ import subprocess
 from dataclasses import dataclass
 from typing import Literal
 
-from owm.errors import OwmError, NOT_OWNED, SHARED_REPO, BRANCH_NOT_FOUND, BRANCH_ALREADY_EXISTS
+from owm.errors import (
+    OwmError, NOT_OWNED, SHARED_REPO, BRANCH_NOT_FOUND, BRANCH_ALREADY_EXISTS,
+    WORKTREE_ADD_FAILED,
+)
 
 
 @dataclass
@@ -73,18 +76,29 @@ def _origin_branch_exists(bare_repo: str, branch: str) -> bool:
 
 def _git_worktree_add(bare_repo: str, path: str, branch: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    subprocess.run(
+    r = subprocess.run(
         ["git", "worktree", "add", path, branch],
-        cwd=bare_repo, check=True, capture_output=True,
+        cwd=bare_repo, capture_output=True, text=True,
     )
+    if r.returncode != 0:
+        raise OwmError(
+            f"git worktree add failed for branch {branch!r}: {r.stderr.strip()}",
+            code=WORKTREE_ADD_FAILED,
+        )
 
 
 def _git_worktree_add_new(bare_repo: str, path: str, branch: str, base: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    subprocess.run(
+    r = subprocess.run(
         ["git", "worktree", "add", "-b", branch, path, base],
-        cwd=bare_repo, check=True, capture_output=True,
+        cwd=bare_repo, capture_output=True, text=True,
     )
+    if r.returncode != 0:
+        raise OwmError(
+            f"git worktree add failed creating branch {branch!r} from base {base!r}: "
+            f"{r.stderr.strip()}",
+            code=WORKTREE_ADD_FAILED,
+        )
 
 
 def create_worktree(

@@ -6,7 +6,7 @@ import os
 import subprocess
 import pytest
 
-from owm.errors import OwmError, BRANCH_NOT_FOUND, BRANCH_ALREADY_EXISTS
+from owm.errors import OwmError, BRANCH_NOT_FOUND, BRANCH_ALREADY_EXISTS, WORKTREE_ADD_FAILED
 from owm.worktrees import create_worktree
 
 
@@ -274,3 +274,21 @@ def test_create_per_instance_worktree_create_flag_refuses_existing_origin_branch
         )
     assert exc.value.code == BRANCH_ALREADY_EXISTS
     assert "colleague-pr" in str(exc.value)
+
+
+@pytest.mark.smoke
+def test_create_per_instance_worktree_bad_base_surfaces_git_error(tmp_path):
+    """create from a base that does not exist — git's own message (invalid reference)
+    is surfaced as a clean OwmError instead of a bare CalledProcessError traceback."""
+    remote = _make_remote_with_branches(tmp_path, "product-core", ["main"])
+    ws = _setup_workspace_origin_tracking(tmp_path, {"product-core": remote})
+
+    with pytest.raises(OwmError) as exc:
+        create_worktree(
+            repo="product-core", branch="brand-new", shared=False,
+            workspace_root=ws, instance_name="review-1",
+            base="no-such-base", create=True,
+        )
+    assert exc.value.code == WORKTREE_ADD_FAILED
+    assert "no-such-base" in str(exc.value)
+    assert "invalid reference" in str(exc.value)
