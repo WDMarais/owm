@@ -18,6 +18,21 @@ class ProxyBackend(Protocol):
     def remove_instance(self, name: str, workspace_root: str) -> None: ...
 
 
+def _nginx_reload() -> bool:
+    """Best-effort `sudo nginx -s reload` so a written/removed block takes effect.
+    Never raises: a missing nginx/sudo or a non-zero exit is a no-op for the caller
+    — the block is on disk either way and can be reloaded by hand. Passwordless
+    reload needs a sudoers entry (NOPASSWD: /usr/sbin/nginx -s reload)."""
+    try:
+        r = subprocess.run(
+            ["sudo", "nginx", "-s", "reload"],
+            check=False, capture_output=True, text=True,
+        )
+    except FileNotFoundError:
+        return False
+    return r.returncode == 0
+
+
 class NginxBackend:
     scheme = "http"
 
@@ -44,15 +59,20 @@ class NginxBackend:
             f"    location /longpolling {{ proxy_pass http://{upstream}_lp; }}\n"
             f"}}\n"
         )
+        # Workspace-local: blocks live in _proxy/ and are pulled into nginx by the
+        # one-time include stub that `owm init` writes (`include _proxy/*.nginx.conf`).
+        # The .nginx.conf suffix MUST match that stub's glob, or nginx never loads them.
         proxy_dir = os.path.join(workspace_root, "_proxy")
         os.makedirs(proxy_dir, exist_ok=True)
-        with open(os.path.join(proxy_dir, f"{name}.conf"), "w") as f:
+        with open(os.path.join(proxy_dir, f"{name}.nginx.conf"), "w") as f:
             f.write(block)
+        _nginx_reload()
 
     def remove_instance(self, name: str, workspace_root: str) -> None:
-        path = os.path.join(workspace_root, "_proxy", f"{name}.conf")
+        path = os.path.join(workspace_root, "_proxy", f"{name}.nginx.conf")
         if os.path.exists(path):
             os.remove(path)
+        _nginx_reload()
 
 
 class CaddyBackend:

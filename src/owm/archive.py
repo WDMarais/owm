@@ -112,16 +112,16 @@ def _remove_proxy_block(instance: str, workspace_root: str) -> bool:
             proxy_conf = parse_workspace_config(f.read()).proxy
     backend = get_proxy_backend(proxy_conf)
     if backend is not None:
-        proxy_dir = os.path.join(workspace_root, "_proxy")
-        ext = ".caddy" if proxy_conf and proxy_conf.backend == "caddy" else ".conf"
-        if os.path.isfile(os.path.join(proxy_dir, f"{instance}{ext}")):
-            backend.remove_instance(instance, workspace_root)
-            return True
-        return False
+        # Delegate to the backend — it owns its own filename (nginx writes
+        # _proxy/<name>.nginx.conf, caddy <name>.caddy) and reloads after removal.
+        # Idempotent, so a no-op if the block is already gone. A path guard here
+        # would have to track the backend's naming and silently skip on a mismatch.
+        backend.remove_instance(instance, workspace_root)
+        return True
     # No proxy section — best-effort cleanup of any leftover files
     proxy_dir = os.path.join(workspace_root, "_proxy")
     removed = False
-    for ext in (".conf", ".caddy"):
+    for ext in (".nginx.conf", ".caddy"):
         path = os.path.join(proxy_dir, f"{instance}{ext}")
         if os.path.isfile(path):
             os.remove(path)

@@ -162,7 +162,8 @@ def test_create_instance_materialises_all_resources(standard_instance_toml, tmp_
 
 @pytest.mark.instance_lifecycle_create
 def test_create_instance_writes_proxy_block_and_conf(standard_instance_toml, tmp_workspace):
-    """create_instance writes _proxy/{name}.conf and instance.conf to disk."""
+    """create_instance writes the nginx block (_proxy/<name>.nginx.conf, matching
+    the init include stub's glob) and instance.conf to disk."""
     with patch("owm.instance.create_worktree"), \
          patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
         create_instance(
@@ -170,8 +171,8 @@ def test_create_instance_writes_proxy_block_and_conf(standard_instance_toml, tmp
             workspace_root=str(tmp_workspace),
             instance_exists=False,
         )
-    assert (tmp_workspace / "_proxy" / "feat-789.conf").exists()
-    proxy_content = (tmp_workspace / "_proxy" / "feat-789.conf").read_text()
+    assert (tmp_workspace / "_proxy" / "feat-789.nginx.conf").exists()
+    proxy_content = (tmp_workspace / "_proxy" / "feat-789.nginx.conf").read_text()
     assert "feat_789" in proxy_content
     assert "18142" in proxy_content
     assert "feat-789.localhost" in proxy_content

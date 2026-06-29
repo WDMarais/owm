@@ -50,6 +50,15 @@ def _no_real_process_scan(monkeypatch):
     monkeypatch.setattr("owm.api.owm_shaped_processes", lambda _ws: [], raising=True)
 
 
+@pytest.fixture(autouse=True)
+def _no_nginx_reload(monkeypatch):
+    """Never shell out to `sudo nginx -s reload` from the test suite. The proxy
+    backend reloads nginx after writing a block; stub it so no test prompts for a
+    password or touches the host nginx. Tests exercising the reload itself patch
+    owm.proxy.subprocess.run directly."""
+    monkeypatch.setattr("owm.proxy._nginx_reload", lambda: True)
+
+
 def _port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(("127.0.0.1", port)) == 0

@@ -143,7 +143,7 @@ def test_create_writes_proxy_block_to_disk(runner, standard_instance_toml, tmp_w
             "--workspace", str(tmp_workspace),
             "create", "feat-789",
         ])
-    assert (tmp_workspace / "_proxy" / "feat-789.conf").exists()
+    assert (tmp_workspace / "_proxy" / "feat-789.nginx.conf").exists()
 
 
 @pytest.mark.cli_integration

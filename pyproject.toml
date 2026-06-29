@@ -57,6 +57,7 @@ markers = [
     "port_assignment",
     "ports_gevent",
     "process_scan",
+    "proxy",
     "requirements_patching",
     "safety_invariants",
     "script_runner",
