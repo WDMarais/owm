@@ -341,10 +341,13 @@ def _set_web_base_url(db_name: str, pg_port: int, url: str) -> bool:
         r = subprocess.run(
             ["psql", "-h", "/var/run/postgresql", "-p", str(pg_port), "-d", db_name,
              "-v", "ON_ERROR_STOP=1", "-c", sql],
-            capture_output=True, text=True,
+            capture_output=True, text=True, timeout=10,
         )
-    except FileNotFoundError:
-        return False  # psql not installed — pinning is best-effort, never fatal
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        # psql absent, or the DB is unreachable and the connection hangs — pinning
+        # is best-effort and runs pre-launch on every start, so a stuck psql must
+        # never block the start. Bounded and swallowed.
+        return False
     return r.returncode == 0
 
 
