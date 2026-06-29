@@ -11,6 +11,7 @@ from owm.worktrees import (
     check_shared_commit_warning,
 )
 from owm.worktrees import create_worktree, check_edit_allowed
+from owm.errors import OwmError, BRANCH_ALREADY_EXISTS
 
 
 # ---------------------------------------------------------------------------
@@ -105,15 +106,40 @@ def test_exists_flag_branch_present_checks_out(tmp_path):
 
 
 @pytest.mark.worktrees
-def test_create_flag_branch_present_checks_out_existing(tmp_path):
+def test_create_flag_branch_present_locally_raises(tmp_path):
+    """create asserts the branch is new — an existing local branch is the wrong
+    assertion, so error instead of silently checking it out."""
     with patch("owm.worktrees._branch_exists", return_value=True), \
-         patch("owm.worktrees._git_worktree_add") as mock_add:
-        create_worktree(
-            repo="product-core", branch="feat-789", shared=False,
-            workspace_root=str(tmp_path), instance_name="feat-789",
-            base="main", create=True,
-        )
-    mock_add.assert_called_once()
+         patch("owm.worktrees._git_worktree_add") as mock_add, \
+         patch("owm.worktrees._git_worktree_add_new") as mock_add_new:
+        with pytest.raises(OwmError) as exc:
+            create_worktree(
+                repo="product-core", branch="feat-789", shared=False,
+                workspace_root=str(tmp_path), instance_name="feat-789",
+                base="main", create=True,
+            )
+    assert exc.value.code == BRANCH_ALREADY_EXISTS
+    assert "already exists locally" in str(exc.value)
+    mock_add.assert_not_called()
+    mock_add_new.assert_not_called()
+
+
+@pytest.mark.worktrees
+def test_create_flag_branch_present_on_origin_raises(tmp_path):
+    """Same assertion against origin: create must not adopt a branch that already
+    exists upstream (the accidental-divergence footgun)."""
+    with patch("owm.worktrees._branch_exists", return_value=False), \
+         patch("owm.worktrees._origin_branch_exists", return_value=True), \
+         patch("owm.worktrees._git_worktree_add_new") as mock_add_new:
+        with pytest.raises(OwmError) as exc:
+            create_worktree(
+                repo="product-core", branch="feat-789", shared=False,
+                workspace_root=str(tmp_path), instance_name="feat-789",
+                base="main", create=True,
+            )
+    assert exc.value.code == BRANCH_ALREADY_EXISTS
+    assert "already exists on origin" in str(exc.value)
+    mock_add_new.assert_not_called()
 
 
 @pytest.mark.worktrees

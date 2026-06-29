@@ -61,6 +61,44 @@ owm push <instance> <shared-repo>
 # expertise filter: someone who understands the command can proceed; someone who doesn't knows to ask
 ```
 
+### Branch intent: does the branch already exist, and do we expect it to?
+
+A per-instance branch is either expected to already exist (check it out) or expected to
+be new (create it from a base). owm can observe existence; the intent must be declared.
+One declared bit — `create` — distinguishes the two; everything else follows from whether
+the branch is found locally or on origin.
+
+```
+default (no create flag): the branch is expected to already exist
+  branch present locally        → checked out
+  branch present on origin only → local branch seeded from origin (the PR-review / pull case)
+  branch absent everywhere      → error (BRANCH_NOT_FOUND), hinting to mark create = true
+```
+
+```
+create = true: the branch is asserted to be new, made from base
+  branch absent everywhere      → created from base, checked out
+  branch present locally        → error (BRANCH_ALREADY_EXISTS) — drop create to check it out
+  branch present on origin      → error (BRANCH_ALREADY_EXISTS) — never silently adopt upstream
+  no base given                 → error (BRANCH_NOT_FOUND): create needs a base branch point
+# create never overwrites or adopts an existing branch — it only ever makes a genuinely new one.
+# Forgetting create is self-correcting: you get a clear "doesn't exist, mark create" and add it.
+```
+
+```
+exists = true: assert the branch already exists (a louder default)
+  same as default, but absence is always a hard error — never falls through to anything else
+# create and exists are mutually exclusive (INVALID_REPO_SPEC).
+```
+
+```
+declaring intent in instance.toml:
+  string form — flags go AFTER the base:   product-core = "feat-789-dev:main+create"
+  table form  — flags are keys:            product-core = {branch = "feat-789-dev", base = "main", create = true}
+# a '+' that ends up inside the branch or base name (e.g. "feat+create:main") is a misplaced
+# flag and is rejected at parse time, not silently treated as part of the branch name.
+```
+
 ---
 
 ## Database lifecycle

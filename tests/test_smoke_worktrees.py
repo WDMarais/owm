@@ -6,7 +6,7 @@ import os
 import subprocess
 import pytest
 
-from owm.errors import OwmError, BRANCH_NOT_FOUND
+from owm.errors import OwmError, BRANCH_NOT_FOUND, BRANCH_ALREADY_EXISTS
 from owm.worktrees import create_worktree
 
 
@@ -257,3 +257,20 @@ def test_create_per_instance_worktree_create_flag_seeds_from_base(tmp_path):
     assert os.path.isfile(os.path.join(result.path, "README.md"))
     assert subprocess.run(["git", "rev-parse", "--verify", "refs/heads/brand-new"],
                           cwd=bare, capture_output=True).returncode == 0
+
+
+@pytest.mark.smoke
+def test_create_per_instance_worktree_create_flag_refuses_existing_origin_branch(tmp_path):
+    """create asserts the branch is new — when it already exists on origin, refuse
+    with BRANCH_ALREADY_EXISTS rather than silently checking out the upstream branch."""
+    remote = _make_remote_with_branches(tmp_path, "product-core", ["main", "colleague-pr"])
+    ws = _setup_workspace_origin_tracking(tmp_path, {"product-core": remote})
+
+    with pytest.raises(OwmError) as exc:
+        create_worktree(
+            repo="product-core", branch="colleague-pr", shared=False,
+            workspace_root=ws, instance_name="review-1",
+            base="origin/main", create=True,
+        )
+    assert exc.value.code == BRANCH_ALREADY_EXISTS
+    assert "colleague-pr" in str(exc.value)

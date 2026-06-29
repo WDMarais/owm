@@ -3,7 +3,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Literal
 
-from owm.errors import OwmError, NOT_OWNED, SHARED_REPO, BRANCH_NOT_FOUND
+from owm.errors import OwmError, NOT_OWNED, SHARED_REPO, BRANCH_NOT_FOUND, BRANCH_ALREADY_EXISTS
 
 
 @dataclass
@@ -117,10 +117,34 @@ def create_worktree(
     if os.path.exists(cfg.path):
         return WorktreeResult(action="linked", path=cfg.path)
 
-    # A branch that already exists is checked out, not created — no base needed.
-    # Local takes precedence; otherwise seed a local branch from origin (the
-    # "check out a colleague's pushed branch" case). The base is only required
-    # to create a branch that exists in neither place.
+    # create asserts the branch is NEW: it must exist nowhere yet, then it is made
+    # from base. If it already exists locally or on origin the assertion is wrong —
+    # error rather than silently checking out the existing branch, which is the
+    # accidental-divergence footgun create exists to prevent.
+    if create:
+        if _branch_exists(bare_repo, branch):
+            raise OwmError(
+                f"repo {repo!r}: create asserted but branch {branch!r} already exists locally "
+                f"— drop create to check it out, or pick a new branch name",
+                code=BRANCH_ALREADY_EXISTS,
+            )
+        if _origin_branch_exists(bare_repo, branch):
+            raise OwmError(
+                f"repo {repo!r}: create asserted but branch {branch!r} already exists on origin "
+                f"— drop create to check it out, or pick a new branch name",
+                code=BRANCH_ALREADY_EXISTS,
+            )
+        if not base:
+            raise OwmError(
+                f"repo {repo!r}: create requires a base branch (branch {branch!r} is new)",
+                code=BRANCH_NOT_FOUND,
+            )
+        _git_worktree_add_new(bare_repo, cfg.path, branch, base)
+        return WorktreeResult(action="created", path=cfg.path)
+
+    # Default (and +exists): the branch is expected to already exist. A local branch
+    # is checked out directly; otherwise seed a local branch from origin (the "check
+    # out a colleague's pushed branch" / PR-review case). No base needed either way.
     if _branch_exists(bare_repo, branch):
         _git_worktree_add(bare_repo, cfg.path, branch)
         return WorktreeResult(action="created", path=cfg.path)
@@ -128,25 +152,16 @@ def create_worktree(
         _git_worktree_add_new(bare_repo, cfg.path, branch, f"origin/{branch}")
         return WorktreeResult(action="created", path=cfg.path)
 
-    # Branch exists nowhere yet.
-    if create:
-        if not base:
-            raise OwmError(
-                f"repo {repo!r}: +create requires a base branch "
-                f"(branch {branch!r} not found locally or on origin)",
-                code=BRANCH_NOT_FOUND,
-            )
-        _git_worktree_add_new(bare_repo, cfg.path, branch, base)
-        return WorktreeResult(action="created", path=cfg.path)
+    # Branch exists nowhere and we were not told to create it.
     if assert_exists:
         raise OwmError(
-            f"repo {repo!r}: +exists asserted but branch {branch!r} not found locally or on origin "
+            f"repo {repo!r}: exists asserted but branch {branch!r} not found locally or on origin "
             f"— check for a typo or push the branch first",
             code=BRANCH_NOT_FOUND,
         )
     raise OwmError(
         f"repo {repo!r}: branch {branch!r} not found locally or on origin — "
-        f"add +create to create it from base",
+        f"mark create = true (or +create) to create it from base",
         code=BRANCH_NOT_FOUND,
     )
 
