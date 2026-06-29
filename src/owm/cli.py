@@ -12,7 +12,6 @@ from owm.api import instance_status, workspace_status, odoo_ps, check_modules, i
 from owm.config import (
     ConfOwnership,
     cwd_workspace_conflict,
-    instance_config_path,
     load_instance_config,
     parse_workspace_config,
     resolve_workspace_root,
@@ -26,7 +25,6 @@ from owm.instance import (
     list_running_instances,
     start_instance,
     stop_instance,
-    pin_web_base_url,
     instance_public_url,
     install_instance_modules,
     kill_instance,
@@ -36,8 +34,6 @@ from owm.instance import (
     odoo_bin_path,
     _read_pid,
     _process_alive,
-    _append_modules_to_toml,
-    _query_installed_modules,
 )
 from owm.archive import archive_instance, _strip_archived_sections
 from owm.env import resolve_env, format_env

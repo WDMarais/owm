@@ -20,10 +20,8 @@ from owm.errors import (
     OwmError,
     format_error,
     STOP_TIMEOUT,
-    NO_COMPARE_TARGET,
     BRANCH_NOT_FOUND,
     DIRTY_WORKTREE,
-    NOT_FOUND,
 )
 from owm.instance import (
     new_instance,
