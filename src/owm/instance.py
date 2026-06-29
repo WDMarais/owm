@@ -555,10 +555,11 @@ workers = 2
 
 def _assign_instance_ports(
     conf: InstanceConfig, workspace_root: str, name: str, toml_path: str,
+    port_range: list[int],
 ) -> tuple[int, int]:
     occupied = _collect_occupied_ports(workspace_root, exclude_instance=name)
     if not conf.server.http_port or conf.server.http_port in occupied:
-        pair = assign_port({"range": [8100, 8299], "occupied": occupied})
+        pair = assign_port({"range": port_range, "occupied": occupied})
         http_port, gevent_port = pair.http_port, pair.gevent_port
         _rewrite_ports_in_toml(toml_path, http_port, gevent_port)
     else:
@@ -666,7 +667,9 @@ def _materialise_instance(name: str, workspace_root: str) -> CreateResult:
     with open(ws_toml_path) as f:
         ws_conf = parse_workspace_config(f.read())
 
-    http_port, gevent_port = _assign_instance_ports(conf, workspace_root, name, toml_path)
+    http_port, gevent_port = _assign_instance_ports(
+        conf, workspace_root, name, toml_path, ws_conf.defaults.http_port_range,
+    )
     _provision_worktrees(conf, workspace_root, name)
     addons_paths = _resolve_instance_addons(conf, ws_conf, workspace_root, name)
     _provision_venv(conf, workspace_root, name)
