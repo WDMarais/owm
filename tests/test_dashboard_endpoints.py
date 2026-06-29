@@ -22,10 +22,12 @@ from unittest.mock import patch
 import pytest
 
 # server.py resolves WORKSPACE at import time; point it at the committed fixture
-# workspace (a valid workspace.toml tree) so the import succeeds. The value is
-# irrelevant to these tests beyond that — the lib calls are patched.
+# workspace (a valid workspace.toml tree) so the import succeeds. Set
+# unconditionally — a developer's exported OWM_WORKSPACE would otherwise win and
+# bind WORKSPACE to a real tree whose instances/ dir may not exist here (the
+# /api/processes endpoint enumerates _instances() off real disk).
 _FIXTURE_WORKSPACE = Path(__file__).parent.parent / "test_fixtures" / "workspace"
-os.environ.setdefault("OWM_WORKSPACE", str(_FIXTURE_WORKSPACE))
+os.environ["OWM_WORKSPACE"] = str(_FIXTURE_WORKSPACE)
 
 from starlette.testclient import TestClient  # noqa: E402
 
