@@ -1062,7 +1062,11 @@ def generate_instance_conf(
     if db_port:
         lines.append(f"db_port = {db_port}")
     if proxy_active:
-        lines.append(f"dbfilter = ^{instance_name}$")
+        # dbfilter matches against DATABASE names, so it must pin to this instance's
+        # actual db_name — not the instance/subdomain name, which often differs
+        # (e.g. instance pd-496 with db odoo12_pd_496). A mismatch leaves Odoo with
+        # no database matching the filter, so it falls back to the db-selector page.
+        lines.append(f"dbfilter = ^{db_name or instance_name}$")
     if addons_path:
         lines.append(
             "# addons_path: first path wins for duplicate module names. Order set by"

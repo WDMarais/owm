@@ -317,7 +317,7 @@ def test_odoo_conf_workers_default_two():
 @pytest.mark.port_assignment
 @pytest.mark.ports_gevent
 def test_odoo_conf_includes_dbfilter_for_subdomain():
-    """dbfilter set to ^<instance_name>$ for subdomain isolation."""
+    """With no explicit db_name, dbfilter falls back to ^<instance_name>$."""
     conf = generate_instance_conf(
         instance_name="feat-789",
         http_port=8142,
@@ -325,6 +325,23 @@ def test_odoo_conf_includes_dbfilter_for_subdomain():
         workers=2,
     )
     assert "dbfilter = ^feat-789$" in conf
+
+
+@pytest.mark.port_assignment
+@pytest.mark.ports_gevent
+def test_odoo_conf_dbfilter_matches_db_name_not_instance_name():
+    """dbfilter matches DATABASE names, so it must pin to db_name when it differs
+    from the instance name — otherwise Odoo finds no matching db and shows the
+    selector page (instance pd-496 with db odoo12_pd_496)."""
+    conf = generate_instance_conf(
+        instance_name="pd-496",
+        http_port=8142,
+        gevent_port=8143,
+        workers=2,
+        db_name="odoo12_pd_496",
+    )
+    assert "dbfilter = ^odoo12_pd_496$" in conf
+    assert "dbfilter = ^pd-496$" not in conf
 
 
 @pytest.mark.port_assignment
