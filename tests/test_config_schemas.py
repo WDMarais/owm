@@ -261,6 +261,32 @@ def test_repo_spec_inline_table_all_flags():
 
 
 @pytest.mark.config_schemas
+def test_repo_spec_inline_table_create():
+    """The table form of the create intent — assert the branch is new, make it from base."""
+    spec = parse_repo_spec({"branch": "PD-490_dev", "base": "main", "create": True})
+    assert spec.branch == "PD-490_dev"
+    assert spec.base == "main"
+    assert spec.create is True
+
+
+@pytest.mark.config_schemas
+def test_repo_spec_plus_before_colon_rejected():
+    """'+create' before the base lands in the branch name; the DSL reads flags only
+    after the base, so this must error loudly rather than yield a '...+create' branch."""
+    with pytest.raises(Exception) as exc:
+        parse_repo_spec("PD-490_dev+create:main")
+    assert "misplaced flag" in str(exc.value)
+
+
+@pytest.mark.config_schemas
+def test_repo_spec_inline_table_plus_in_branch_rejected():
+    """A flag stuffed into a table's branch value is the same trap, caught the same way."""
+    with pytest.raises(Exception) as exc:
+        parse_repo_spec({"branch": "PD-490_dev+create", "base": "main"})
+    assert "misplaced flag" in str(exc.value)
+
+
+@pytest.mark.config_schemas
 def test_parse_instance_config_accepts_inline_table_repos():
     toml = """
 [repos]

@@ -158,6 +158,22 @@ class RepoSpec(BaseModel):
             data["assert_exists"] = data.pop("exists")
         return data
 
+    @model_validator(mode='after')
+    def _reject_plus_in_refs(self):
+        # A '+' surviving into a branch/base name means a flag landed in the wrong
+        # place: '+create' before the colon ("branch+create:base"), or stuffed into
+        # the branch value of a table. The string DSL only reads flags after the
+        # base, so the rest silently becomes part of the name — caught here instead.
+        for field in ("branch", "base"):
+            val = getattr(self, field)
+            if val and "+" in val:
+                raise ValueError(
+                    f"{field} {val!r} contains '+', which looks like a misplaced flag. "
+                    "In the string form flags go after the base (e.g. 'branch:base+create'); "
+                    'or use the table form (e.g. {branch = "...", base = "...", create = true}).'
+                )
+        return self
+
 
 class WorkspaceRepo(BaseModel):
     path: str
