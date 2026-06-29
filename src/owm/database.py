@@ -3,7 +3,9 @@ import subprocess
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from owm.errors import OwmError, DB_UNAVAILABLE, INSTANCE_RUNNING, DB_HAS_CONNECTIONS
+from owm.errors import (
+    OwmError, DB_UNAVAILABLE, INSTANCE_RUNNING, DB_HAS_CONNECTIONS, DB_OPERATION_FAILED,
+)
 
 
 class SeedScriptState(StrEnum):
@@ -78,18 +80,27 @@ class TemplateStatus:
     stale: bool
 
 
+def _run_pg_command(args: list[str], what: str) -> None:
+    """Run a postgres CLI command, surfacing its stderr on failure as an OwmError
+    rather than a bare CalledProcessError with the message swallowed (e.g. dropdb's
+    'database is being accessed by other users')."""
+    r = subprocess.run(args, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise OwmError(f"{what} failed: {r.stderr.strip()}", code=DB_OPERATION_FAILED)
+
+
 def _createdb(name: str, pg_host: str, pg_port: int, template: str | None = None) -> None:
     args = ["createdb", "-h", pg_host, "-p", str(pg_port)]
     if template:
         args.append(f"--template={template}")
     args.append(name)
-    subprocess.run(args, check=True, capture_output=True)
+    _run_pg_command(args, f"createdb {name}")
 
 
 def _dropdb(name: str, pg_host: str, pg_port: int) -> None:
-    subprocess.run(
+    _run_pg_command(
         ["dropdb", "-h", pg_host, "-p", str(pg_port), "--if-exists", name],
-        check=True, capture_output=True,
+        f"dropdb {name}",
     )
 
 
@@ -132,6 +143,14 @@ def create_db(name: str, odoo_version: str, template: str | None, pg_port: int) 
 
 def reset_db(name: str, template: str, pg_port: int, seed_script: str | None) -> ResetDbResult:
     pg_host = "/var/run/postgresql"
+    # Backstop the CLI's _is_running guard: a process owm has lost track of (started
+    # outside owm, stale pid) can still hold the DB open, and dropdb would then fail
+    # opaquely. Refuse with a clear, actionable message instead.
+    if _has_active_connections(name, pg_host, pg_port):
+        raise OwmError(
+            f"database '{name}' has active connections — run `owm stop` (or `owm kill`) first",
+            code=DB_HAS_CONNECTIONS,
+        )
     _dropdb(name, pg_host, pg_port)
     _createdb(name, pg_host, pg_port, template=template)
     if seed_script:
@@ -237,7 +256,7 @@ def create_template_from_instance(
     pg_host = "/var/run/postgresql"
     if is_running:
         raise OwmError(
-            f"instance is running — run `owm stop` first",
+            "instance is running — run `owm stop` first",
             code=INSTANCE_RUNNING,
         )
     if _has_active_connections(instance_db, pg_host, pg_port):

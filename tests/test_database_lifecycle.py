@@ -4,12 +4,12 @@ Covers: Database lifecycle, Database auth sections.
 """
 import subprocess
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from owm.database import create_db, reset_db, sync_db_from_template, create_template_from_instance
 from owm.database import check_template_staleness, check_pg_reachability
 from owm.database import SeedScriptState
-from owm.errors import INSTANCE_RUNNING, DB_HAS_CONNECTIONS
+from owm.errors import OwmError, INSTANCE_RUNNING, DB_HAS_CONNECTIONS, DB_OPERATION_FAILED
 from owm.instance import generate_instance_conf
 from owm.workspace import init_workspace
 
@@ -81,7 +81,8 @@ def test_create_db_owned_by_operator_user():
 
 @pytest.mark.database_lifecycle
 def test_db_reset_restores_from_base_template():
-    with patch("owm.database._dropdb"), patch("owm.database._createdb"):
+    with patch("owm.database._dropdb"), patch("owm.database._createdb"), \
+         patch("owm.database._has_active_connections", return_value=False):
         result = reset_db(
             name="odoo19_feat789",
             template="odoo19_base",
@@ -93,7 +94,8 @@ def test_db_reset_restores_from_base_template():
 
 @pytest.mark.database_lifecycle
 def test_db_reset_with_seed_script_reruns_it():
-    with patch("owm.database._dropdb"), patch("owm.database._createdb"):
+    with patch("owm.database._dropdb"), patch("owm.database._createdb"), \
+         patch("owm.database._has_active_connections", return_value=False):
         result = reset_db(
             name="odoo19_feat789",
             template="odoo19_base",
@@ -107,7 +109,8 @@ def test_db_reset_with_seed_script_reruns_it():
 
 @pytest.mark.database_lifecycle
 def test_db_reset_no_seed_script_no_warning():
-    with patch("owm.database._dropdb"), patch("owm.database._createdb"):
+    with patch("owm.database._dropdb"), patch("owm.database._createdb"), \
+         patch("owm.database._has_active_connections", return_value=False):
         result = reset_db(
             name="odoo19_feat789",
             template="odoo19_base",
@@ -116,6 +119,42 @@ def test_db_reset_no_seed_script_no_warning():
         )
     assert result.warning is None
     assert result.seed_script_state == SeedScriptState.UNSET
+
+
+@pytest.mark.database_lifecycle
+def test_db_reset_refuses_when_db_has_active_connections():
+    """Backstop the CLI's _is_running guard: a process owm lost track of can still
+    hold the DB open. Refuse clearly instead of letting dropdb fail opaquely."""
+    with patch("owm.database._has_active_connections", return_value=True), \
+         patch("owm.database._dropdb") as drop:
+        with pytest.raises(OwmError) as exc:
+            reset_db(name="odoo12_pd_496", template="odoo12_base", pg_port=5432, seed_script=None)
+    assert exc.value.code == DB_HAS_CONNECTIONS
+    assert "active connections" in str(exc.value)
+    drop.assert_not_called()
+
+
+@pytest.mark.database_lifecycle
+def test_dropdb_surfaces_stderr_on_failure():
+    """A dropdb failure carries postgres's message, not a bare CalledProcessError."""
+    from owm.database import _dropdb
+    fake = MagicMock(returncode=1, stderr="dropdb: error: database \"x\" is being accessed by other users")
+    with patch("owm.database.subprocess.run", return_value=fake):
+        with pytest.raises(OwmError) as exc:
+            _dropdb("x", "/var/run/postgresql", 5432)
+    assert exc.value.code == DB_OPERATION_FAILED
+    assert "being accessed by other users" in str(exc.value)
+
+
+@pytest.mark.database_lifecycle
+def test_createdb_surfaces_stderr_on_failure():
+    from owm.database import _createdb
+    fake = MagicMock(returncode=1, stderr="createdb: error: database creation failed")
+    with patch("owm.database.subprocess.run", return_value=fake):
+        with pytest.raises(OwmError) as exc:
+            _createdb("x", "/var/run/postgresql", 5432)
+    assert exc.value.code == DB_OPERATION_FAILED
+    assert "creation failed" in str(exc.value)
 
 
 # ---------------------------------------------------------------------------
