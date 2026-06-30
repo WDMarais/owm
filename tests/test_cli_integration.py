@@ -991,3 +991,22 @@ def test_owmcli_passes_success_through(runner):
     result = runner.invoke(app, ["ok"])
     assert result.exit_code == 0
     assert "done" in result.output
+
+
+@pytest.mark.cli_integration
+def test_validate_warns_on_missing_script_runner_file(runner, tmp_workspace):
+    """A declared runner whose file is missing under scripts_dir is flagged, so
+    run-script won't surprise you with a runtime failure."""
+    inst = tmp_workspace / "instances" / "feat-789"
+    inst.mkdir(parents=True)
+    (inst / "instance.toml").write_text(
+        '[repos]\nodoo_like = "main:shared"\n'
+        '\n[database]\nname = "owm_feat789"\npg_port = 5432\n'
+        "\n[server]\nhttp_port = 8100\ngevent_port = 8101\n"
+        '\n[scripts]\nscripts_dir = "scripts/reviews"\n'
+        '\n[scripts.runners]\nsetup = { file = "setup.py", type = "shell" }\n'
+    )
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789"])
+    out = result.output + (result.stderr or "")
+    assert "script runner 'setup': file not found" in out
+    assert "scripts/reviews/setup.py" in out

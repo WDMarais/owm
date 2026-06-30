@@ -996,6 +996,21 @@ def cmd_validate(ctx, name, live):
     if not os.path.isdir(venv_dir):
         warnings.append("venv not found — run owm create")
 
+    # Each declared script runner's file must exist under scripts_dir, else
+    # `owm run-script <name>` fails at run time. Resolved the same way the runner
+    # resolves it (scripts_dir + runner.file).
+    if conf.scripts and conf.scripts.runners:
+        scripts_base = (
+            os.path.join(instance_dir, conf.scripts.scripts_dir)
+            if conf.scripts.scripts_dir else instance_dir
+        )
+        for rname, runner in conf.scripts.runners.items():
+            sp = os.path.join(scripts_base, runner.file)
+            if not os.path.isfile(sp):
+                warnings.append(
+                    f"script runner {rname!r}: file not found: {os.path.relpath(sp, workspace_root)}"
+                )
+
     if ws_conf:
         workspace_repos_meta = {
             n: {"has_addons": r.has_addons, "addons_paths": r.addons_paths}
