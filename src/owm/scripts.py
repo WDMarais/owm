@@ -57,9 +57,29 @@ class ScaffoldResult:
     content: str
 
 
+def split_ndjson(raw: str) -> tuple[list[dict], list[str]]:
+    """Separate a script's stdout into NDJSON rows and plain printout.
+
+    A script may interleave human progress lines with its NDJSON result rows;
+    only the JSON lines are structured results. Non-JSON lines are not errors —
+    printing is allowed — so they come back separately for display rather than
+    crashing the parse. (A real failure is a nonzero exit, handled upstream.)"""
+    rows: list[dict] = []
+    plain: list[str] = []
+    for line in raw.strip().split("\n"):
+        s = line.strip()
+        if not s:
+            continue
+        try:
+            rows.append(json.loads(s))
+        except json.JSONDecodeError:
+            plain.append(line)
+    return rows, plain
+
+
 def parse_ndjson_output(raw: str) -> list[dict]:
-    lines = [line.strip() for line in raw.strip().split("\n") if line.strip()]
-    return [json.loads(line) for line in lines]
+    """NDJSON result rows from a script's stdout, ignoring any plain printout."""
+    return split_ndjson(raw)[0]
 
 
 def run_script(

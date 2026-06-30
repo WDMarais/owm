@@ -302,3 +302,18 @@ def test_compare_symmetric_either_instance_can_initiate():
 #   the script file is not fully specced (JSON header? special NDJSON row?).
 # test_compare_ndjson_written_for_both_instances: spec says ndjson_base and ndjson_feat
 #   paths returned; file retention policy (how long kept) not specced.
+
+
+@pytest.mark.script_runner
+def test_parse_ndjson_tolerates_plain_printout():
+    """Non-JSON lines are plain printout, not parse errors — only rows returned."""
+    rows = parse_ndjson_output('starting up\n{"case": "a", "status": "OK"}\ndone\n')
+    assert rows == [{"case": "a", "status": "OK"}]
+
+
+@pytest.mark.script_runner
+def test_split_ndjson_separates_rows_and_plain():
+    from owm.scripts import split_ndjson
+    rows, plain = split_ndjson('hello\n{"case": "a", "status": "OK"}\nbye\n')
+    assert rows == [{"case": "a", "status": "OK"}]
+    assert plain == ["hello", "bye"]

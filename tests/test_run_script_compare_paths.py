@@ -65,3 +65,11 @@ def test_compare_can_target_a_named_script(tmp_workspace):
     result = compare_instance("feat-1", str(tmp_workspace), base="base-1", script="smoke")
     assert result["status"] == "unexpected_changes"
     assert any(u["case"] == "invoice" for u in result["unexpected"])
+
+
+def test_run_script_surfaces_plain_output_and_tallies_only_rows(tmp_workspace):
+    mixed = '✓ did a thing\n{"case": "x", "status": "OK"}\nall done\n'
+    with patch("owm.api.execute_script", return_value=mixed):
+        r = run_instance_script("feat-1", str(tmp_workspace), "smoke")
+    assert r["summary"]["total"] == 1  # only the NDJSON row is tallied
+    assert r["output"] == ["✓ did a thing", "all done"]  # prints surfaced

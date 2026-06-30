@@ -24,7 +24,7 @@ from owm.instance import (
 )
 from owm.ports import find_conflicting_process, listeners_on_ports, plan_ports
 from owm.sync import repo_alert_state, git_run
-from owm.scripts import execute_script, run_script, compare_instances
+from owm.scripts import execute_script, run_script, compare_instances, split_ndjson
 from owm.worktrees import resolve_worktree_path
 
 
@@ -344,6 +344,7 @@ def run_instance_script(instance: str, workspace_root: str, script: str) -> dict
     os.makedirs(ndjson_dir, exist_ok=True)
 
     stdout = execute_script(instance, script, workspace_root)
+    _, plain_output = split_ndjson(stdout)  # human prints, surfaced but not tallied
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%S")
     stem = f"{script}-{ts}"
@@ -366,6 +367,7 @@ def run_instance_script(instance: str, workspace_root: str, script: str) -> dict
             "reason": result.abort_reason,
             "rows_run": result.rows_run,
             "ndjson_path": ndjson_path,
+            "output": plain_output,
         }
 
     failures = [r for r in result.rows if r.get("status") == "FAIL" and not r.get("_non_conforming")]
@@ -380,6 +382,7 @@ def run_instance_script(instance: str, workspace_root: str, script: str) -> dict
         },
         "failures": failures,
         "ndjson_path": ndjson_path,
+        "output": plain_output,
     }
 
 
@@ -417,8 +420,10 @@ def compare_instance(instance: str, workspace_root: str, base: str | None = None
         path = os.path.join(workspace_root, "_dumps", inst, ndjson_name)
         if not os.path.exists(path):
             return None
+        # Tolerate plain printout interleaved in the dump — only the NDJSON rows
+        # are diffable; a script's progress lines are not.
         with open(path) as fh:
-            return [json.loads(line) for line in fh if line.strip()]
+            return split_ndjson(fh.read())[0]
 
     result = compare_instances(
         instance=instance,
