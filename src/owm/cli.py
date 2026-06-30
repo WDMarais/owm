@@ -245,20 +245,12 @@ def cmd_create(ctx, name, repos, force, toml_only):
 
     if repos:
         repo_dict = _parse_repo_specs(repos)
-        try:
-            new_result = new_instance(name=instance, repos=repo_dict, workspace_root=workspace_root, force=force)
-        except OwmError as e:
-            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-            sys.exit(1)
+        new_result = new_instance(name=instance, repos=repo_dict, workspace_root=workspace_root, force=force)
         if toml_only:
             click.echo(new_result.toml_path)
             return
 
-    try:
-        result = create_instance(instance, workspace_root)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = create_instance(instance, workspace_root)
     if result.status == "up_to_date":
         click.echo(f"{instance}  up to date")
     elif result.status == "created":
@@ -333,16 +325,12 @@ def cmd_install(ctx, name, modules, timeout, no_save):
 
     if modules:
         click.echo(f"installing {','.join(modules)} into {instance} …")
-    try:
-        result = install_instance_modules(
-            instance, workspace_root,
-            list(modules) or None,
-            save=not no_save,
-            timeout=timeout,
-        )
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = install_instance_modules(
+        instance, workspace_root,
+        list(modules) or None,
+        save=not no_save,
+        timeout=timeout,
+    )
 
     if result.already_installed:
         click.echo(f"  note: {', '.join(result.already_installed)} already installed in DB — use `owm upgrade` to update")
@@ -361,11 +349,7 @@ def cmd_stop(ctx, name, wait):
     """Stop an instance. NAME may be omitted when inside an instance directory."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    try:
-        result = stop_instance(instance, workspace_root, wait=wait)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = stop_instance(instance, workspace_root, wait=wait)
     if result.status == "not_running":
         click.echo(f"{instance} is not running")
     elif result.status == "stopped":
@@ -384,12 +368,8 @@ def cmd_restart(ctx, name):
     """Stop then start an instance."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    try:
-        stop_instance(instance, workspace_root, wait=True)
-        result = start_instance(instance, workspace_root, wait=False)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    stop_instance(instance, workspace_root, wait=True)
+    result = start_instance(instance, workspace_root, wait=False)
     click.echo(f"{instance}  restarted  pid={result.pid}")
 
 
@@ -584,17 +564,13 @@ def cmd_delete(ctx, name, force):
     workspace_root = _resolve_workspace(ctx)
     running = _is_running(instance, workspace_root)
     compare_pairs = _workspace_compare_pairs(workspace_root)
-    try:
-        result = delete_instance(
-            instance=instance,
-            running=running,
-            force=force,
-            workspace_root=workspace_root,
-            workspace_compare_pairs=compare_pairs,
-        )
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = delete_instance(
+        instance=instance,
+        running=running,
+        force=force,
+        workspace_root=workspace_root,
+        workspace_compare_pairs=compare_pairs,
+    )
     if result.status == "pending_confirmation":
         for item in result.checklist or []:
             click.echo(f"  • {item}")
@@ -602,17 +578,13 @@ def cmd_delete(ctx, name, force):
         if not click.confirm(f"Delete {instance!r}?", default=False):
             click.echo("aborted")
             sys.exit(1)
-        try:
-            result = delete_instance(
-                instance=instance,
-                running=running,
-                force=True,
-                workspace_root=workspace_root,
-                workspace_compare_pairs=compare_pairs,
-            )
-        except OwmError as e:
-            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-            sys.exit(1)
+        result = delete_instance(
+            instance=instance,
+            running=running,
+            force=True,
+            workspace_root=workspace_root,
+            workspace_compare_pairs=compare_pairs,
+        )
     click.echo(f"{instance}  deleted")
 
 
@@ -632,17 +604,13 @@ def cmd_rename(ctx, name, new_name):
         )
     running = _is_running(name, workspace_root)
     compare_pairs = _workspace_compare_pairs(workspace_root)
-    try:
-        result = rename_instance(
-            instance=name,
-            new_name=new_name,
-            running=running,
-            workspace_root=workspace_root,
-            workspace_compare_pairs=compare_pairs,
-        )
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = rename_instance(
+        instance=name,
+        new_name=new_name,
+        running=running,
+        workspace_root=workspace_root,
+        workspace_compare_pairs=compare_pairs,
+    )
     click.echo(f"{name} → {new_name}")
     if result.old_url and result.new_url:
         click.echo(f"  {result.old_url} → {result.new_url}")
@@ -667,12 +635,8 @@ def cmd_logs(ctx, name, lines, level, follow):
         if level:
             click.echo("warning: --level is ignored with --follow", err=True)
         os.execvp("tail", ["tail", "-f", log_path])
-    try:
-        result = show_logs(instance=instance, n=lines, follow=False, level=level,
-                           workspace_root=workspace_root)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = show_logs(instance=instance, n=lines, follow=False, level=level,
+                       workspace_root=workspace_root)
     if result.warning:
         click.echo(f"warning: {result.warning}", err=True)
     for line in result.lines:
@@ -755,11 +719,7 @@ def cmd_run_script(ctx, name, script, json_out):
         raise click.UsageError("SCRIPT is required.")
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    try:
-        result = run_instance_script(instance, workspace_root, script)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = run_instance_script(instance, workspace_root, script)
     if json_out:
         click.echo(json.dumps(result))
         return
@@ -791,11 +751,7 @@ def cmd_compare(ctx, name, base, script, json_out):
     """
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    try:
-        result = compare_instance(instance, workspace_root, base, script)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = compare_instance(instance, workspace_root, base, script)
     if json_out:
         click.echo(json.dumps(result))
         return
@@ -818,17 +774,13 @@ def cmd_db_dump(ctx, name, out):
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     conf = load_instance_config(instance, workspace_root)
-    try:
-        result = db_dump(
-            instance=instance,
-            out=out,
-            workspace_root=workspace_root,
-            db_name=conf.database.name,
-            pg_port=conf.database.pg_port,
-        )
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = db_dump(
+        instance=instance,
+        out=out,
+        workspace_root=workspace_root,
+        db_name=conf.database.name,
+        pg_port=conf.database.pg_port,
+    )
     click.echo(f"dump: {result.path}")
 
 
@@ -842,18 +794,14 @@ def cmd_db_restore(ctx, name, path_arg):
     workspace_root = _resolve_workspace(ctx)
     conf = load_instance_config(instance, workspace_root)
     running = _is_running(instance, workspace_root)
-    try:
-        result = db_restore(
-            instance=instance,
-            path=path_arg,
-            workspace_root=workspace_root,
-            db_name=conf.database.name,
-            pg_port=conf.database.pg_port,
-            running=running,
-        )
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = db_restore(
+        instance=instance,
+        path=path_arg,
+        workspace_root=workspace_root,
+        db_name=conf.database.name,
+        pg_port=conf.database.pg_port,
+        running=running,
+    )
     click.echo(f"restored: {result.resolved_path}")
 
 
@@ -930,12 +878,8 @@ def cmd_archive(ctx, name, discard_db):
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     running = _is_running(instance, workspace_root)
-    try:
-        archive_instance(instance=instance, workspace_root=workspace_root,
-                         running=running, discard_db=discard_db)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    archive_instance(instance=instance, workspace_root=workspace_root,
+                     running=running, discard_db=discard_db)
     click.echo(f"{instance}  archived  _archive/{instance}/")
 
 
@@ -967,24 +911,16 @@ def cmd_unarchive(ctx, name, discard):
     dest_toml = os.path.join(instance_dir, "instance.toml")
     shutil.copy2(archived_toml, dest_toml)
     _strip_archived_sections(dest_toml)
-    try:
-        create_instance(name, workspace_root)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    create_instance(name, workspace_root)
     click.echo(f"  materialised {name}")
 
     # Restore database
     if os.path.exists(archived_dump):
         conf = load_instance_config(name, workspace_root)
-        try:
-            db_restore(
-                instance=name, path=archived_dump, workspace_root=workspace_root,
-                db_name=conf.database.name, pg_port=conf.database.pg_port, running=False,
-            )
-        except OwmError as e:
-            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-            sys.exit(1)
+        db_restore(
+            instance=name, path=archived_dump, workspace_root=workspace_root,
+            db_name=conf.database.name, pg_port=conf.database.pg_port, running=False,
+        )
         click.echo("  restored DB from archive dump")
     else:
         click.echo("  note: no db.dump in archive — DB not restored")
@@ -1268,11 +1204,7 @@ def cmd_diff(ctx, name, name_only, stat, json_out):
     mode = "name-only" if name_only else "stat" if stat else "patch"
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    try:
-        result = instance_diff(instance, workspace_root, mode=mode)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = instance_diff(instance, workspace_root, mode=mode)
     if json_out:
         click.echo(json.dumps(result))
         return
@@ -1303,11 +1235,7 @@ def cmd_check_modules(ctx, name, json_out):
     """Check which [install] modules are installed in the instance DB."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    try:
-        result = check_modules(instance, workspace_root)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = check_modules(instance, workspace_root)
     if json_out:
         click.echo(json.dumps(result))
         return
@@ -1421,11 +1349,7 @@ def cmd_sync(ctx, name, repo, rebase):
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     repo_states = _gather_repo_states(instance, workspace_root)
-    try:
-        results = sync_instance(instance, repo_states, rebase=rebase, repo=repo)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    results = sync_instance(instance, repo_states, rebase=rebase, repo=repo)
     conf = load_instance_config(instance, workspace_root)
     failed = False
     for rname, outcome in results.items():
@@ -1479,23 +1403,15 @@ def cmd_push(ctx, name, repo, all_repos):
             click.echo(f"error: {repo} has uncommitted changes — commit or stash before pushing", err=True)
             sys.exit(1)
         branch_status = state.get("status") if state.get("status") in ("diverged", "ahead") else None
-        try:
-            results = push_instance(
-                instance, repo=repo, branch_status=branch_status,
-                shared=repo_states[repo].get("shared", False),
-                owned=not load_instance_config(instance, workspace_root).repos[repo].readonly,
-            )
-        except OwmError as e:
-            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-            sys.exit(1)
+        results = push_instance(
+            instance, repo=repo, branch_status=branch_status,
+            shared=repo_states[repo].get("shared", False),
+            owned=not load_instance_config(instance, workspace_root).repos[repo].readonly,
+        )
     else:
-        try:
-            results = push_instance(
-                instance, repo=repo, all_repos=all_repos, repo_states=repo_states,
-            )
-        except OwmError as e:
-            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-            sys.exit(1)
+        results = push_instance(
+            instance, repo=repo, all_repos=all_repos, repo_states=repo_states,
+        )
 
     conf = load_instance_config(instance, workspace_root)
     failed = False
@@ -1535,13 +1451,9 @@ def cmd_reset(ctx, name, repo, force, all_repos):
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     repo_states = _gather_repo_states(instance, workspace_root)
-    try:
-        results = reset_instance(
-            instance, repo=repo, force=force, all_repos=all_repos, repo_states=repo_states,
-        )
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    results = reset_instance(
+        instance, repo=repo, force=force, all_repos=all_repos, repo_states=repo_states,
+    )
     conf = load_instance_config(instance, workspace_root)
     failed = False
     for rname, outcome in results.items():
@@ -1578,11 +1490,7 @@ def cmd_pull_base(ctx, name, repo):
     """
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
-    try:
-        result = pull_base_instance(instance, workspace_root, repo=repo)
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = pull_base_instance(instance, workspace_root, repo=repo)
 
     if result.get("note"):
         click.echo(f"  {result['note']}")
@@ -1623,16 +1531,12 @@ def cmd_template_create(ctx, instance, template_name):
     workspace_root = _resolve_workspace(ctx)
     conf = load_instance_config(instance, workspace_root)
     running = _is_running(instance, workspace_root)
-    try:
-        result = create_template_from_instance(
-            instance_db=conf.database.name,
-            template_name=template_name,
-            pg_port=conf.database.pg_port,
-            is_running=running,
-        )
-    except OwmError as e:
-        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
-        sys.exit(1)
+    result = create_template_from_instance(
+        instance_db=conf.database.name,
+        template_name=template_name,
+        pg_port=conf.database.pg_port,
+        is_running=running,
+    )
     click.echo(f"template: {result.template_name}  (source: {result.source_db})")
 
 
