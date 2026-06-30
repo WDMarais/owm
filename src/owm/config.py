@@ -320,6 +320,24 @@ def parse_repo_spec(spec: str | dict) -> RepoSpec:
     return RepoSpec.model_validate(spec)
 
 
+def _config_error_from_validation(label: str, e: ValidationError) -> ConfigError:
+    """Build a one-line ConfigError from a pydantic ValidationError.
+
+    pydantic's default str() is a multi-line dump; embedding it leaks an ugly
+    blob into every consumer (CLI line, dashboard notification). Summarise to
+    the first offending field plus an overflow count, and keep the full
+    structured list in .extra for consumers that want to expand it."""
+    details = [
+        {"loc": ".".join(str(p) for p in err["loc"]), "msg": err["msg"]}
+        for err in e.errors()
+    ]
+    first = details[0]
+    summary = f"{first['loc']}: {first['msg']}"
+    if len(details) > 1:
+        summary += f" (+{len(details) - 1} more)"
+    return ConfigError(f"invalid {label}: {summary}", errors=details)
+
+
 def parse_workspace_config(toml: str) -> WorkspaceConfig:
     try:
         raw = tomllib.loads(toml)
@@ -328,7 +346,7 @@ def parse_workspace_config(toml: str) -> WorkspaceConfig:
     try:
         return WorkspaceConfig.model_validate(raw)
     except ValidationError as e:
-        raise ConfigError(f"invalid workspace.toml: {e}") from e
+        raise _config_error_from_validation("workspace.toml", e) from e
 
 
 def parse_instance_config(toml: str) -> InstanceConfig:
@@ -339,7 +357,7 @@ def parse_instance_config(toml: str) -> InstanceConfig:
     try:
         return InstanceConfig.model_validate(raw)
     except ValidationError as e:
-        raise ConfigError(f"invalid instance.toml: {e}") from e
+        raise _config_error_from_validation("instance.toml", e) from e
 
 
 def load_instance_config(instance: str, workspace_root: str) -> InstanceConfig:
