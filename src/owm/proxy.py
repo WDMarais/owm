@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 from typing import Protocol, runtime_checkable
 
 
@@ -108,12 +109,42 @@ class CaddyBackend:
             os.remove(path)
         self._reload()
 
-    def _reload(self) -> None:
-        if os.path.exists(self._caddy_config):
-            subprocess.run(
-                ["caddy", "reload", "--config", self._caddy_config],
-                check=False, capture_output=True,
+    def _reload(self) -> bool:
+        """Best-effort `caddy reload` so a written/removed block takes effect.
+        Never raises (the block is on disk either way), but surfaces failure to
+        stderr instead of reporting a false success: a non-zero reload — most
+        often an ambiguous/invalid site elsewhere in the Caddyfile — leaves the
+        running caddy on its old config, so the instance silently isn't served.
+        Returns whether the reload actually applied."""
+        if not os.path.exists(self._caddy_config):
+            print(
+                f"warning: caddy config {self._caddy_config} not found — proxy block "
+                f"written but not reloaded; caddy is not serving this instance.",
+                file=sys.stderr,
             )
+            return False
+        try:
+            r = subprocess.run(
+                ["caddy", "reload", "--config", self._caddy_config],
+                check=False, capture_output=True, text=True,
+            )
+        except FileNotFoundError:
+            print(
+                "warning: caddy not found on PATH — proxy block written but not reloaded.",
+                file=sys.stderr,
+            )
+            return False
+        if r.returncode != 0:
+            detail = (r.stderr or r.stdout or "").strip()
+            print(
+                f"warning: caddy reload failed (exit {r.returncode}) — the proxy block is "
+                f"on disk but the running caddy kept its old config, so this instance is "
+                f"not being served. Fix the Caddyfile and rerun `caddy reload`."
+                + (f"\n  {detail}" if detail else ""),
+                file=sys.stderr,
+            )
+            return False
+        return True
 
 
 def get_proxy_backend(proxy_conf) -> ProxyBackend | None:
