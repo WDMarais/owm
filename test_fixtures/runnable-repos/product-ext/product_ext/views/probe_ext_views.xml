@@ -1,0 +1,12 @@
+<odoo>
+    <record id="view_product_probe_form_ext" model="ir.ui.view">
+        <field name="name">product.probe.form.ext</field>
+        <field name="model">product.probe</field>
+        <field name="inherit_id" ref="product_base.view_product_probe_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="extra"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

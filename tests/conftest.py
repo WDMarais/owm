@@ -4,7 +4,7 @@ Shared pytest fixtures for re-owm integration and smoke tests.
 Fixture tiers:
   - git primitives: make_upstream_repo, make_bare_clone, git_commit
   - workspace: tmp_workspace, workspace_toml, instance_toml
-  - repo seeds: fixture_repo_path (serves test_fixtures/repos/* content)
+  - repo seeds: fixture_repo_path (serves test_fixtures/lightweight-repos/* content)
 
 When wiring up red tests that need real filesystem/git state, import
 fixtures from here rather than building git setup inline. Tests that
@@ -85,7 +85,7 @@ def _fixture_ports_unoccupied():
 # Paths
 # ---------------------------------------------------------------------------
 
-FIXTURE_REPOS = Path(__file__).parent.parent / "test_fixtures" / "repos"
+FIXTURE_REPOS = Path(__file__).parent.parent / "test_fixtures" / "lightweight-repos"
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +129,7 @@ def make_upstream_repo(tmp_path, git_commit):
 
     Args:
         name: repo name (used as subdirectory under tmp_path/_upstream/)
-        seed: "fixture" uses test_fixtures/repos/<name>/ content;
+        seed: "fixture" uses test_fixtures/lightweight-repos/<name>/ content;
               dict maps relative paths to file content strings;
               None creates an empty repo with a single README commit.
 
