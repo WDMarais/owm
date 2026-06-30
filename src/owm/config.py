@@ -2,6 +2,7 @@ import os
 import tomllib
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_field, model_validator
 
@@ -282,7 +283,7 @@ class PythonSection(BaseModel):
 
 class ScriptRunner(BaseModel):
     file: str
-    type: str
+    type: Literal["shell", "plain"]  # shell = runs inside odoo-bin shell (env injected); plain = bare python
 
 
 class ScriptCompare(BaseModel):
