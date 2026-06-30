@@ -116,7 +116,26 @@ def _workspace_compare_pairs(workspace_root: str) -> list:
         return parse_workspace_config(f.read()).compare_pairs
 
 
-@click.group()
+class OwmCli(click.Group):
+    """Group with a top-level OwmError boundary.
+
+    Catching OwmError is otherwise opt-in per command, so any command that
+    forgets re-introduces a raw traceback on a routine failure. This is the
+    backstop: any OwmError escaping any command renders as the standard
+    `error: <msg> [<code>]` line and exits 1. Commands with their own
+    OwmError handler (custom messages, code-specific handling, or per-repo
+    loops that continue past a failure) still catch first — this only sees
+    what escapes."""
+
+    def invoke(self, ctx):
+        try:
+            return super().invoke(ctx)
+        except OwmError as e:
+            click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+            sys.exit(1)
+
+
+@click.group(cls=OwmCli)
 @click.option(
     "--workspace", "-w",
     default=None,

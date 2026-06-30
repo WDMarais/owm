@@ -947,3 +947,47 @@ def test_branches_instance_shows_branch_names(runner, tmp_workspace):
     assert result.exit_code == 0
     assert "main" in result.output
     assert "feat-789-dev" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Top-level OwmError boundary (OwmCli)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cli_integration
+def test_owmcli_renders_escaping_owm_error_as_clean_exit(runner):
+    """An OwmError that escapes a command with no local handler is rendered by
+    the group's boundary as the standard error line + exit 1, not a traceback."""
+    import click
+    from owm.cli import OwmCli
+    from owm.errors import OwmError, NOT_FOUND
+
+    @click.group(cls=OwmCli)
+    def app():
+        pass
+
+    @app.command("boom")
+    def boom():
+        raise OwmError("kaboom", code=NOT_FOUND)
+
+    result = runner.invoke(app, ["boom"])
+    assert result.exit_code == 1
+    assert "error: kaboom [NOT_FOUND]" in result.output
+
+
+@pytest.mark.cli_integration
+def test_owmcli_passes_success_through(runner):
+    """The boundary is transparent on the success path."""
+    import click
+    from owm.cli import OwmCli
+
+    @click.group(cls=OwmCli)
+    def app():
+        pass
+
+    @app.command("ok")
+    def ok():
+        click.echo("done")
+
+    result = runner.invoke(app, ["ok"])
+    assert result.exit_code == 0
+    assert "done" in result.output
