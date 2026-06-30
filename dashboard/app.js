@@ -72,19 +72,44 @@ async function loadStatus() {
     setInterval(loadNotifications, 30_000);
 }
 
+const FETCH_MIN_MS = 500;      // keep "Fetching" up long enough to read on a fast fetch
+const FETCH_TIMEOUT_MS = 60_000;
+
 async function doFetch() {
     const btn = document.getElementById("fetch-btn");
+    if (btn.disabled) return;                    // already in flight — ignore re-clicks
+    const idle = btn.textContent;
     btn.disabled = true;
-    const prev = btn.textContent;
-    btn.textContent = "⟳";
+    btn.classList.add("busy");
+    btn.textContent = "Fetching";
+    // Pull focus to the live owm log — the fetch now logs on initiation, so this
+    // makes it visible something is happening even if you weren't watching logs.
+    if (_activeTab !== "owm") _activateTab("owm");
+    const pane = document.getElementById("right-pane");
+    pane.classList.remove("fetching");
+    void pane.offsetWidth;            // restart the flash on a repeat fetch
+    pane.classList.add("fetching");
+
+    // Guaranteed teardown on every path: success, error, OR a hung request (the
+    // AbortController caps it so the label can never get stuck on "Fetching").
+    // The minimum window keeps the label readable on a fast local fetch.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+    const minBusy = new Promise(r => setTimeout(r, FETCH_MIN_MS));
     try {
-        await fetch("/api/fetch", { method: "POST" });
+        await fetch("/api/fetch", { method: "POST", signal: ctrl.signal });
         const data = await api("/api/status");
         renderRepoList(data.repos);
         await loadNotifications();
-    } catch (_) {}
-    btn.textContent = prev;
-    btn.disabled = false;
+    } catch (_) {
+        // aborted/network error — fall through to teardown
+    } finally {
+        clearTimeout(timer);
+        await minBusy;
+        btn.textContent = idle;
+        btn.classList.remove("busy");
+        btn.disabled = false;
+    }
 }
 
 async function loadBanner() {
