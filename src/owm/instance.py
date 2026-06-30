@@ -851,6 +851,12 @@ def stop_instance(
     os.kill(pid, signal.SIGTERM)
 
     if not wait:
+        # Drop the running-state tracker even without waiting for exit: the
+        # instance has been signalled to stop, and a lingering (soon-dead) pid in
+        # state.json is exactly what makes the next scan flag a stale/orphaned
+        # process. Confirmed-stop callers pass wait=True, which also clears below.
+        _clear_pid(instance, workspace_root)
+        workspace_log(workspace_root, "stop", instance=instance, pid=pid, status="signalled")
         return StopResult(status="stopping", pid=pid)
 
     if _wait_for_stop(pid, timeout_seconds):
