@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 from owm.api import odoo_ps
 from owm.archive import archive_instance
-from owm.config import parse_workspace_config, parse_instance_config, load_instance_config
+from owm.config import parse_workspace_config, parse_instance_config, load_instance_config, list_instances
 from owm.errors import OwmError
 from owm.worktrees import resolve_worktree_path
 from owm.instance import (
@@ -94,9 +94,10 @@ WORKSPACE = _find_workspace()
 # ── Disk helpers ──────────────────────────────────────────────────────────────
 
 def _instances() -> list[str]:
-    return sorted(
-        p.name for p in (WORKSPACE / "instances").iterdir() if p.is_dir()
-    )
+    # An instance is a dir with an instance.toml — defer to the lib's definition
+    # so the dashboard doesn't list toml-less orphan dirs (which otherwise show
+    # up as bogus "error" instances).
+    return list_instances(str(WORKSPACE))
 
 
 def _read_state(instance: str) -> dict:
