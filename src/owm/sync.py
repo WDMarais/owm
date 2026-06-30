@@ -336,6 +336,9 @@ def fetch_active_branches(workspace_root: str) -> dict:
         if not os.path.isdir(bare_path):
             continue
         branches = sorted(active.get(name, []))
+        # Log initiation up front so the owm log (and the dashboard's live stream)
+        # shows the fetch starting, not only the per-repo outcome once it finishes.
+        workspace_log(workspace_root, "fetch", repo=name, status="started")
         try:
             updated = git_fetch_bare(bare_path, branches=branches or None)
         except OwmError as e:
