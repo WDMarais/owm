@@ -491,6 +491,15 @@ def api_notifications():
 
         try:
             cfg = parse_instance_config((WORKSPACE / "instances" / name / "instance.toml").read_text())
+        except OwmError as e:
+            # ConfigError already reads "invalid instance.toml: <field>: <msg>";
+            # show it with its code rather than re-wrapping it in another
+            # "instance.toml unreadable" prefix (which doubled the wording).
+            notifications.append({
+                "tier": "warn", "instance": name,
+                "msg": f"{e.args[0]} [{e.code}]", "section": "health",
+            })
+            continue
         except Exception as e:
             notifications.append({
                 "tier": "warn", "instance": name,
