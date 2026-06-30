@@ -16,6 +16,7 @@ from owm.errors import (
     SHARED_REPO,
     DIRTY_WORKTREE,
     FETCH_TIMEOUT,
+    GIT_COMMAND_FAILED,
 )
 from owm.oplog import workspace_log
 from owm.worktrees import resolve_worktree_path
@@ -26,8 +27,20 @@ from owm.worktrees import resolve_worktree_path
 # ---------------------------------------------------------------------------
 
 def git_run(args: list[str], cwd: str, *, check: bool = True, timeout: int | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=str(cwd), check=check,
-                          capture_output=True, text=True, timeout=timeout)
+    try:
+        return subprocess.run(["git", *args], cwd=str(cwd), check=check,
+                              capture_output=True, text=True, timeout=timeout)
+    except subprocess.CalledProcessError as e:
+        # Turn a git failure into an OwmError so the CLI's top-level handler
+        # prints a clean message + code instead of dumping a raw traceback.
+        # check=False callers never reach here (they inspect returncode);
+        # only check=True callers, which previously let CalledProcessError
+        # escape uncaught. stderr carries the actionable detail (e.g. a stale
+        # index.lock path) and rides home in .extra for structured consumers.
+        stderr = (e.stderr or "").strip()
+        detail = stderr or f"git {args[0]} exited {e.returncode}"
+        raise OwmError(f"git {args[0]} failed: {detail}", code=GIT_COMMAND_FAILED,
+                       stderr=stderr, returncode=e.returncode) from e
 
 
 def read_repo_state(worktree_path: str) -> dict:

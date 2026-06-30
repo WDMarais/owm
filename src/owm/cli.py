@@ -1402,25 +1402,40 @@ def cmd_sync(ctx, name, repo, rebase):
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
     repo_states = _gather_repo_states(instance, workspace_root)
-    results = sync_instance(instance, repo_states, rebase=rebase, repo=repo)
+    try:
+        results = sync_instance(instance, repo_states, rebase=rebase, repo=repo)
+    except OwmError as e:
+        click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
+        sys.exit(1)
     conf = load_instance_config(instance, workspace_root)
+    failed = False
     for rname, outcome in results.items():
         status = outcome["status"]
-        if status == "fast-forwarded":
-            rspec = conf.repos[rname]
-            wt = resolve_worktree_path(
-                repo=rname, branch=rspec.branch, shared=rspec.shared,
-                workspace_root=workspace_root, instance_name=instance,
-            )
-            git_fast_forward(wt.path)
-        elif status == "rebased":
-            rspec = conf.repos[rname]
-            wt = resolve_worktree_path(
-                repo=rname, branch=rspec.branch, shared=rspec.shared,
-                workspace_root=workspace_root, instance_name=instance,
-            )
-            git_rebase(wt.path)
+        # Each repo's git mutation is isolated: a failure on one (e.g. a stale
+        # index.lock blocking the ff) surfaces as a clean line and the rest
+        # still sync, rather than a raw traceback aborting the whole run.
+        try:
+            if status == "fast-forwarded":
+                rspec = conf.repos[rname]
+                wt = resolve_worktree_path(
+                    repo=rname, branch=rspec.branch, shared=rspec.shared,
+                    workspace_root=workspace_root, instance_name=instance,
+                )
+                git_fast_forward(wt.path)
+            elif status == "rebased":
+                rspec = conf.repos[rname]
+                wt = resolve_worktree_path(
+                    repo=rname, branch=rspec.branch, shared=rspec.shared,
+                    workspace_root=workspace_root, instance_name=instance,
+                )
+                git_rebase(wt.path)
+        except OwmError as e:
+            failed = True
+            click.echo(f"  {rname}  error: {e.args[0]} [{e.code}]", err=True)
+            continue
         click.echo(f"  {rname}  {status}")
+    if failed:
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------

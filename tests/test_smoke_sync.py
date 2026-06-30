@@ -15,12 +15,14 @@ import pytest
 from owm.sync import (
     read_repo_state,
     has_local_commits,
+    git_run,
     git_fetch_bare,
     git_fast_forward,
     git_rebase,
     git_push,
     git_reset_hard,
 )
+from owm.errors import OwmError, GIT_COMMAND_FAILED
 
 
 # ---------------------------------------------------------------------------
@@ -308,3 +310,44 @@ def test_git_reset_hard_discards_local_commits(tmp_path):
     assert has_local_commits(str(clone)) is True
     git_reset_hard(str(clone))
     assert has_local_commits(str(clone)) is False
+
+
+# ---------------------------------------------------------------------------
+# git_run — failure wrapping
+# ---------------------------------------------------------------------------
+
+@pytest.mark.smoke
+def test_git_run_wraps_failure_as_owm_error(tmp_path):
+    """A failing git command (check=True) raises OwmError(GIT_COMMAND_FAILED),
+    not a bare CalledProcessError, so the CLI prints a clean message. git's
+    stderr rides home in .extra for structured consumers (notifications)."""
+    up = _upstream(tmp_path)
+    clone = _clone(up, tmp_path / "clone")
+    with pytest.raises(OwmError) as ei:
+        git_run(["merge", "--ff-only", "origin/does-not-exist"], cwd=str(clone))
+    assert ei.value.code == GIT_COMMAND_FAILED
+    assert ei.value.extra.get("stderr")
+
+
+@pytest.mark.smoke
+def test_git_run_passthrough_when_check_false(tmp_path):
+    """check=False callers keep inspecting returncode — no wrapping."""
+    up = _upstream(tmp_path)
+    clone = _clone(up, tmp_path / "clone")
+    r = git_run(["merge", "--ff-only", "origin/does-not-exist"], cwd=str(clone), check=False)
+    assert r.returncode != 0
+
+
+@pytest.mark.smoke
+def test_git_fast_forward_surfaces_stale_index_lock(tmp_path):
+    """The incident: a stale index.lock blocking the ff is surfaced as a clean
+    OwmError whose message names the lock, instead of a raw traceback."""
+    up = _upstream(tmp_path)
+    clone = _clone(up, tmp_path / "clone")
+    _commit(up, "next.txt", "next", "advance upstream")
+    _git("fetch", "origin", cwd=clone)  # clone now behind origin/main
+    (clone / ".git" / "index.lock").write_text("")
+    with pytest.raises(OwmError) as ei:
+        git_fast_forward(str(clone))
+    assert ei.value.code == GIT_COMMAND_FAILED
+    assert "index.lock" in ei.value.args[0]
