@@ -24,7 +24,7 @@ from owm.instance import (
 )
 from owm.ports import find_conflicting_process, listeners_on_ports, plan_ports
 from owm.sync import repo_alert_state, git_run
-from owm.scripts import execute_script, run_script, compare_instances, split_ndjson
+from owm.scripts import execute_script, run_script, compare_instances, parse_ndjson_output
 from owm.worktrees import resolve_worktree_path
 
 
@@ -343,23 +343,33 @@ def run_instance_script(instance: str, workspace_root: str, script: str) -> dict
     ndjson_dir = os.path.join(workspace_root, "_dumps", instance)
     os.makedirs(ndjson_dir, exist_ok=True)
 
-    stdout = execute_script(instance, script, workspace_root)
-    _, plain_output = split_ndjson(stdout)  # human prints, surfaced but not tallied
-
+    # Reserve the per-run result + log paths up front so the script can write its
+    # NDJSON to NDJSON_OUT as it runs. Uniqueness keys off the log, which owm
+    # always writes (the .ndjson is opt-in — a script may emit none).
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%S")
     stem = f"{script}-{ts}"
-    ndjson_name = f"{stem}.ndjson"
     n = 2
-    while os.path.exists(os.path.join(ndjson_dir, ndjson_name)):  # >1 run in the same second
-        ndjson_name = f"{stem}-{n}.ndjson"
+    while os.path.exists(os.path.join(ndjson_dir, f"{stem}.log")):  # >1 run in the same second
+        stem = f"{script}-{ts}-{n}"
         n += 1
+    ndjson_name = f"{stem}.ndjson"
     ndjson_path = os.path.join(ndjson_dir, ndjson_name)
-    with open(ndjson_path, "w") as f:
-        f.write(stdout)
+    log_path = os.path.join(ndjson_dir, f"{stem}.log")
+
+    run_log = execute_script(instance, script, workspace_root, ndjson_out=ndjson_path)
+    with open(log_path, "w") as f:
+        f.write(run_log)
+
+    # NDJSON is opt-in: ensure the file exists (empty = no structured results) so
+    # the latest pointer and compare always resolve.
+    if not os.path.exists(ndjson_path):
+        open(ndjson_path, "w").close()
+    with open(ndjson_path) as f:
+        ndjson = f.read()
     _point_latest(ndjson_dir, f"{script}-latest.ndjson", ndjson_name)
     _point_latest(ndjson_dir, "latest.ndjson", ndjson_name)
 
-    result = run_script(instance, script, ndjson_output=stdout)
+    result = run_script(instance, script, ndjson_output=ndjson)
 
     if result.status == "abort":
         return {
@@ -367,7 +377,8 @@ def run_instance_script(instance: str, workspace_root: str, script: str) -> dict
             "reason": result.abort_reason,
             "rows_run": result.rows_run,
             "ndjson_path": ndjson_path,
-            "output": plain_output,
+            "log_path": log_path,
+            "output": run_log,
         }
 
     failures = [r for r in result.rows if r.get("status") == "FAIL" and not r.get("_non_conforming")]
@@ -382,7 +393,8 @@ def run_instance_script(instance: str, workspace_root: str, script: str) -> dict
         },
         "failures": failures,
         "ndjson_path": ndjson_path,
-        "output": plain_output,
+        "log_path": log_path,
+        "output": run_log,
     }
 
 
@@ -420,10 +432,8 @@ def compare_instance(instance: str, workspace_root: str, base: str | None = None
         path = os.path.join(workspace_root, "_dumps", inst, ndjson_name)
         if not os.path.exists(path):
             return None
-        # Tolerate plain printout interleaved in the dump — only the NDJSON rows
-        # are diffable; a script's progress lines are not.
         with open(path) as fh:
-            return split_ndjson(fh.read())[0]
+            return parse_ndjson_output(fh.read())
 
     result = compare_instances(
         instance=instance,

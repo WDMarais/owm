@@ -305,15 +305,8 @@ def test_compare_symmetric_either_instance_can_initiate():
 
 
 @pytest.mark.script_runner
-def test_parse_ndjson_tolerates_plain_printout():
-    """Non-JSON lines are plain printout, not parse errors — only rows returned."""
-    rows = parse_ndjson_output('starting up\n{"case": "a", "status": "OK"}\ndone\n')
+def test_parse_ndjson_skips_non_json_lines():
+    """The results file is the structured channel; a stray non-JSON line is a
+    tolerant skip, not a fatal parse (stdout noise never reaches here)."""
+    rows = parse_ndjson_output('oops a stray line\n{"case": "a", "status": "OK"}\n')
     assert rows == [{"case": "a", "status": "OK"}]
-
-
-@pytest.mark.script_runner
-def test_split_ndjson_separates_rows_and_plain():
-    from owm.scripts import split_ndjson
-    rows, plain = split_ndjson('hello\n{"case": "a", "status": "OK"}\nbye\n')
-    assert rows == [{"case": "a", "status": "OK"}]
-    assert plain == ["hello", "bye"]

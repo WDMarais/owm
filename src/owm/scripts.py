@@ -57,15 +57,14 @@ class ScaffoldResult:
     content: str
 
 
-def split_ndjson(raw: str) -> tuple[list[dict], list[str]]:
-    """Separate a script's stdout into NDJSON rows and plain printout.
+def parse_ndjson_output(raw: str) -> list[dict]:
+    """NDJSON rows from a results file's contents.
 
-    A script may interleave human progress lines with its NDJSON result rows;
-    only the JSON lines are structured results. Non-JSON lines are not errors —
-    printing is allowed — so they come back separately for display rather than
-    crashing the parse. (A real failure is a nonzero exit, handled upstream.)"""
+    The results file is the structured channel: a script opts in by writing rows
+    to $NDJSON_OUT. owm never parses a script's stdout for structure, so this only
+    ever sees the file. Non-JSON lines are skipped rather than fatal — a tolerant
+    guardrail, since stdout (odoo-shell noise, human prints) is a separate sink."""
     rows: list[dict] = []
-    plain: list[str] = []
     for line in raw.strip().split("\n"):
         s = line.strip()
         if not s:
@@ -73,13 +72,8 @@ def split_ndjson(raw: str) -> tuple[list[dict], list[str]]:
         try:
             rows.append(json.loads(s))
         except json.JSONDecodeError:
-            plain.append(line)
-    return rows, plain
-
-
-def parse_ndjson_output(raw: str) -> list[dict]:
-    """NDJSON result rows from a script's stdout, ignoring any plain printout."""
-    return split_ndjson(raw)[0]
+            continue
+    return rows
 
 
 def run_script(
@@ -221,8 +215,9 @@ def compare_instances(
     )
 
 
-def execute_script(instance: str, script_name: str, workspace_root: str) -> str:
-    """Run an instance's declared script runner and return its stdout (NDJSON).
+def execute_script(instance: str, script_name: str, workspace_root: str,
+                   ndjson_out: str | None = None) -> str:
+    """Run an instance's declared script runner; return its raw stdout (run log).
 
     Resolves the runner from instance.toml ([scripts.runners].<name>), honoring
     scripts_dir and the runner's file/type, rather than assuming
@@ -230,8 +225,13 @@ def execute_script(instance: str, script_name: str, workspace_root: str) -> str:
     on the subprocess so a script reads its target exactly as an external caller
     would after ``owm env <instance> --format shell``. A ``plain`` runner runs as
     bare python; a ``shell`` runner is piped through odoo-bin shell with the ORM
-    ``env`` available. A missing runner/file or a nonzero exit raises rather than
-    returning empty output that tallies as a misleading "0 total".
+    ``env`` available.
+
+    Structured results are decoupled from stdout: a script opts in by writing
+    NDJSON rows to the file at $NDJSON_OUT (``ndjson_out``), which owm consumes at
+    completion. stdout is just the run log — odoo-shell noise, human prints,
+    whatever — returned for display, never parsed. A missing runner/file or a
+    nonzero exit raises rather than reporting a misleading empty success.
     """
     conf = load_instance_config(instance, workspace_root)
     runners = conf.scripts.runners if conf.scripts else {}
@@ -268,6 +268,10 @@ def execute_script(instance: str, script_name: str, workspace_root: str) -> str:
         instance_gevent_port=conf.server.gevent_port,
         instance_scripts_dir=scripts_dir,
     )}
+    if ndjson_out is not None:
+        # Where the script writes its NDJSON results (opt-in). Per-run, so it
+        # layers on top of the instance-level resolve_env contract.
+        env["NDJSON_OUT"] = ndjson_out
     venv_python = os.path.join(instance_dir, ".venv", "bin", "python")
 
     if runner.type == "shell":

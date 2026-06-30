@@ -17,7 +17,13 @@ BASE_OUT = '{"case": "login", "status": "OK"}\n{"case": "invoice", "status": "FA
 
 
 def _run(instance, output, tmp_workspace):
-    with patch("owm.api.execute_script", return_value=output):
+    # The script writes its NDJSON to $NDJSON_OUT and prints a run log to stdout;
+    # owm consumes the file, not stdout.
+    def fake_execute(inst, script, ws, ndjson_out=None):
+        with open(ndjson_out, "w") as f:
+            f.write(output)
+        return "run complete\n"
+    with patch("owm.api.execute_script", side_effect=fake_execute):
         return run_instance_script(instance, str(tmp_workspace), "smoke")
 
 
@@ -67,9 +73,23 @@ def test_compare_can_target_a_named_script(tmp_workspace):
     assert any(u["case"] == "invoice" for u in result["unexpected"])
 
 
-def test_run_script_surfaces_plain_output_and_tallies_only_rows(tmp_workspace):
-    mixed = '✓ did a thing\n{"case": "x", "status": "OK"}\nall done\n'
-    with patch("owm.api.execute_script", return_value=mixed):
+def test_run_script_tallies_file_and_surfaces_run_log(tmp_workspace):
+    """NDJSON comes from the results file; stdout is the run log, shown as-is."""
+    def fake_execute(inst, script, ws, ndjson_out=None):
+        with open(ndjson_out, "w") as f:
+            f.write('{"case": "x", "status": "OK"}\n')
+        return "✓ did a thing\nall done\n"
+    with patch("owm.api.execute_script", side_effect=fake_execute):
         r = run_instance_script("feat-1", str(tmp_workspace), "smoke")
-    assert r["summary"]["total"] == 1  # only the NDJSON row is tallied
-    assert r["output"] == ["✓ did a thing", "all done"]  # prints surfaced
+    assert r["summary"]["total"] == 1  # tallied from the file
+    assert r["output"] == "✓ did a thing\nall done\n"  # run log, verbatim
+    assert open(r["log_path"]).read() == "✓ did a thing\nall done\n"  # log persisted
+
+
+def test_run_script_no_ndjson_is_clean_zero(tmp_workspace):
+    """NDJSON is opt-in: a script that writes none is a clean 0-row run, not a failure."""
+    with patch("owm.api.execute_script", side_effect=lambda *a, **k: "just printing\n"):
+        r = run_instance_script("feat-1", str(tmp_workspace), "smoke")
+    assert r["status"] == "ok"
+    assert r["summary"]["total"] == 0
+    assert os.path.exists(r["ndjson_path"])  # empty file created for the latest pointer

@@ -723,8 +723,9 @@ def cmd_run_script(ctx, name, script, json_out):
     if json_out:
         click.echo(json.dumps(result))
         return
-    for line in result.get("output", []):  # script's plain prints, surfaced as-is
-        click.echo(line)
+    run_log = result.get("output", "")  # the script's raw stdout — shown, never parsed
+    if run_log.strip():
+        click.echo(run_log, nl=False if run_log.endswith("\n") else True)
     if result["status"] == "abort":
         click.echo(f"{instance}  {script}: aborted — {result['reason']} (after {result['rows_run']} rows)", err=True)
         sys.exit(1)

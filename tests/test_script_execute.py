@@ -54,16 +54,21 @@ def test_execute_script_missing_file_resolves_under_scripts_dir(tmp_workspace):
 
 
 @pytest.mark.script_runner
-def test_execute_script_plain_runs_with_env_and_returns_stdout(tmp_workspace):
+def test_execute_script_plain_writes_ndjson_file_and_returns_run_log(tmp_workspace, tmp_path):
     inst = _instance(tmp_workspace, "feat-1", runners={"smoke": ("smoke.py", "plain")}, with_venv=True)
     (inst / "scripts").mkdir()
+    # Writes a row (using the injected DB_NAME) to $NDJSON_OUT; prints a run log to stdout.
     (inst / "scripts" / "smoke.py").write_text(
         "import os, json\n"
-        "print(json.dumps({'case': os.environ['DB_NAME'], 'status': 'OK'}))\n"
+        "with open(os.environ['NDJSON_OUT'], 'w') as f:\n"
+        "    f.write(json.dumps({'case': os.environ['DB_NAME'], 'status': 'OK'}) + '\\n')\n"
+        "print('did the setup')\n"
     )
-    out = execute_script("feat-1", "smoke", str(tmp_workspace))
-    # DB_NAME from the env contract is visible to the script; stdout is the NDJSON
-    assert json.loads(out.strip()) == {"case": "db_feat-1", "status": "OK"}
+    out_file = tmp_path / "out.ndjson"
+    run_log = execute_script("feat-1", "smoke", str(tmp_workspace), ndjson_out=str(out_file))
+    # stdout is the run log; structured results live in the NDJSON_OUT file
+    assert run_log.strip() == "did the setup"
+    assert json.loads(out_file.read_text().strip()) == {"case": "db_feat-1", "status": "OK"}
 
 
 @pytest.mark.script_runner
