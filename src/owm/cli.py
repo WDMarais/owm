@@ -1479,18 +1479,26 @@ def cmd_push(ctx, name, repo, all_repos):
             sys.exit(1)
 
     conf = load_instance_config(instance, workspace_root)
+    failed = False
     for rname, outcome in results.items():
-        if outcome["status"] == "pushed":
-            rspec = conf.repos[rname]
-            wt = resolve_worktree_path(
-                repo=rname, branch=rspec.branch, shared=rspec.shared,
-                workspace_root=workspace_root, instance_name=instance,
-            )
-            git_push(wt.path)
-            bare = os.path.join(workspace_root, "_repos", f"{rname}.git")
-            if os.path.isdir(bare):
-                git_fetch_bare(bare, branches=[rspec.branch])
+        try:
+            if outcome["status"] == "pushed":
+                rspec = conf.repos[rname]
+                wt = resolve_worktree_path(
+                    repo=rname, branch=rspec.branch, shared=rspec.shared,
+                    workspace_root=workspace_root, instance_name=instance,
+                )
+                git_push(wt.path)
+                bare = os.path.join(workspace_root, "_repos", f"{rname}.git")
+                if os.path.isdir(bare):
+                    git_fetch_bare(bare, branches=[rspec.branch])
+        except OwmError as e:
+            failed = True
+            click.echo(f"  {rname}  error: {e.args[0]} [{e.code}]", err=True)
+            continue
         click.echo(f"  {rname}  {outcome['status']}")
+    if failed:
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -1516,15 +1524,23 @@ def cmd_reset(ctx, name, repo, force, all_repos):
         click.echo(f"error: {e.args[0]} [{e.code}]", err=True)
         sys.exit(1)
     conf = load_instance_config(instance, workspace_root)
+    failed = False
     for rname, outcome in results.items():
-        if outcome["status"] == "reset":
-            rspec = conf.repos[rname]
-            wt = resolve_worktree_path(
-                repo=rname, branch=rspec.branch, shared=rspec.shared,
-                workspace_root=workspace_root, instance_name=instance,
-            )
-            git_reset_hard(wt.path)
+        try:
+            if outcome["status"] == "reset":
+                rspec = conf.repos[rname]
+                wt = resolve_worktree_path(
+                    repo=rname, branch=rspec.branch, shared=rspec.shared,
+                    workspace_root=workspace_root, instance_name=instance,
+                )
+                git_reset_hard(wt.path)
+        except OwmError as e:
+            failed = True
+            click.echo(f"  {rname}  error: {e.args[0]} [{e.code}]", err=True)
+            continue
         click.echo(f"  {rname}  {outcome['status']}")
+    if failed:
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
