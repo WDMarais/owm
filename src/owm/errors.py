@@ -53,6 +53,8 @@ class ErrorCode(StrEnum):
     NO_ODOO_REPO        = "NO_ODOO_REPO"
     FETCH_TIMEOUT       = "FETCH_TIMEOUT"
     GIT_COMMAND_FAILED  = "GIT_COMMAND_FAILED"
+    SCRIPT_NOT_FOUND    = "SCRIPT_NOT_FOUND"
+    SCRIPT_FAILED       = "SCRIPT_FAILED"
     # Config failures, named by owning domain rather than file format (which is
     # incidental): OWM_CONFIG_* = owm's own config (instance.toml / workspace.toml);
     # ODOO_CONFIG_* = the Odoo server config owm generates (instance.conf).
@@ -98,6 +100,8 @@ CONFIRMATION_REQUIRED = ErrorCode.CONFIRMATION_REQUIRED
 NO_ODOO_REPO          = ErrorCode.NO_ODOO_REPO
 FETCH_TIMEOUT         = ErrorCode.FETCH_TIMEOUT
 GIT_COMMAND_FAILED    = ErrorCode.GIT_COMMAND_FAILED
+SCRIPT_NOT_FOUND      = ErrorCode.SCRIPT_NOT_FOUND
+SCRIPT_FAILED         = ErrorCode.SCRIPT_FAILED
 OWM_CONFIG_INVALID    = ErrorCode.OWM_CONFIG_INVALID
 ODOO_CONFIG_UNMARKED  = ErrorCode.ODOO_CONFIG_UNMARKED
 ODOO_CONFIG_NO_ADDONS = ErrorCode.ODOO_CONFIG_NO_ADDONS

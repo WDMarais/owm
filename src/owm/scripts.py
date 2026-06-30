@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
+from owm.config import load_instance_config
+from owm.env import resolve_env
+from owm.errors import OwmError, SCRIPT_NOT_FOUND, SCRIPT_FAILED
+
 
 class FailureMode(StrEnum):
     ROW_LEVEL = "row_level"
@@ -198,10 +202,73 @@ def compare_instances(
 
 
 def execute_script(instance: str, script_name: str, workspace_root: str) -> str:
-    """Run the script subprocess with the instance venv; return raw stdout (NDJSON lines)."""
-    venv_python = os.path.join(workspace_root, "instances", instance, ".venv", "bin", "python")
-    script_path = os.path.join(workspace_root, "scripts", instance, f"{script_name}.py")
-    r = subprocess.run([venv_python, script_path], capture_output=True, text=True, check=False)
+    """Run an instance's declared script runner and return its stdout (NDJSON).
+
+    Resolves the runner from instance.toml ([scripts.runners].<name>), honoring
+    scripts_dir and the runner's file/type, rather than assuming
+    scripts/<instance>/<name>.py. The instance env contract (resolve_env) is set
+    on the subprocess so a script reads its target exactly as an external caller
+    would after ``owm env <instance> --format shell``. A ``plain`` runner runs as
+    bare python; a ``shell`` runner is piped through odoo-bin shell with the ORM
+    ``env`` available. A missing runner/file or a nonzero exit raises rather than
+    returning empty output that tallies as a misleading "0 total".
+    """
+    conf = load_instance_config(instance, workspace_root)
+    runners = conf.scripts.runners if conf.scripts else {}
+    runner = runners.get(script_name)
+    if runner is None:
+        known = ", ".join(sorted(runners)) or "none"
+        raise OwmError(
+            f"no script runner {script_name!r} in [scripts.runners] (known: {known})",
+            code=SCRIPT_NOT_FOUND,
+        )
+
+    instance_dir = os.path.join(workspace_root, "instances", instance)
+    scripts_dir = conf.scripts.scripts_dir if conf.scripts else None
+    base = os.path.join(instance_dir, scripts_dir) if scripts_dir else instance_dir
+    script_path = os.path.join(base, runner.file)
+    if not os.path.isfile(script_path):
+        raise OwmError(f"script file not found: {script_path}", code=SCRIPT_NOT_FOUND)
+
+    # Only a shell runner needs odoo-bin; resolving it for a plain runner would
+    # force an odoo repo on instances that don't have one. Local import: instance.py
+    # pulls in a heavier graph that would couple this low-level runner to it.
+    odoo_bin = None
+    if runner.type == "shell":
+        from owm.instance import odoo_bin_path
+        odoo_bin = odoo_bin_path(conf, workspace_root, instance)
+
+    env = {**os.environ, **resolve_env(
+        instance=instance,
+        workspace_root=workspace_root,
+        odoo_bin=odoo_bin,
+        instance_db_name=conf.database.name,
+        instance_pg_port=conf.database.pg_port,
+        instance_http_port=conf.server.http_port,
+        instance_gevent_port=conf.server.gevent_port,
+        instance_scripts_dir=scripts_dir,
+    )}
+    venv_python = os.path.join(instance_dir, ".venv", "bin", "python")
+
+    if runner.type == "shell":
+        # Pipe the script through odoo-bin shell so it runs with the ORM `env`
+        # bound — the same invocation `owm shell` uses.
+        conf_path = os.path.join(instance_dir, "instance.conf")
+        cmd = [venv_python, odoo_bin, "shell", "-c", conf_path,
+               "-d", conf.database.name, "--no-http"]
+        with open(script_path) as f:
+            stdin = f.read()
+    else:  # plain
+        cmd = [venv_python, script_path]
+        stdin = None
+
+    r = subprocess.run(cmd, input=stdin, capture_output=True, text=True, check=False, env=env)
+    if r.returncode != 0:
+        detail = (r.stderr or "").strip() or f"exited {r.returncode}"
+        raise OwmError(
+            f"script {script_name!r} failed: {detail}",
+            code=SCRIPT_FAILED, returncode=r.returncode, stderr=(r.stderr or "").strip(),
+        )
     return r.stdout
 
 
