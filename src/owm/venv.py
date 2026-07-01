@@ -66,8 +66,27 @@ def _delete_venv(venv_dir: str) -> None:
     shutil.rmtree(venv_dir, ignore_errors=True)
 
 
+def _file_fingerprint(path: str) -> str:
+    """`path:sha256(content)` — a missing file hashes as empty content.
+
+    Content-sensitive so an in-place edit to a requirements/patch file (same
+    path) moves the stamp, while a no-op git checkout that rewrites the file
+    with identical content does not. Path stays in the fingerprint so a rename
+    or a swap to a differently-named variant still registers."""
+    try:
+        with open(path, "rb") as f:
+            body = f.read()
+    except OSError:
+        body = b""
+    return f"{path}:{hashlib.sha256(body).hexdigest()}"
+
+
 def compute_stamp(requirements_files: list[str], patches: list[str]) -> str:
-    parts = sorted(requirements_files) + ["--patches--"] + sorted(patches)
+    parts = (
+        [_file_fingerprint(f) for f in sorted(requirements_files)]
+        + ["--patches--"]
+        + [_file_fingerprint(p) for p in sorted(patches)]
+    )
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
 
 

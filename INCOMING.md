@@ -129,13 +129,10 @@ The four lifecycle regressions vs legacy that gated the branch-marker work are n
 (collect requirements from every repo + suffix variants + `[python].requirements`; reuse an
 existing DB on create; auto-install `[install].modules` on create; reconcile modules on
 db-reset — auto-install defaults on with a `--no-install` opt-out on both create and reset).
-Two residual questions the pass surfaced, kept here because they're decisions not bugs:
+The venv re-sync stamp is now content-based (`compute_stamp` hashes each requirements/patch
+file's contents), so an in-place edit re-syncs while a no-op git checkout does not. One
+residual question the pass surfaced, kept here because it's a decision not a bug:
 
-- **venv re-sync is set-based, not content-based.** `_provision_venv`/`_sync_instance_venv`
-  reconcile via `compute_stamp`, which hashes the *set* of requirements file paths. So a repo
-  added or a suffixed file appearing triggers a re-install, but an in-place edit to an existing
-  requirements file (same path set) does not. Legacy used mtime. Decide whether to make the
-  stamp mtime/content-aware for full parity, or accept set-based as good enough.
 - **`reset_db`'s `seed_script` path is dead.** `reset_db` still has the `seed_script` →
   `PENDING` machinery, but no seed config exists anywhere in the schema and every caller
   (CLI, MCP) passes `seed_script=None`. Either add a seed-script config to the instance schema

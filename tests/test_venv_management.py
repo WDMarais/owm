@@ -100,6 +100,29 @@ def test_stamp_differs_when_patches_change():
     assert stamp1 != stamp2
 
 
+@pytest.mark.venv_management
+def test_stamp_tracks_in_place_content_edits(tmp_path):
+    """Same path, changed content → different stamp (the mtime-free re-sync signal)."""
+    req = tmp_path / "requirements.txt"
+    req.write_text("rapidfuzz==3.1\n")
+    before = compute_stamp(requirements_files=[str(req)], patches=[])
+    req.write_text("rapidfuzz==3.5\n")
+    after = compute_stamp(requirements_files=[str(req)], patches=[])
+    assert before != after
+
+
+@pytest.mark.venv_management
+def test_stamp_stable_when_content_unchanged(tmp_path):
+    """A rewrite with identical content (e.g. a no-op git checkout) leaves the
+    stamp unchanged, so no spurious re-sync."""
+    req = tmp_path / "requirements.txt"
+    req.write_text("rapidfuzz==3.1\n")
+    before = compute_stamp(requirements_files=[str(req)], patches=[])
+    req.write_text("rapidfuzz==3.1\n")  # same bytes, fresh mtime
+    after = compute_stamp(requirements_files=[str(req)], patches=[])
+    assert before == after
+
+
 # ---------------------------------------------------------------------------
 # owm start — conditional sync
 # ---------------------------------------------------------------------------
