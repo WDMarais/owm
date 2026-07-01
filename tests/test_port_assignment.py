@@ -303,6 +303,49 @@ def test_odoo_conf_includes_gevent_port():
 
 @pytest.mark.port_assignment
 @pytest.mark.ports_gevent
+def test_odoo_conf_uses_longpolling_port_on_odoo_14():
+    """Odoo <=15 wants longpolling_port; gevent_port is ignored there and the
+    worker falls back to the shared default 8072, colliding across instances."""
+    conf = generate_instance_conf(
+        instance_name="cd-2117",
+        http_port=8115,
+        gevent_port=8116,
+        workers=2,
+        odoo_version=14,
+    )
+    assert "longpolling_port = 8116" in conf
+    assert "gevent_port" not in conf
+
+
+@pytest.mark.port_assignment
+@pytest.mark.ports_gevent
+def test_odoo_conf_uses_gevent_port_on_odoo_16():
+    conf = generate_instance_conf(
+        instance_name="feat-789",
+        http_port=8142,
+        gevent_port=8143,
+        workers=2,
+        odoo_version=16,
+    )
+    assert "gevent_port = 8143" in conf
+    assert "longpolling_port" not in conf
+
+
+@pytest.mark.port_assignment
+@pytest.mark.ports_gevent
+def test_odoo_conf_unknown_version_defaults_to_gevent_port():
+    conf = generate_instance_conf(
+        instance_name="feat-789",
+        http_port=8142,
+        gevent_port=8143,
+        workers=2,
+        odoo_version=None,
+    )
+    assert "gevent_port = 8143" in conf
+
+
+@pytest.mark.port_assignment
+@pytest.mark.ports_gevent
 def test_odoo_conf_workers_default_two():
     conf = generate_instance_conf(
         instance_name="feat-789",

@@ -677,6 +677,17 @@ def _odoo_major_from_branch(branch: str) -> int | None:
         return None
 
 
+def instance_odoo_major(conf: InstanceConfig) -> int | None:
+    """Best-effort Odoo major version for an instance, from its odoo repo's branch.
+    None when the odoo repo can't be located or the branch has no parseable
+    version — callers then fall back to the modern conf directive names."""
+    try:
+        odoo = find_odoo_repo(conf)
+    except OwmError:
+        return None
+    return _odoo_major_from_branch(odoo.spec.branch)
+
+
 def _collect_requirements(conf: InstanceConfig, workspace_root: str, name: str) -> list[str]:
     """Requirements files to install into the instance venv.
 
@@ -759,6 +770,7 @@ def _write_instance_odoo_conf(
         proxy_active=True,
         addons_path=addons_paths or None,
         logfile=log_path,
+        odoo_version=instance_odoo_major(conf),
     )
     conf_path = os.path.join(workspace_root, "instances", name, "instance.conf")
     if os.path.exists(conf_path):
@@ -1119,6 +1131,14 @@ def classify_port_holder(cmdline: str | None, workspace_root: str) -> str:
     return "probable_squatter"
 
 
+def _longpoll_directive(odoo_version: int | None) -> str:
+    """The Odoo config key for the longpolling/gevent worker port, by major version.
+    Odoo 16 renamed `longpolling_port` to `gevent_port`; on ≤15 the newer key is
+    silently ignored and the worker falls back to the default 8072 (which then
+    collides across instances). Unknown version → assume the modern key."""
+    return "longpolling_port" if odoo_version is not None and odoo_version < 16 else "gevent_port"
+
+
 def generate_instance_conf(
     instance_name: str,
     http_port: int,
@@ -1129,6 +1149,7 @@ def generate_instance_conf(
     proxy_active: bool = True,
     addons_path: list[str] | None = None,
     logfile: str | None = None,
+    odoo_version: int | None = None,
 ) -> str:
     # dbfilter is only safe when subdomain routing is active (feat-789.localhost);
     # without it, all instances share localhost and dbfilter causes session cookie collisions.
@@ -1137,7 +1158,7 @@ def generate_instance_conf(
         f"{ConfOwnership.MANAGED} — change to '{ConfOwnership.MANUAL}' to take manual ownership",
         "[options]",
         f"http_port = {http_port}",
-        f"gevent_port = {gevent_port}",
+        f"{_longpoll_directive(odoo_version)} = {gevent_port}",
         f"workers = {workers}",
         "db_host = /var/run/postgresql",
     ]

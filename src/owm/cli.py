@@ -31,6 +31,7 @@ from owm.instance import (
     kill_instance,
     health_check,
     generate_instance_conf,
+    instance_odoo_major,
     find_odoo_repo,
     odoo_bin_path,
     _read_pid,
@@ -1119,6 +1120,7 @@ def cmd_validate(ctx, name, live):
             proxy_active=True,
             addons_path=addons_paths or None,
             logfile=log_path,
+            odoo_version=instance_odoo_major(conf),
         )
         with open(conf_path) as f:
             on_disk = f.read()
@@ -1356,6 +1358,7 @@ def cmd_regen_conf(ctx, name, force):
         proxy_active=True,
         addons_path=addons_paths or None,
         logfile=log_path,
+        odoo_version=instance_odoo_major(conf),
     )
     with open(conf_path, "w") as f:
         f.write(content)
