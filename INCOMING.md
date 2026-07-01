@@ -133,7 +133,15 @@ The venv re-sync stamp is now content-based (`compute_stamp` hashes each require
 file's contents), so an in-place edit re-syncs while a no-op git checkout does not. One
 residual question the pass surfaced, kept here because it's a decision not a bug:
 
-- **`reset_db`'s `seed_script` path is dead.** `reset_db` still has the `seed_script` →
-  `PENDING` machinery, but no seed config exists anywhere in the schema and every caller
-  (CLI, MCP) passes `seed_script=None`. Either add a seed-script config to the instance schema
-  and wire it, or remove the vestigial parameter and `SeedScriptState` handling.
+- **TODO: `reset_db`'s `seed_script` path is dead — decide, then either wire or remove.**
+  `reset_db` still carries the `seed_script` → `PENDING` machinery (and `SeedScriptState`),
+  but no seed config exists in the schema and every caller (CLI, MCP) passes `seed_script=None`.
+  Specced in `spec.md:126` ("instance-specific seed script re-run if configured") — the intent
+  was a post-`db-reset` step to restore *instance-specific* state (fixtures, a configured
+  provider, a company record) that the shared base template doesn't carry.
+  YAGNI for now: no instance configures one, and the capability is already covered by the
+  script runner (`owm run-script` + `[scripts]`). If revived, do NOT resurrect a bespoke
+  `seed_script: str` field + enum — express it as a **script-runner lifecycle hook**
+  (`[scripts] on_reset`, sibling `on_create`) that reuses the runner's env injection and
+  failure surfacing. When actioned: remove the dead stub now and downgrade the `spec.md` line
+  to "post-reset script hook — TBD" so impl and spec stay in step.
