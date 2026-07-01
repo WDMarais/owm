@@ -279,6 +279,10 @@ class InstallSection(BaseModel):
 
 class PythonSection(BaseModel):
     version: str | None = None
+    # Explicit requirements files (relative to the instance dir, or absolute).
+    # When set, they override the per-repo inference in _collect_requirements —
+    # the escape hatch for repos whose file naming doesn't match the convention.
+    requirements: list[str] | None = None
 
 
 class ScriptRunner(BaseModel):

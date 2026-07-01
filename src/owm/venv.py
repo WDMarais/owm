@@ -110,6 +110,22 @@ def sync_venv_if_needed(
     return SyncVenvResult(synced=True, stamp_updated=True, patches_applied=patches)
 
 
+def reconcile_venv(
+    venv_dir: str,
+    requirements_files: list[str],
+    patches: list[str],
+) -> SyncVenvResult:
+    """Reconcile an existing venv with the currently-collected requirements.
+
+    Reads the venv's own recorded stamp (rather than making the caller thread it
+    through), so callers on the create/start paths can keep an existing venv in
+    step with a broadened or changed requirement set without re-deriving stamps.
+    """
+    current = compute_stamp(requirements_files, patches)
+    recorded = _read_stamp(venv_dir) or ""
+    return sync_venv_if_needed(venv_dir, current, recorded, requirements_files, patches)
+
+
 def rebuild_venv(
     instance: str,
     python_version: str,

@@ -5,7 +5,9 @@ Covers: Instance lifecycle — create, Workspace init sections.
 import pytest
 from unittest.mock import patch, MagicMock
 
-from owm.instance import new_instance, create_instance, _strip_create_flag_in_toml
+from owm.instance import (
+    new_instance, create_instance, _strip_create_flag_in_toml, _collect_requirements,
+)
 from owm.workspace import init_workspace
 from owm.config import ConfOwnership, parse_instance_config
 from owm.errors import OwmError, ODOO_CONFIG_UNMARKED, ODOO_CONFIG_NO_ADDONS
@@ -454,6 +456,82 @@ def test_init_writes_reverse_proxy_block_for_dashboard(tmp_path):
         result = init_workspace(str(tmp_path), docker_context=False)
     assert result.proxy_block_written is True
     assert not hasattr(result, "proxy_block_target")
+
+
+# ---------------------------------------------------------------------------
+# Requirements collection — every repo contributes, with odoo-major-suffixed
+# fallback and an explicit [python].requirements override.
+# ---------------------------------------------------------------------------
+
+def _collect_conf(odoo_branch="14.0", *, extra_repos="", python_block=""):
+    toml = (
+        "[repos]\n"
+        f'odoo = "{odoo_branch}:shared"\n'
+        + extra_repos
+        + '\n[database]\nname = "x"\npg_port = 5432\n'
+        + '\n[server]\nhttp_port = 8100\n'
+        + python_block
+    )
+    return parse_instance_config(toml)
+
+
+def _touch(path):
+    import os
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w").close()
+
+
+@pytest.mark.instance_lifecycle_create
+def test_collect_requirements_gathers_every_repo(tmp_path):
+    conf = _collect_conf(extra_repos='app = "PD-490_dev:main"\n')
+    ws = str(tmp_path)
+    _touch(f"{ws}/_shared/odoo/14.0/requirements.txt")
+    _touch(f"{ws}/instances/inst/app/requirements.txt")
+    got = _collect_requirements(conf, ws, "inst")
+    assert f"{ws}/_shared/odoo/14.0/requirements.txt" in got
+    assert f"{ws}/instances/inst/app/requirements.txt" in got
+
+
+@pytest.mark.instance_lifecycle_create
+def test_collect_requirements_falls_back_to_odoo_major_suffix(tmp_path):
+    # The RapidFuzz case: a non-odoo repo ships only requirements_3.txt (14+).
+    conf = _collect_conf(odoo_branch="taskflow/14.0", extra_repos='app = "PD-490_dev:main"\n')
+    ws = str(tmp_path)
+    _touch(f"{ws}/instances/inst/app/requirements_3.txt")
+    got = _collect_requirements(conf, ws, "inst")
+    assert f"{ws}/instances/inst/app/requirements_3.txt" in got
+
+
+@pytest.mark.instance_lifecycle_create
+def test_collect_requirements_uses_v2_suffix_for_odoo_12(tmp_path):
+    conf = _collect_conf(odoo_branch="12.0", extra_repos='app = "PD-490_dev:main"\n')
+    ws = str(tmp_path)
+    _touch(f"{ws}/instances/inst/app/requirements_2.txt")
+    got = _collect_requirements(conf, ws, "inst")
+    assert f"{ws}/instances/inst/app/requirements_2.txt" in got
+
+
+@pytest.mark.instance_lifecycle_create
+def test_collect_requirements_prefers_plain_over_suffixed(tmp_path):
+    conf = _collect_conf(extra_repos='app = "PD-490_dev:main"\n')
+    ws = str(tmp_path)
+    _touch(f"{ws}/instances/inst/app/requirements.txt")
+    _touch(f"{ws}/instances/inst/app/requirements_3.txt")
+    got = [g for g in _collect_requirements(conf, ws, "inst") if "/app/" in g]
+    assert got == [f"{ws}/instances/inst/app/requirements.txt"]
+
+
+@pytest.mark.instance_lifecycle_create
+def test_collect_requirements_explicit_override_wins(tmp_path):
+    conf = _collect_conf(
+        extra_repos='app = "PD-490_dev:main"\n',
+        python_block='\n[python]\nrequirements = ["reqs/custom.txt"]\n',
+    )
+    ws = str(tmp_path)
+    # Inference targets exist but must be ignored in favour of the explicit list.
+    _touch(f"{ws}/_shared/odoo/14.0/requirements.txt")
+    got = _collect_requirements(conf, ws, "inst")
+    assert got == [f"{ws}/instances/inst/reqs/custom.txt"]
 
 
 # === SPEC GAPS ===
