@@ -19,8 +19,27 @@ from owm.workspace import init_workspace
 # ---------------------------------------------------------------------------
 
 @pytest.mark.database_lifecycle
+def test_create_db_reuses_existing_database():
+    """create is idempotent: an existing DB is reused, not recreated — no
+    createdb collision on a re-run."""
+    with patch("owm.database._database_exists", return_value=True), \
+         patch("owm.database._createdb") as createdb:
+        result = create_db(
+            name="odoo19_feat789",
+            odoo_version="19",
+            template="odoo19_base",
+            pg_port=5432,
+        )
+    createdb.assert_not_called()
+    assert result.source == "existing"
+    assert result.full_install_required is False
+    assert "already exists" in result.warning
+
+
+@pytest.mark.database_lifecycle
 def test_create_db_clones_from_template_when_available():
-    with patch("owm.database._createdb"):
+    with patch("owm.database._createdb"), \
+         patch("owm.database._database_exists", return_value=False):
         result = create_db(
             name="odoo19_feat789",
             odoo_version="19",
@@ -35,7 +54,8 @@ def test_create_db_clones_from_template_when_available():
 @pytest.mark.database_lifecycle
 def test_create_db_blank_slate_when_no_template():
     """No base template for this Odoo version → blank slate + slow-install warning."""
-    with patch("owm.database._createdb"):
+    with patch("owm.database._createdb"), \
+         patch("owm.database._database_exists", return_value=False):
         result = create_db(
             name="odoo19_feat789",
             odoo_version="19",
@@ -50,7 +70,8 @@ def test_create_db_blank_slate_when_no_template():
 
 @pytest.mark.database_lifecycle
 def test_create_db_uses_unix_socket_connection():
-    with patch("owm.database._createdb"):
+    with patch("owm.database._createdb"), \
+         patch("owm.database._database_exists", return_value=False):
         result = create_db(
             name="odoo19_feat789",
             odoo_version="19",
@@ -64,7 +85,8 @@ def test_create_db_uses_unix_socket_connection():
 @pytest.mark.database_lifecycle
 def test_create_db_owned_by_operator_user():
     """No per-instance Postgres roles; DB owned by operator user directly."""
-    with patch("owm.database._createdb"):
+    with patch("owm.database._createdb"), \
+         patch("owm.database._database_exists", return_value=False):
         result = create_db(
             name="odoo19_feat789",
             odoo_version="19",

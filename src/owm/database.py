@@ -24,7 +24,7 @@ class ConnectionConfig:
 
 @dataclass
 class CreateDbResult:
-    source: str  # "template" | "blank"
+    source: str  # "template" | "blank" | "existing"
     template: str | None
     full_install_required: bool
     connection: ConnectionConfig
@@ -116,10 +116,34 @@ def _pg_isready(pg_host: str, pg_port: int) -> None:
         )
 
 
+def _database_exists(name: str, pg_host: str, pg_port: int) -> bool:
+    r = subprocess.run(
+        ["psql", "-h", pg_host, "-p", str(pg_port), "-d", "postgres", "-tAc",
+         f"SELECT 1 FROM pg_database WHERE datname='{name}'"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return False
+    return r.stdout.strip() == "1"
+
+
 def create_db(name: str, odoo_version: str, template: str | None, pg_port: int) -> CreateDbResult:
     operator = getpass.getuser()
     pg_host = "/var/run/postgresql"
     connection = ConnectionConfig(host=pg_host, port=pg_port)
+    if _database_exists(name, pg_host, pg_port):
+        # Idempotent create: reuse an existing DB rather than dying on the
+        # createdb collision. Re-running create should converge; destructive
+        # recreation is db-reset's job, not create's.
+        return CreateDbResult(
+            source="existing",
+            template=template,
+            full_install_required=False,
+            connection=connection,
+            owner=operator,
+            operator_user=operator,
+            warning=f"database '{name}' already exists — reusing it (run `owm db-reset` to rebuild)",
+        )
     _createdb(name, pg_host, pg_port, template=template)
     if template:
         return CreateDbResult(

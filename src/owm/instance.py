@@ -798,7 +798,7 @@ def _materialise_instance(name: str, workspace_root: str) -> CreateResult:
     return CreateResult(
         status="created",
         worktrees_created=True,
-        db_created=True,
+        db_created=db_result.source != "existing",
         full_install_required=db_result.full_install_required,
         port_reserved=True,
         proxy_block_written=proxy is not None,
