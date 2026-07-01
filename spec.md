@@ -1721,9 +1721,9 @@ default     = "run"              # script used when no name given to owm run-scr
 scripts_dir = "scripts/reviews/PD-789"   # base dir for name resolution
 
 [scripts.runners]
-setup   = {file = "setup.py",   type = "shell"}   # runs inside odoo-bin shell
-run     = {file = "run.py",     type = "shell"}
-compare = {file = "compare.py", type = "plain"}   # plain Python, no Odoo shell
+setup   = {file = "setup.py",   type = "odoo-shell"}   # python piped through odoo-bin shell (ORM env bound)
+run     = {file = "run.py",     type = "odoo-shell"}
+compare = {file = "compare.py", type = "python"}       # bare python, no Odoo shell
 
 [scripts.compare]
 target = "main"                  # default compare partner; overrides workspace compare_pairs

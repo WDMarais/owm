@@ -223,9 +223,9 @@ def execute_script(instance: str, script_name: str, workspace_root: str,
     scripts_dir and the runner's file/type, rather than assuming
     scripts/<instance>/<name>.py. The instance env contract (resolve_env) is set
     on the subprocess so a script reads its target exactly as an external caller
-    would after ``owm env <instance> --format shell``. A ``plain`` runner runs as
-    bare python; a ``shell`` runner is piped through odoo-bin shell with the ORM
-    ``env`` available.
+    would after ``owm env <instance> --format shell``. A ``python`` runner runs as
+    bare python; an ``odoo-shell`` runner is piped through odoo-bin shell with the
+    ORM ``env`` available.
 
     Structured results are decoupled from stdout: a script opts in by writing
     NDJSON rows to the file at $NDJSON_OUT (``ndjson_out``), which owm consumes at
@@ -250,11 +250,11 @@ def execute_script(instance: str, script_name: str, workspace_root: str,
     if not os.path.isfile(script_path):
         raise OwmError(f"script file not found: {script_path}", code=SCRIPT_NOT_FOUND)
 
-    # Only a shell runner needs odoo-bin; resolving it for a plain runner would
-    # force an odoo repo on instances that don't have one. Local import: instance.py
-    # pulls in a heavier graph that would couple this low-level runner to it.
+    # Only an odoo-shell runner needs odoo-bin; resolving it for a python runner
+    # would force an odoo repo on instances that don't have one. Local import:
+    # instance.py pulls in a heavier graph that would couple this low-level runner to it.
     odoo_bin = None
-    if runner.type == "shell":
+    if runner.type == "odoo-shell":
         from owm.instance import odoo_bin_path
         odoo_bin = odoo_bin_path(conf, workspace_root, instance)
 
@@ -274,7 +274,7 @@ def execute_script(instance: str, script_name: str, workspace_root: str,
         env["NDJSON_OUT"] = ndjson_out
     venv_python = os.path.join(instance_dir, ".venv", "bin", "python")
 
-    if runner.type == "shell":
+    if runner.type == "odoo-shell":
         # Pipe the script through odoo-bin shell so it runs with the ORM `env`
         # bound — the same invocation `owm shell` uses.
         conf_path = os.path.join(instance_dir, "instance.conf")
@@ -282,7 +282,7 @@ def execute_script(instance: str, script_name: str, workspace_root: str,
                "-d", conf.database.name, "--no-http"]
         with open(script_path) as f:
             stdin = f.read()
-    else:  # plain
+    else:  # python
         cmd = [venv_python, script_path]
         stdin = None
 

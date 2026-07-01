@@ -36,7 +36,7 @@ def _instance(ws, name, *, runners, scripts_dir="scripts", with_venv=False):
 
 @pytest.mark.script_runner
 def test_execute_script_unknown_runner_raises(tmp_workspace):
-    _instance(tmp_workspace, "feat-1", runners={"test": ("run.py", "plain")})
+    _instance(tmp_workspace, "feat-1", runners={"test": ("run.py", "python")})
     with pytest.raises(OwmError) as ei:
         execute_script("feat-1", "nope", str(tmp_workspace))
     assert ei.value.code == SCRIPT_NOT_FOUND
@@ -45,7 +45,7 @@ def test_execute_script_unknown_runner_raises(tmp_workspace):
 
 @pytest.mark.script_runner
 def test_execute_script_missing_file_resolves_under_scripts_dir(tmp_workspace):
-    _instance(tmp_workspace, "feat-1", runners={"setup": ("setup.py", "plain")})
+    _instance(tmp_workspace, "feat-1", runners={"setup": ("setup.py", "python")})
     with pytest.raises(OwmError) as ei:
         execute_script("feat-1", "setup", str(tmp_workspace))
     assert ei.value.code == SCRIPT_NOT_FOUND
@@ -55,7 +55,7 @@ def test_execute_script_missing_file_resolves_under_scripts_dir(tmp_workspace):
 
 @pytest.mark.script_runner
 def test_execute_script_plain_writes_ndjson_file_and_returns_run_log(tmp_workspace, tmp_path):
-    inst = _instance(tmp_workspace, "feat-1", runners={"smoke": ("smoke.py", "plain")}, with_venv=True)
+    inst = _instance(tmp_workspace, "feat-1", runners={"smoke": ("smoke.py", "python")}, with_venv=True)
     (inst / "scripts").mkdir()
     # Writes a row (using the injected DB_NAME) to $NDJSON_OUT; prints a run log to stdout.
     (inst / "scripts" / "smoke.py").write_text(
@@ -73,7 +73,7 @@ def test_execute_script_plain_writes_ndjson_file_and_returns_run_log(tmp_workspa
 
 @pytest.mark.script_runner
 def test_execute_script_plain_nonzero_exit_raises(tmp_workspace):
-    inst = _instance(tmp_workspace, "feat-1", runners={"boom": ("boom.py", "plain")}, with_venv=True)
+    inst = _instance(tmp_workspace, "feat-1", runners={"boom": ("boom.py", "python")}, with_venv=True)
     (inst / "scripts").mkdir()
     (inst / "scripts" / "boom.py").write_text("import sys\nsys.stderr.write('kaboom\\n')\nsys.exit(2)\n")
     with pytest.raises(OwmError) as ei:

@@ -1004,7 +1004,7 @@ def test_validate_warns_on_missing_script_runner_file(runner, tmp_workspace):
         '\n[database]\nname = "owm_feat789"\npg_port = 5432\n'
         "\n[server]\nhttp_port = 8100\ngevent_port = 8101\n"
         '\n[scripts]\nscripts_dir = "scripts/reviews"\n'
-        '\n[scripts.runners]\nsetup = { file = "setup.py", type = "shell" }\n'
+        '\n[scripts.runners]\nsetup = { file = "setup.py", type = "odoo-shell" }\n'
     )
     result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789"])
     out = result.output + (result.stderr or "")

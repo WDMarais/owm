@@ -343,9 +343,9 @@ default     = "run"
 scripts_dir = "scripts/reviews/PD-789"
 
 [scripts.runners]
-setup   = {file = "setup.py",   type = "shell"}
-run     = {file = "run.py",     type = "shell"}
-compare = {file = "compare.py", type = "plain"}
+setup   = {file = "setup.py",   type = "odoo-shell"}
+run     = {file = "run.py",     type = "odoo-shell"}
+compare = {file = "compare.py", type = "python"}
 
 [scripts.compare]
 target = "main"
@@ -369,8 +369,8 @@ sync_opt_in = false
     assert config.python.version == "3.12"
     assert config.scripts.default == "run"
     assert config.scripts.runners["setup"].file == "setup.py"
-    assert config.scripts.runners["setup"].type == "shell"
-    assert config.scripts.runners["compare"].type == "plain"
+    assert config.scripts.runners["setup"].type == "odoo-shell"
+    assert config.scripts.runners["compare"].type == "python"
     assert config.scripts.compare.target == "main"
     assert config.template.sync_opt_in is False
 

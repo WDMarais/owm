@@ -283,7 +283,7 @@ class PythonSection(BaseModel):
 
 class ScriptRunner(BaseModel):
     file: str
-    type: Literal["shell", "plain"]  # shell = runs inside odoo-bin shell (env injected); plain = bare python
+    type: Literal["odoo-shell", "python"]  # odoo-shell = python piped through odoo-bin shell (ORM env bound); python = bare python, no ORM
 
 
 class ScriptCompare(BaseModel):
