@@ -5,7 +5,9 @@ Covers: Worktrees and branch ownership / proxy section.
 import pytest
 from unittest.mock import patch, MagicMock
 
-from owm.proxy import NginxBackend, get_proxy_backend, _nginx_reload
+from owm.proxy import (
+    NginxBackend, get_proxy_backend, _nginx_reload, _nginx_config_includes,
+)
 from owm.config import ProxyConfig
 
 
@@ -95,6 +97,66 @@ def test_nginx_reload_nonzero_returns_false():
 def test_nginx_reload_missing_binary_is_best_effort():
     with patch("owm.proxy.subprocess.run", side_effect=FileNotFoundError):
         assert _nginx_reload() is False
+
+
+# ---------------------------------------------------------------------------
+# Warnings: a written block that nginx won't serve (reload didn't apply, or the
+# _proxy dir isn't included) must not look like success.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.proxy
+def test_nginx_write_warns_when_reload_does_not_apply(tmp_path, capsys):
+    with patch("owm.proxy._nginx_reload", return_value=False):
+        NginxBackend().write_instance("feat-1", 8100, 8101, "localhost", str(tmp_path))
+    err = capsys.readouterr().err
+    assert "did not apply" in err
+    assert "feat-1.localhost" in err
+
+
+@pytest.mark.proxy
+def test_nginx_write_warns_when_proxy_dir_not_included(tmp_path, capsys):
+    with patch("owm.proxy._nginx_reload", return_value=True), \
+         patch("owm.proxy._nginx_config_includes", return_value=False):
+        NginxBackend().write_instance("feat-1", 8100, 8101, "localhost", str(tmp_path))
+    err = capsys.readouterr().err
+    assert "no nginx `include`" in err
+    assert "feat-1.localhost" in err
+
+
+@pytest.mark.proxy
+def test_nginx_write_silent_when_reloaded_and_included(tmp_path, capsys):
+    with patch("owm.proxy._nginx_reload", return_value=True), \
+         patch("owm.proxy._nginx_config_includes", return_value=True):
+        NginxBackend().write_instance("feat-1", 8100, 8101, "localhost", str(tmp_path))
+    assert capsys.readouterr().err == ""
+
+
+@pytest.mark.proxy
+def test_nginx_config_includes_finds_include_of_proxy_dir(tmp_path):
+    proxy_dir = tmp_path / "ws" / "_proxy"
+    proxy_dir.mkdir(parents=True)
+    conf_d = tmp_path / "etc" / "conf.d"
+    conf_d.mkdir(parents=True)
+    (conf_d / "owm-ws.conf").write_text(f"include {proxy_dir}/*.nginx.conf;\n")
+    assert _nginx_config_includes(str(proxy_dir), roots=(str(conf_d),)) is True
+
+
+@pytest.mark.proxy
+def test_nginx_config_includes_false_when_readable_but_absent(tmp_path):
+    proxy_dir = tmp_path / "ws" / "_proxy"
+    proxy_dir.mkdir(parents=True)
+    conf_d = tmp_path / "etc" / "conf.d"
+    conf_d.mkdir(parents=True)
+    (conf_d / "other.conf").write_text("include /some/other/path/*.conf;\n")
+    assert _nginx_config_includes(str(proxy_dir), roots=(str(conf_d),)) is False
+
+
+@pytest.mark.proxy
+def test_nginx_config_includes_true_when_no_config_readable(tmp_path):
+    # Nothing to read → can't tell → don't cry wolf.
+    proxy_dir = tmp_path / "ws" / "_proxy"
+    proxy_dir.mkdir(parents=True)
+    assert _nginx_config_includes(str(proxy_dir), roots=(str(tmp_path / "nope"),)) is True
 
 
 # ---------------------------------------------------------------------------

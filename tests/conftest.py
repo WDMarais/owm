@@ -52,11 +52,14 @@ def _no_real_process_scan(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_nginx_reload(monkeypatch):
-    """Never shell out to `sudo nginx -s reload` from the test suite. The proxy
-    backend reloads nginx after writing a block; stub it so no test prompts for a
-    password or touches the host nginx. Tests exercising the reload itself patch
-    owm.proxy.subprocess.run directly."""
+    """Never shell out to `sudo nginx -s reload` from the test suite, and never
+    scan the host's /etc/nginx. The proxy backend reloads nginx and checks the
+    include after writing a block; stub both so no test prompts for a password,
+    touches the host nginx, or warns based on the host's real config. Tests
+    exercising these patch owm.proxy.subprocess.run / _nginx_config_includes
+    directly."""
     monkeypatch.setattr("owm.proxy._nginx_reload", lambda: True)
+    monkeypatch.setattr("owm.proxy._nginx_config_includes", lambda proxy_dir: True)
 
 
 def _port_in_use(port: int) -> bool:

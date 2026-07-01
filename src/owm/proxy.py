@@ -34,6 +34,43 @@ def _nginx_reload() -> bool:
     return r.returncode == 0
 
 
+_NGINX_CONFIG_ROOTS = (
+    "/etc/nginx/nginx.conf",
+    "/etc/nginx/conf.d",
+    "/etc/nginx/sites-enabled",
+)
+
+
+def _nginx_config_includes(proxy_dir: str, roots: tuple[str, ...] = _NGINX_CONFIG_ROOTS) -> bool:
+    """Best-effort: does the nginx config tree `include` this workspace's _proxy dir?
+
+    Root-free scan of the usual config roots for an include directive referencing
+    proxy_dir. Returns True when such an include is found OR when no config is
+    readable at all (can't tell — don't cry wolf); False only when config *was*
+    read and none of it references the dir. A workspace-local block is useless if
+    nginx never includes it (the common owm-legacy → rewrite transition gap), so
+    callers use this to warn instead of silently writing an ignored block."""
+    needle = os.path.abspath(proxy_dir)
+    saw_config = False
+    for root in roots:
+        paths = [root] if os.path.isfile(root) else (
+            [os.path.join(root, n) for n in sorted(os.listdir(root))]
+            if os.path.isdir(root) else []
+        )
+        for path in paths:
+            try:
+                with open(path) as f:
+                    text = f.read()
+            except OSError:
+                continue
+            saw_config = True
+            for line in text.splitlines():
+                s = line.strip()
+                if s.startswith("include") and needle in s:
+                    return True
+    return not saw_config
+
+
 class NginxBackend:
     scheme = "http"
 
@@ -67,13 +104,33 @@ class NginxBackend:
         os.makedirs(proxy_dir, exist_ok=True)
         with open(os.path.join(proxy_dir, f"{name}.nginx.conf"), "w") as f:
             f.write(block)
-        _nginx_reload()
+        if not _nginx_reload():
+            print(
+                f"warning: proxy block for {name!r} written but `nginx -s reload` did not "
+                f"apply — the block is on disk but nginx is serving its old config, so "
+                f"{name}.{domain_suffix} is not live yet. Run `sudo nginx -s reload` (or add a "
+                f"NOPASSWD sudoers entry for `/usr/sbin/nginx -s reload`).",
+                file=sys.stderr,
+            )
+        elif not _nginx_config_includes(proxy_dir):
+            print(
+                f"warning: proxy block for {name!r} written to {proxy_dir}/, but no nginx "
+                f"`include` references that dir — nginx will not serve {name}.{domain_suffix} "
+                f"until the include is wired (see the stub from `owm init`: "
+                f"{proxy_dir}/owm-include.conf).",
+                file=sys.stderr,
+            )
 
     def remove_instance(self, name: str, workspace_root: str) -> None:
         path = os.path.join(workspace_root, "_proxy", f"{name}.nginx.conf")
         if os.path.exists(path):
             os.remove(path)
-        _nginx_reload()
+        if not _nginx_reload():
+            print(
+                f"warning: proxy block for {name!r} removed but `nginx -s reload` did not "
+                f"apply — run `sudo nginx -s reload` to stop serving it.",
+                file=sys.stderr,
+            )
 
 
 class CaddyBackend:
