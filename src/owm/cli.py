@@ -32,6 +32,7 @@ from owm.instance import (
     health_check,
     generate_instance_conf,
     instance_odoo_major,
+    odoo_version_warning,
     find_odoo_repo,
     odoo_bin_path,
     _read_pid,
@@ -260,6 +261,9 @@ def cmd_create(ctx, name, repos, force, toml_only, no_install):
         click.echo(f"{instance}  up to date")
     elif result.status == "created":
         click.echo(f"{instance}  created  {instance_public_url(instance, workspace_root)}")
+        version_warning = odoo_version_warning(load_instance_config(instance, workspace_root), instance)
+        if version_warning:
+            click.echo(f"  warn: {version_warning}", err=True)
         if no_install:
             click.echo(f"  modules: skipped (--no-install) — run `owm install {instance}` when ready")
         else:
@@ -1098,6 +1102,10 @@ def cmd_validate(ctx, name, live):
     else:
         addons_paths = None
 
+    version_warning = odoo_version_warning(conf, instance)
+    if version_warning:
+        warnings.append(version_warning)
+
     conf_path = os.path.join(instance_dir, "instance.conf")
     if not os.path.isfile(conf_path):
         warnings.append("instance.conf missing — run owm create")
@@ -1363,6 +1371,9 @@ def cmd_regen_conf(ctx, name, force):
     with open(conf_path, "w") as f:
         f.write(content)
     click.echo(f"{instance}  instance.conf regenerated")
+    version_warning = odoo_version_warning(conf, instance)
+    if version_warning:
+        click.echo(f"  warn: {version_warning}", err=True)
 
 
 @cli.command("fetch")

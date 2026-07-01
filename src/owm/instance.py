@@ -678,14 +678,35 @@ def _odoo_major_from_branch(branch: str) -> int | None:
 
 
 def instance_odoo_major(conf: InstanceConfig) -> int | None:
-    """Best-effort Odoo major version for an instance, from its odoo repo's branch.
-    None when the odoo repo can't be located or the branch has no parseable
-    version — callers then fall back to the modern conf directive names."""
+    """Odoo major version for an instance: the explicit [server].odoo_version if
+    set, else derived from the odoo repo's branch. None when neither yields a
+    value (unversioned branch, no override). The single version resolver, so the
+    override reaches every consumer; callers that author conf/venv should also
+    surface odoo_version_warning() so the None case is never a silent guess."""
+    if conf.server.odoo_version is not None:
+        return conf.server.odoo_version
     try:
         odoo = find_odoo_repo(conf)
     except OwmError:
         return None
     return _odoo_major_from_branch(odoo.spec.branch)
+
+
+def odoo_version_warning(conf: InstanceConfig, instance: str) -> str | None:
+    """A loud, actionable warning when the Odoo version can't be determined, else
+    None. The version drives the longpolling conf directive and the requirements
+    suffix; guessing wrong is silent and expensive (wrong port → won't serve,
+    under-collected deps → import errors at boot), so authoring paths warn rather
+    than guess quietly. Setting [server].odoo_version silences it and makes the
+    choice explicit."""
+    if instance_odoo_major(conf) is not None:
+        return None
+    return (
+        f"cannot determine Odoo version for {instance!r} (odoo branch encodes none and "
+        f"[server].odoo_version is unset) — assuming 16+ (gevent_port, no requirements "
+        f"suffix). If this is Odoo <=15, set [server].odoo_version or it will misbind the "
+        f"longpolling port and under-collect requirements."
+    )
 
 
 def _collect_requirements(conf: InstanceConfig, workspace_root: str, name: str) -> list[str]:

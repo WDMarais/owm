@@ -250,6 +250,11 @@ class ServerSection(BaseModel):
     http_port: int = 0
     workers: int = 2
     odoo_repo: str | None = None  # explicit Odoo source repo; falls back to the shared repo
+    # Explicit Odoo major version. Overrides branch-name inference — the escape
+    # hatch for branches that don't encode a parseable version (or where the
+    # inference would guess wrong). Drives the conf port directive and the
+    # requirements-suffix lookup.
+    odoo_version: int | None = None
 
     @model_validator(mode='before')
     @classmethod

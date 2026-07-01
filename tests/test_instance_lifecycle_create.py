@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 from owm.instance import (
     new_instance, create_instance, _strip_create_flag_in_toml, _collect_requirements,
-    install_declared_modules, instance_odoo_major,
+    install_declared_modules, instance_odoo_major, odoo_version_warning,
 )
 from owm.workspace import init_workspace
 from owm.config import ConfOwnership, parse_instance_config
@@ -549,6 +549,33 @@ def test_instance_odoo_major_from_shared_odoo_branch():
 @pytest.mark.instance_lifecycle_create
 def test_instance_odoo_major_none_when_unparseable_branch():
     assert instance_odoo_major(_collect_conf(odoo_branch="main")) is None
+
+
+@pytest.mark.instance_lifecycle_create
+def test_instance_odoo_major_override_rescues_unparseable_branch():
+    conf = _collect_conf(odoo_branch="main", python_block="")
+    conf.server.odoo_version = 12
+    assert instance_odoo_major(conf) == 12
+
+
+@pytest.mark.instance_lifecycle_create
+def test_instance_odoo_major_override_beats_branch_derived():
+    conf = _collect_conf(odoo_branch="19.0")
+    conf.server.odoo_version = 14
+    assert instance_odoo_major(conf) == 14  # explicit override wins over the branch's 19
+
+
+@pytest.mark.instance_lifecycle_create
+def test_odoo_version_warning_silent_when_known():
+    assert odoo_version_warning(_collect_conf(odoo_branch="14.0"), "cd-2117") is None
+
+
+@pytest.mark.instance_lifecycle_create
+def test_odoo_version_warning_loud_when_unknown():
+    msg = odoo_version_warning(_collect_conf(odoo_branch="main"), "cd-2117")
+    assert msg is not None
+    assert "cd-2117" in msg
+    assert "odoo_version" in msg
 
 
 # ---------------------------------------------------------------------------
