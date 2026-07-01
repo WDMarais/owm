@@ -231,6 +231,54 @@ def test_create_infers_instance_from_cwd(runner, standard_instance_toml, tmp_wor
 
 
 # ---------------------------------------------------------------------------
+# owm db-reset — module reconcile after template restore
+# ---------------------------------------------------------------------------
+
+def _reset_toml(tmp_workspace, with_modules=True):
+    inst = tmp_workspace / "instances" / "feat-789"
+    inst.mkdir(parents=True, exist_ok=True)
+    content = (
+        '[repos]\nodoo = {branch = "19.0", shared = true}\n'
+        '[database]\nname = "feat789_db"\npg_port = 5432\ntemplate = "feat789_base"\n'
+        '[server]\nhttp_port = 8142\ngevent_port = 8143\n'
+    )
+    if with_modules:
+        content += '[install]\nmodules = ["test_sale_ext"]\n'
+    (inst / "instance.toml").write_text(content)
+
+
+@pytest.mark.cli_integration
+def test_db_reset_reconciles_modules(runner, tmp_workspace):
+    from owm.database import ResetDbResult
+    _reset_toml(tmp_workspace)
+    with patch("owm.cli._is_running", return_value=False), \
+         patch("owm.cli.reset_db", return_value=ResetDbResult(restored_from="feat789_base")), \
+         patch("owm.cli.install_declared_modules",
+               return_value=MagicMock(installed=["test_sale_ext"])) as install:
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "db-reset", "feat-789",
+        ])
+    assert result.exit_code == 0
+    install.assert_called_once()
+    assert "installed test_sale_ext" in result.output
+
+
+@pytest.mark.cli_integration
+def test_db_reset_no_install_skips_reconcile(runner, tmp_workspace):
+    from owm.database import ResetDbResult
+    _reset_toml(tmp_workspace)
+    with patch("owm.cli._is_running", return_value=False), \
+         patch("owm.cli.reset_db", return_value=ResetDbResult(restored_from="feat789_base")), \
+         patch("owm.cli.install_declared_modules") as install:
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace), "db-reset", "feat-789", "--no-install",
+        ])
+    assert result.exit_code == 0
+    install.assert_not_called()
+    assert "skipped" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
 # owm delete
 # ---------------------------------------------------------------------------
 

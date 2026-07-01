@@ -820,8 +820,10 @@ def cmd_db_restore(ctx, name, path_arg):
 
 @cli.command("db-reset")
 @click.argument("name", required=False)
+@click.option("--no-install", is_flag=True,
+              help="Restore the DB only; skip reconciling [install].modules afterwards.")
 @click.pass_context
-def cmd_db_reset(ctx, name):
+def cmd_db_reset(ctx, name, no_install):
     """Reset instance database to its template. Requires the instance to be stopped."""
     instance = _resolve_instance(ctx, name)
     workspace_root = _resolve_workspace(ctx)
@@ -848,6 +850,15 @@ def cmd_db_reset(ctx, name):
     if result.warning:
         msg += f"\nwarn: {result.warning}"
     click.echo(msg)
+    # The restored template usually already carries [install].modules, so this
+    # reconciles rather than reinstalls: it installs only what the template is
+    # missing (a no-op otherwise), keeping reset convergent without a blind boot.
+    if no_install:
+        click.echo(f"  modules: skipped (--no-install) — run `owm install {instance}` if needed")
+    else:
+        installed = install_declared_modules(instance, workspace_root)
+        if installed and installed.installed:
+            click.echo(f"  modules: installed {', '.join(installed.installed)}")
 
 
 @cli.command("env")

@@ -524,7 +524,12 @@ def owm_db_reset(instance: str) -> dict:
     except Exception as e:
         return format_error(str(e), "DB_RESET_FAILED")
 
-    out = {"status": "ok", "restored_from": result.restored_from}
+    installed = install_declared_modules(instance, workspace_root)
+    out = {
+        "status": "ok",
+        "restored_from": result.restored_from,
+        "modules_installed": installed.installed if installed else [],
+    }
     if result.warning:
         out["warning"] = result.warning
     return out
