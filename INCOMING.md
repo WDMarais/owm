@@ -123,51 +123,20 @@ vs compute-on-demand; where reconciliation warnings live (`fetch` vs `validate`)
 
 ---
 
-## Create / DB / venv lifecycle — parity + idempotency regressions vs legacy (2026-07-01)
+## Create / DB / venv lifecycle — residual questions after the parity pass (2026-07-01)
 
-Prerequisite to the branch-marker work: the create path itself is regressed. Two concrete
-field failures observed on cd-2117 — (a) RapidFuzz (in taskflow's `requirements_3.txt`) never
-installed, (b) `owm create` after a partial teardown failed `createdb ... already exists
-[DB_OPERATION_FAILED]`. Both are symptoms of a broader lifecycle gap. Rewrite vs owm-legacy:
+The four lifecycle regressions vs legacy that gated the branch-marker work are now fixed
+(collect requirements from every repo + suffix variants + `[python].requirements`; reuse an
+existing DB on create; auto-install `[install].modules` on create; reconcile modules on
+db-reset — auto-install defaults on with a `--no-install` opt-out on both create and reset).
+Two residual questions the pass surfaced, kept here because they're decisions not bugs:
 
-### 1. venv / requirements (cause of the RapidFuzz miss)
-- **Rewrite** `_provision_venv` (instance.py:650): collects **only** `<odoo_worktree>/
-  requirements.txt`; returns early if `.venv` exists (no re-sync); `PythonSection` (config.py)
-  has no `requirements` field. So non-odoo repos and version-suffixed files are never installed.
-- **Legacy** `_collect_requirements` + `_ensure_requirements` (workspace.py): honours explicit
-  `[python].requirements`; else derives odoo-major → suffix (`_ODOO_REQUIREMENTS_SUFFIX`) and
-  iterates **every** repo (shared → `_shared/<repo>/<branch>`), taking `requirements.txt` or
-  `requirements{suffix}.txt`; installs via `uv pip install`, mtime-stamped; **re-runs on every
-  start** so the venv tracks requirement changes.
-- Gap to close: multi-repo collection, version-suffix variants, `[python].requirements`
-  override, and start-time re-sync (or a `sync_venv_if_needed` call — the helper exists in
-  venv.py but nothing wires it into start/create).
-
-### 2. create idempotency (cause of the createdb-exists failure)
-- **Rewrite**: `cmd_create` calls `create_instance(name, ws)` with none of the incremental
-  args, so the whole idempotent dispatch inside `create_instance` (instance.py:759-782,
-  keyed on `instance_exists`/`toml_changed`/`repo_changes`) is **dead from the CLI** — every
-  invocation falls through to full `_materialise_instance` → `create_db` → `_createdb`, a plain
-  `createdb` that hard-fails if the DB exists.
-- **Legacy**: `check_database()` before acting; drop only if present; worktrees "already
-  exists, skipping". Re-running create converges instead of erroring.
-- Gap to close: wire the incremental dispatch into the CLI (compute existing state and pass it),
-  and/or make `_materialise` existence-aware per resource — DB especially: reuse / offer reset /
-  error with guidance, not a bare failure.
-
-### 3. module install on create/reset
-- **Rewrite**: `_materialise` computes `full_install_required` but nothing acts on it; create
-  never installs modules; `reset_db` marks the seed `PENDING` but does not run it or reinstall.
-- **Legacy**: `_auto_install_modules` runs on create and on db-reset (`force_reinstall=True`).
-- Gap to close: decide whether create/reset auto-install `[install].modules` (blank-DB create
-  currently leaves an empty DB), and wire the seed step.
-
-### 4. db-reset
-- **Rewrite** `reset_db`: guards active connections, `dropdb --if-exists`, `createdb` from
-  template, seed `PENDING` (unrun); template required.
-- **Legacy** `cmd_db_reset`: `check_database`, conditional drop, template optional, then
-  `_auto_install_modules(force_reinstall)`, optional `--restart`.
-
-**Through-line:** the rewrite cleanly *split* provisioning into helpers but several steps became
-no-ops or non-idempotent relative to legacy's behaviour. Treat as a "lifecycle parity +
-idempotency" pass; it gates the marker work because the `new`/create path depends on it.
+- **venv re-sync is set-based, not content-based.** `_provision_venv`/`_sync_instance_venv`
+  reconcile via `compute_stamp`, which hashes the *set* of requirements file paths. So a repo
+  added or a suffixed file appearing triggers a re-install, but an in-place edit to an existing
+  requirements file (same path set) does not. Legacy used mtime. Decide whether to make the
+  stamp mtime/content-aware for full parity, or accept set-based as good enough.
+- **`reset_db`'s `seed_script` path is dead.** `reset_db` still has the `seed_script` →
+  `PENDING` machinery, but no seed config exists anywhere in the schema and every caller
+  (CLI, MCP) passes `seed_script=None`. Either add a seed-script config to the instance schema
+  and wire it, or remove the vestigial parameter and `SeedScriptState` handling.
