@@ -1358,6 +1358,12 @@ def cmd_fetch(ctx):
             click.echo(f"  {rec['name']}: updated")
         else:
             click.echo(f"  {rec['name']}: up to date")
+        missing = rec.get("missing_branches")
+        if missing:
+            click.echo(
+                f"  {rec['name']}: warning: {len(missing)} branch(es) not found on "
+                f"origin or locally (broken instance.toml refs): {', '.join(missing)}"
+            )
 
 
 # ---------------------------------------------------------------------------

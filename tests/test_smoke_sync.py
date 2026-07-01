@@ -17,6 +17,8 @@ from owm.sync import (
     has_local_commits,
     git_run,
     git_fetch_bare,
+    list_origin_branches,
+    fetch_active_branches,
     git_fast_forward,
     git_rebase,
     git_push,
@@ -234,6 +236,76 @@ def test_git_fetch_bare_raises_on_failed_fetch(tmp_path):
     with pytest.raises(OwmError) as ei:
         git_fetch_bare(str(bare), branches=["no-such-branch"])
     assert ei.value.code == FETCH_FAILED
+
+
+@pytest.mark.smoke
+def test_list_origin_branches_returns_head_names(tmp_path):
+    up = _upstream(tmp_path)
+    _git("branch", "feat-x", cwd=up)
+    bare = _make_bare(up, tmp_path / "repo.git")
+    assert list_origin_branches(str(bare)) == {"main", "feat-x"}
+
+
+def _mini_workspace(tmp_path, upstream: Path, bare_name: str, branches_by_instance: dict):
+    """Build a minimal owm workspace: workspace.toml + a real bare clone under
+    _repos/, and one instance.toml per entry declaring the given repo branch."""
+    ws = tmp_path / "ws"
+    (ws / "instances").mkdir(parents=True)
+    (ws / "_repos").mkdir()
+    (ws / "owm.log").touch()
+    (ws / "workspace.toml").write_text('[repos]\napp = "file:///app"\n[clusters]\n')
+    _make_bare(upstream, ws / "_repos" / f"{bare_name}.git")
+    for i, (inst, branch) in enumerate(branches_by_instance.items()):
+        d = ws / "instances" / inst
+        d.mkdir()
+        http = 8100 + 2 * i
+        (d / "instance.toml").write_text(
+            f'[repos]\napp = "{branch}"\n'
+            f'\n[database]\nname = "db_{inst.replace("-", "_")}"\npg_port = 5432\n'
+            f"\n[server]\nhttp_port = {http}\ngevent_port = {http + 1}\n"
+        )
+    return ws
+
+
+@pytest.mark.smoke
+def test_fetch_active_branches_reports_branch_missing_from_origin_and_local(tmp_path):
+    """A branch declared in an instance.toml but absent from origin AND local (a
+    typo, or a branch merged and pruned everywhere) is filtered out of the fetch
+    and reported — instead of aborting the whole repo's batched fetch and leaving
+    valid branches unfetched behind a false 'up to date'."""
+    up = _upstream(tmp_path)
+    _git("branch", "feat-valid", cwd=up)
+    ws = _mini_workspace(
+        tmp_path, up, "app",
+        {"inst-valid": "feat-valid", "inst-broken": "gone-everywhere"},
+    )
+    run = fetch_active_branches(str(ws))
+    rec = next(r for r in run["repos"] if r["name"] == "app")
+
+    assert rec["status"] != "unreachable"          # the missing ref did not abort the fetch
+    assert rec["missing_branches"] == ["gone-everywhere"]
+    # the valid branch actually landed in the bare repo
+    bare = ws / "_repos" / "app.git"
+    assert git_run(["rev-parse", "--verify", "refs/heads/feat-valid"], cwd=str(bare)).returncode == 0
+
+
+@pytest.mark.smoke
+def test_fetch_active_branches_does_not_flag_local_only_branch(tmp_path):
+    """A branch present locally but not on origin (an unpushed / merged-then-
+    deleted working branch) is skipped by the fetch but NOT reported as missing —
+    only branches absent from both origin and local are broken refs."""
+    up = _upstream(tmp_path)
+    ws = _mini_workspace(tmp_path, up, "app", {"inst-local": "wip-unpushed"})
+    # create the branch locally in the bare, so it exists in refs/heads but was
+    # never pushed to (and does not exist on) origin.
+    bare = ws / "_repos" / "app.git"
+    _git("branch", "wip-unpushed", "main", cwd=bare)
+
+    run = fetch_active_branches(str(ws))
+    rec = next(r for r in run["repos"] if r["name"] == "app")
+
+    assert rec["status"] != "unreachable"
+    assert rec["missing_branches"] == []           # local-only is normal, not flagged
 
 
 # ---------------------------------------------------------------------------

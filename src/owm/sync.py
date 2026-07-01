@@ -198,6 +198,52 @@ def git_fetch_bare(bare_path: str, *, branches: list[str] | None = None, timeout
     return bool(ref_lines)
 
 
+def list_origin_branches(bare_path: str, *, timeout: int = 60) -> set[str]:
+    """Branch names that currently exist on origin (via `git ls-remote --heads`).
+
+    Used to filter a repo's active branches before fetching: `git fetch` aborts
+    the whole batch if any requested refspec's source ref is missing on origin,
+    so one stale branch (a merged/deleted PR still named in an instance.toml)
+    would otherwise strand every other branch. Raises OwmError(FETCH_TIMEOUT /
+    FETCH_FAILED) if origin can't be reached — the same failures a fetch would
+    hit, so the caller treats the repo as unreachable either way.
+    """
+    try:
+        r = subprocess.run(
+            ["git", "ls-remote", "--heads", "origin"],
+            cwd=str(bare_path), capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise OwmError(f"ls-remote timed out after {timeout}s", code=FETCH_TIMEOUT)
+    if r.returncode != 0:
+        detail = (r.stderr or "").strip() or f"exited {r.returncode}"
+        raise OwmError(f"git ls-remote failed: {detail}", code=FETCH_FAILED,
+                       returncode=r.returncode)
+    branches = set()
+    for line in r.stdout.splitlines():
+        # each line is "<sha>\trefs/heads/<branch>"
+        _, _, ref = line.partition("\trefs/heads/")
+        if ref:
+            branches.add(ref)
+    return branches
+
+
+def list_local_branches(bare_path: str) -> set[str]:
+    """Local branch names in the bare repo (refs/heads/*).
+
+    Lets fetch tell an unpushed/local-only working branch (absent from origin but
+    present here — nothing to fetch, no problem) apart from a genuinely missing
+    ref (absent from both — a typo, or a branch merged and pruned everywhere).
+    """
+    r = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads/"],
+        cwd=str(bare_path), capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return set()
+    return {line.strip() for line in r.stdout.splitlines() if line.strip()}
+
+
 def git_current_hash(path: str) -> str:
     return git_run(["rev-parse", "HEAD"], cwd=path).stdout.strip()
 
@@ -357,18 +403,38 @@ def fetch_active_branches(workspace_root: str) -> dict:
         bare_path = os.path.join(workspace_root, "_repos", f"{name}.git")
         if not os.path.isdir(bare_path):
             continue
-        branches = sorted(active.get(name, []))
+        declared = sorted(active.get(name, []))
         # Log initiation up front so the owm log (and the dashboard's live stream)
         # shows the fetch starting, not only the per-repo outcome once it finishes.
         workspace_log(workspace_root, "fetch", repo=name, status="started")
         try:
-            updated = git_fetch_bare(bare_path, branches=branches or None)
+            # Fetch only branches that exist on origin. `git fetch` aborts the
+            # whole batch on the first missing refspec, so any declared branch not
+            # on origin has to be dropped or it strands every valid branch behind a
+            # false "up to date". A dropped branch is only *reported* as missing if
+            # it is also absent locally: a branch present here but not on origin is
+            # an unpushed (or merged-then-deleted) working branch — nothing to fetch,
+            # not an error. Absent from both is a genuinely broken ref.
+            missing: list[str] = []
+            fetch_branches = None
+            if declared:
+                origin_heads = list_origin_branches(bare_path)
+                local_heads = list_local_branches(bare_path)
+                fetch_branches = [b for b in declared if b in origin_heads]
+                missing = [b for b in declared
+                           if b not in origin_heads and b not in local_heads]
+            # branches=None means "fetch all" — only the no-declared-branches case.
+            # When no declared branch is on origin, fetch nothing rather than all.
+            if fetch_branches or not declared:
+                updated = git_fetch_bare(bare_path, branches=fetch_branches)
+            else:
+                updated = False
         except OwmError as e:
             unreachable.append(name)
-            records.append({"name": name, "branches": branches,
+            records.append({"name": name, "branches": declared, "missing_branches": [],
                             "status": "unreachable", "error": e.args[0], "code": e.code})
             continue
-        records.append({"name": name, "branches": branches,
+        records.append({"name": name, "branches": declared, "missing_branches": missing,
                         "status": "updated" if updated else "up_to_date"})
         if updated:
             repos_with_updates.append(name)
