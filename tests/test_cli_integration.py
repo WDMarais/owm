@@ -118,7 +118,7 @@ def test_create_toml_only_no_workspace_toml_exits_nonzero(runner, tmp_path, monk
 
 @pytest.mark.cli_integration
 def test_create_exits_zero_on_success(runner, standard_instance_toml, tmp_workspace):
-    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
+    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)), patch("owm.cli.install_declared_modules"):
         result = runner.invoke(cli, [
             "--workspace", str(tmp_workspace),
             "create", "feat-789",
@@ -128,7 +128,7 @@ def test_create_exits_zero_on_success(runner, standard_instance_toml, tmp_worksp
 
 @pytest.mark.cli_integration
 def test_create_output_mentions_instance_url(runner, standard_instance_toml, tmp_workspace):
-    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
+    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)), patch("owm.cli.install_declared_modules"):
         result = runner.invoke(cli, [
             "--workspace", str(tmp_workspace),
             "create", "feat-789",
@@ -138,7 +138,7 @@ def test_create_output_mentions_instance_url(runner, standard_instance_toml, tmp
 
 @pytest.mark.cli_integration
 def test_create_writes_proxy_block_to_disk(runner, standard_instance_toml, tmp_workspace):
-    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
+    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)), patch("owm.cli.install_declared_modules"):
         runner.invoke(cli, [
             "--workspace", str(tmp_workspace),
             "create", "feat-789",
@@ -148,12 +148,41 @@ def test_create_writes_proxy_block_to_disk(runner, standard_instance_toml, tmp_w
 
 @pytest.mark.cli_integration
 def test_create_writes_instance_conf_to_disk(runner, standard_instance_toml, tmp_workspace):
-    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
+    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)), patch("owm.cli.install_declared_modules"):
         runner.invoke(cli, [
             "--workspace", str(tmp_workspace),
             "create", "feat-789",
         ])
     assert (tmp_workspace / "instances" / "feat-789" / "instance.conf").exists()
+
+
+@pytest.mark.cli_integration
+def test_create_auto_installs_declared_modules(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)), \
+         patch("owm.cli.install_declared_modules",
+               return_value=MagicMock(installed=["test_sale_ext"])) as install:
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "create", "feat-789",
+        ])
+    assert result.exit_code == 0
+    install.assert_called_once()
+    assert "installed test_sale_ext" in result.output
+
+
+@pytest.mark.cli_integration
+def test_create_no_install_skips_module_install(runner, standard_instance_toml, tmp_workspace):
+    with patch("owm.instance.create_worktree"), \
+         patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)), \
+         patch("owm.cli.install_declared_modules") as install:
+        result = runner.invoke(cli, [
+            "--workspace", str(tmp_workspace),
+            "create", "feat-789", "--no-install",
+        ])
+    assert result.exit_code == 0
+    install.assert_not_called()
+    assert "skipped" in result.output.lower()
 
 
 @pytest.mark.cli_integration
@@ -195,7 +224,7 @@ def test_create_infers_instance_from_cwd(runner, standard_instance_toml, tmp_wor
         "[clusters]\n"
     )
     monkeypatch.chdir(tmp_workspace / "instances" / "feat-789")
-    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)):
+    with patch("owm.instance.create_worktree"), patch("owm.instance.create_db", return_value=MagicMock(full_install_required=True)), patch("owm.cli.install_declared_modules"):
         result = runner.invoke(cli, ["create"])
     assert result.exit_code == 0
     assert "feat-789" in result.output

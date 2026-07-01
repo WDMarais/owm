@@ -27,6 +27,7 @@ from owm.instance import (
     stop_instance,
     instance_public_url,
     install_instance_modules,
+    install_declared_modules,
     kill_instance,
     health_check,
     generate_instance_conf,
@@ -219,8 +220,11 @@ def _parse_repo_specs(repos: tuple) -> dict[str, str]:
 @click.argument("repos", nargs=-1, metavar="name=branch:base ...")
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing instance.toml if REPOS given.")
 @click.option("--toml-only", is_flag=True, help="Write instance.toml and stop — do not materialise.")
+@click.option("--no-install", is_flag=True,
+              help="Provision only; skip installing [install].modules (leaves the DB blank for "
+                   "diagnostics / hand-sequenced installs — run `owm install` when ready).")
 @click.pass_context
-def cmd_create(ctx, name, repos, force, toml_only):
+def cmd_create(ctx, name, repos, force, toml_only, no_install):
     """Create and materialise an instance.
 
     With REPOS: writes instance.toml then materialises (one-shot).
@@ -255,6 +259,12 @@ def cmd_create(ctx, name, repos, force, toml_only):
         click.echo(f"{instance}  up to date")
     elif result.status == "created":
         click.echo(f"{instance}  created  {instance_public_url(instance, workspace_root)}")
+        if no_install:
+            click.echo(f"  modules: skipped (--no-install) — run `owm install {instance}` when ready")
+        else:
+            installed = install_declared_modules(instance, workspace_root)
+            if installed and installed.installed:
+                click.echo(f"  modules: installed {', '.join(installed.installed)}")
     else:
         click.echo(f"{instance}  {result.status}")
 

@@ -513,6 +513,20 @@ def install_instance_modules(
     )
 
 
+def install_declared_modules(instance: str, workspace_root: str) -> InstallModulesResult | None:
+    """Install the instance's [install].modules manifest, if any are declared.
+
+    A no-op (returns None) when no modules are declared, and — via the dedup in
+    install_instance_modules — a no-op when they are already present. Safe to call
+    on every create/db-reset so a freshly provisioned instance comes up usable
+    without a separate manual `owm install`. Booting Odoo is why this lives at the
+    command layer (cmd_create / owm_create) rather than inside create_instance."""
+    conf = load_instance_config(instance, workspace_root)
+    if not (conf.install and conf.install.modules):
+        return None
+    return install_instance_modules(instance, workspace_root)
+
+
 def _rewrite_ports_in_toml(toml_path: str, http_port: int, gevent_port: int) -> None:
     with open(toml_path) as f:
         content = f.read()

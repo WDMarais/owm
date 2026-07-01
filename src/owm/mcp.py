@@ -31,6 +31,7 @@ from owm.instance import (
     kill_instance,
     restart_instance,
     install_instance_modules,
+    install_declared_modules,
     list_running_instances,
     odoo_bin_path,
     find_odoo_repo,
@@ -248,7 +249,14 @@ def owm_create(instance: str, toml: str | None = None, repos: dict[str, str] | N
         return {"status": "ok", "created": [], "updated": [], "skipped": []}
 
     result = create_instance(name=instance, workspace_root=workspace_root)
-    return {"status": "ok", "created": result.created, "updated": result.updated, "skipped": result.skipped}
+    installed = install_declared_modules(instance, workspace_root)
+    return {
+        "status": "ok",
+        "created": result.created,
+        "updated": result.updated,
+        "skipped": result.skipped,
+        "modules_installed": installed.installed if installed else [],
+    }
 
 
 @mcp.tool()

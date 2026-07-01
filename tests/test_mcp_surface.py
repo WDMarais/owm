@@ -8,7 +8,7 @@ Safety invariants tested explicitly:
 - Delete/archive/reset tools operate on local state only
 """
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from owm.mcp import (
     owm_status,
@@ -383,12 +383,15 @@ def test_owm_create_from_disk_returns_status_dict(standard_instance_toml, tmp_wo
     fake = CreateResult(status="created", worktrees_created=True, db_created=True,
                         port_reserved=True, proxy_block_written=True, odoo_conf_generated=True)
     with patch("owm.mcp.read_repo_state", return_value={"status": "clean"}), \
-         patch("owm.mcp.create_instance", return_value=fake):
+         patch("owm.mcp.create_instance", return_value=fake), \
+         patch("owm.mcp.install_declared_modules",
+               return_value=MagicMock(installed=["test_sale_ext"])):
         result = owm_create(instance="feat-789")
     assert result["status"] == "ok"
     assert "created" in result
     assert "updated" in result
     assert "skipped" in result
+    assert result["modules_installed"] == ["test_sale_ext"]
 
 
 @pytest.mark.mcp_surface

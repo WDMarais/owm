@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 
 from owm.instance import (
     new_instance, create_instance, _strip_create_flag_in_toml, _collect_requirements,
+    install_declared_modules,
 )
 from owm.workspace import init_workspace
 from owm.config import ConfOwnership, parse_instance_config
@@ -532,6 +533,33 @@ def test_collect_requirements_explicit_override_wins(tmp_path):
     _touch(f"{ws}/_shared/odoo/14.0/requirements.txt")
     got = _collect_requirements(conf, ws, "inst")
     assert got == [f"{ws}/instances/inst/reqs/custom.txt"]
+
+
+# ---------------------------------------------------------------------------
+# install_declared_modules — auto-install manifest, no-op when nothing declared
+# ---------------------------------------------------------------------------
+
+@pytest.mark.instance_lifecycle_create
+def test_install_declared_modules_noops_without_manifest():
+    conf = MagicMock()
+    conf.install = None
+    with patch("owm.instance.load_instance_config", return_value=conf), \
+         patch("owm.instance.install_instance_modules") as install:
+        result = install_declared_modules("feat-789", "/ws")
+    assert result is None
+    install.assert_not_called()
+
+
+@pytest.mark.instance_lifecycle_create
+def test_install_declared_modules_installs_when_declared():
+    conf = MagicMock()
+    conf.install.modules = ["test_sale_ext"]
+    sentinel = object()
+    with patch("owm.instance.load_instance_config", return_value=conf), \
+         patch("owm.instance.install_instance_modules", return_value=sentinel) as install:
+        result = install_declared_modules("feat-789", "/ws")
+    assert result is sentinel
+    install.assert_called_once_with("feat-789", "/ws")
 
 
 # === SPEC GAPS ===
