@@ -90,6 +90,38 @@ odoo = "git@github.com:odoo/odoo.git"
 
 
 @pytest.mark.config_schemas
+def test_parse_workspace_config_requirements_files():
+    """[python.requirements_files] maps Odoo major → candidate filenames."""
+    toml = """
+[repos]
+odoo = "git@github.com:odoo/odoo.git"
+
+[clusters]
+"19" = {pg_version = "16", port = 5432}
+
+[python.requirements_files]
+default = ["requirements.txt", "requirements_3.txt"]
+"12" = ["requirements.txt", "requirements_2.txt"]
+"""
+    config = parse_workspace_config(toml)
+    assert config.python.requirements_files["default"] == ["requirements.txt", "requirements_3.txt"]
+    assert config.python.requirements_files["12"] == ["requirements.txt", "requirements_2.txt"]
+
+
+@pytest.mark.config_schemas
+def test_parse_workspace_config_no_python_section():
+    """Absent [python] → None; collection falls back to the universal default."""
+    toml = """
+[repos]
+odoo = "git@github.com:odoo/odoo.git"
+
+[clusters]
+"19" = {pg_version = "16", port = 5432}
+"""
+    assert parse_workspace_config(toml).python is None
+
+
+@pytest.mark.config_schemas
 def test_parse_workspace_config_missing_repos_raises():
     toml = """
 [clusters]

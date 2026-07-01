@@ -661,12 +661,6 @@ def _resolve_instance_addons(
     return addons_paths
 
 
-# Maps odoo major version to the numbered requirements suffix used on repos that
-# carry multiple version variants on one shared branch (e.g. requirements_3.txt).
-_ODOO_REQUIREMENTS_SUFFIX = {12: "_2"}
-_ODOO_REQUIREMENTS_SUFFIX_DEFAULT = "_3"  # 14 and up
-
-
 def _odoo_major_from_branch(branch: str) -> int | None:
     """Odoo major version encoded in a branch name ('taskflow/14.0' → 14), or
     None when the last path segment doesn't start with an integer major."""
@@ -709,15 +703,32 @@ def odoo_version_warning(conf: InstanceConfig, instance: str) -> str | None:
     )
 
 
-def _collect_requirements(conf: InstanceConfig, workspace_root: str, name: str) -> list[str]:
+def _resolve_requirements_candidates(
+    odoo_major: int | None, files_map: dict[str, list[str]] | None,
+) -> list[str]:
+    """Candidate requirements filenames for an instance's Odoo version, in
+    preference order. The version-matched list wins, else the 'default' list,
+    else the universal ['requirements.txt'] when nothing is configured."""
+    if files_map:
+        if odoo_major is not None and str(odoo_major) in files_map:
+            return files_map[str(odoo_major)]
+        if "default" in files_map:
+            return files_map["default"]
+    return ["requirements.txt"]
+
+
+def _collect_requirements(
+    conf: InstanceConfig, workspace_root: str, name: str,
+    requirements_files: dict[str, list[str]] | None = None,
+) -> list[str]:
     """Requirements files to install into the instance venv.
 
-    Explicit `[python].requirements` wins outright. Otherwise infer per-repo:
-    every repo (not just odoo) contributes its `requirements.txt`, falling back
-    to the odoo-major-suffixed variant (`requirements_3.txt` for 14+) for repos
-    that ship version-specific files on a shared branch. This is the collection
-    breadth the earlier odoo-only version missed (e.g. RapidFuzz in a non-odoo
-    repo's requirements_3.txt)."""
+    Explicit `[python].requirements` wins outright. Otherwise, for each repo
+    (not just odoo), install the first of the workspace's configured candidate
+    filenames that exists — so a repo with a plain `requirements.txt` uses it,
+    while a repo that only ships a version-specific variant on a shared branch
+    (e.g. `requirements_3.txt`) is still picked up. The candidate list per Odoo
+    major comes from `[python.requirements_files]` in workspace.toml."""
     instance_dir = os.path.join(workspace_root, "instances", name)
     if conf.python and conf.python.requirements:
         return [
@@ -725,30 +736,30 @@ def _collect_requirements(conf: InstanceConfig, workspace_root: str, name: str) 
             for p in conf.python.requirements
         ]
 
-    odoo = find_odoo_repo(conf)
-    odoo_major = _odoo_major_from_branch(odoo.spec.branch)
-    suffix = (
-        _ODOO_REQUIREMENTS_SUFFIX.get(odoo_major, _ODOO_REQUIREMENTS_SUFFIX_DEFAULT)
-        if odoo_major is not None else None
-    )
+    candidates = _resolve_requirements_candidates(instance_odoo_major(conf), requirements_files)
 
     req_files: list[str] = []
     for repo_name, spec in conf.repos.items():
         wt = resolve_worktree_path(repo_name, spec.branch, spec.shared, workspace_root, name)
-        plain = os.path.join(wt.path, "requirements.txt")
-        if os.path.isfile(plain):
-            req_files.append(plain)
-            continue
-        if suffix is not None:
-            numbered = os.path.join(wt.path, f"requirements{suffix}.txt")
-            if os.path.isfile(numbered):
-                req_files.append(numbered)
+        for fname in candidates:
+            path = os.path.join(wt.path, fname)
+            if os.path.isfile(path):
+                req_files.append(path)
+                break
     return req_files
 
 
-def _provision_venv(conf: InstanceConfig, workspace_root: str, name: str) -> None:
+def _workspace_requirements_files(ws_conf: WorkspaceConfig) -> dict[str, list[str]] | None:
+    return ws_conf.python.requirements_files if ws_conf.python else None
+
+
+def _provision_venv(
+    conf: InstanceConfig, ws_conf: WorkspaceConfig, workspace_root: str, name: str,
+) -> None:
     venv_dir = os.path.join(workspace_root, "instances", name, ".venv")
-    req_files = _collect_requirements(conf, workspace_root, name)
+    req_files = _collect_requirements(
+        conf, workspace_root, name, _workspace_requirements_files(ws_conf),
+    )
     if os.path.exists(venv_dir):
         # Already built — reconcile against the current set rather than skip, so a
         # broadened collection (or a newly-appearing suffixed file) gets installed.
@@ -758,13 +769,18 @@ def _provision_venv(conf: InstanceConfig, workspace_root: str, name: str) -> Non
     create_venv(name, python_version, req_files, patches=[], venv_dir=venv_dir)
 
 
-def _sync_instance_venv(conf: InstanceConfig, workspace_root: str, name: str) -> None:
+def _sync_instance_venv(
+    conf: InstanceConfig, ws_conf: WorkspaceConfig, workspace_root: str, name: str,
+) -> None:
     """Keep an existing venv in step with its requirements on start. No-op when
     the venv is absent (the create path owns the first build)."""
     venv_dir = os.path.join(workspace_root, "instances", name, ".venv")
     if not os.path.exists(venv_dir):
         return
-    reconcile_venv(venv_dir, _collect_requirements(conf, workspace_root, name), patches=[])
+    req_files = _collect_requirements(
+        conf, workspace_root, name, _workspace_requirements_files(ws_conf),
+    )
+    reconcile_venv(venv_dir, req_files, patches=[])
 
 
 def _configure_proxy(
@@ -831,7 +847,7 @@ def _materialise_instance(name: str, workspace_root: str) -> CreateResult:
         toml_path, [n for n, s in conf.repos.items() if s.create],
     )
     addons_paths = _resolve_instance_addons(conf, ws_conf, workspace_root, name)
-    _provision_venv(conf, workspace_root, name)
+    _provision_venv(conf, ws_conf, workspace_root, name)
     db_result = create_db(
         name=conf.database.name,
         odoo_version="",
@@ -909,7 +925,7 @@ def start_instance(
         )
 
     conf = load_instance_config(instance, workspace_root)
-    _sync_instance_venv(conf, workspace_root, instance)
+    _sync_instance_venv(conf, _load_workspace_config(workspace_root), workspace_root, instance)
 
     for port in (conf.server.http_port, conf.server.gevent_port):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

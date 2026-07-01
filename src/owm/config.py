@@ -211,6 +211,20 @@ class ProxyConfig(BaseModel):
     caddy_config: str | None = None
 
 
+class WorkspacePythonConfig(BaseModel):
+    # Maps Odoo major version → the candidate requirements filenames to look for
+    # in each repo, in preference order (owm installs the first that exists per
+    # repo). "default" applies to any major not listed. This is explicit rather
+    # than a suffix owm expands, and keeps the (workspace-specific) file-naming
+    # convention in config instead of hardcoded in owm. Absent/empty → the one
+    # universal default, ["requirements.txt"].
+    #
+    #   [python.requirements_files]
+    #   default = ["requirements.txt", "requirements_3.txt"]
+    #   "12"    = ["requirements.txt", "requirements_2.txt"]
+    requirements_files: dict[str, list[str]] = {}
+
+
 class WorkspaceScripts(BaseModel):
     scripts_dir: str
 
@@ -223,6 +237,7 @@ class WorkspaceConfig(BaseModel):
     compare_pairs: list[list[str]] = []
     proxy: ProxyConfig | None = None
     scripts: WorkspaceScripts | None = None
+    python: WorkspacePythonConfig | None = None
 
     @model_validator(mode='before')
     @classmethod

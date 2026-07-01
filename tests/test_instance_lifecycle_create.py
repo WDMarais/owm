@@ -494,32 +494,54 @@ def test_collect_requirements_gathers_every_repo(tmp_path):
 
 
 @pytest.mark.instance_lifecycle_create
-def test_collect_requirements_falls_back_to_odoo_major_suffix(tmp_path):
+def test_collect_requirements_uses_configured_variant_for_odoo_14(tmp_path):
     # The RapidFuzz case: a non-odoo repo ships only requirements_3.txt (14+).
     conf = _collect_conf(odoo_branch="taskflow/14.0", extra_repos='app = "PD-490_dev:main"\n')
     ws = str(tmp_path)
     _touch(f"{ws}/instances/inst/app/requirements_3.txt")
-    got = _collect_requirements(conf, ws, "inst")
+    got = _collect_requirements(
+        conf, ws, "inst",
+        requirements_files={"default": ["requirements.txt", "requirements_3.txt"]},
+    )
     assert f"{ws}/instances/inst/app/requirements_3.txt" in got
 
 
 @pytest.mark.instance_lifecycle_create
-def test_collect_requirements_uses_v2_suffix_for_odoo_12(tmp_path):
+def test_collect_requirements_uses_configured_variant_for_odoo_12(tmp_path):
     conf = _collect_conf(odoo_branch="12.0", extra_repos='app = "PD-490_dev:main"\n')
     ws = str(tmp_path)
     _touch(f"{ws}/instances/inst/app/requirements_2.txt")
-    got = _collect_requirements(conf, ws, "inst")
+    got = _collect_requirements(
+        conf, ws, "inst",
+        requirements_files={"12": ["requirements.txt", "requirements_2.txt"],
+                            "default": ["requirements.txt", "requirements_3.txt"]},
+    )
     assert f"{ws}/instances/inst/app/requirements_2.txt" in got
 
 
 @pytest.mark.instance_lifecycle_create
-def test_collect_requirements_prefers_plain_over_suffixed(tmp_path):
+def test_collect_requirements_first_candidate_wins_per_repo(tmp_path):
+    # List order is preference: plain requirements.txt listed first beats the variant.
     conf = _collect_conf(extra_repos='app = "PD-490_dev:main"\n')
     ws = str(tmp_path)
     _touch(f"{ws}/instances/inst/app/requirements.txt")
     _touch(f"{ws}/instances/inst/app/requirements_3.txt")
-    got = [g for g in _collect_requirements(conf, ws, "inst") if "/app/" in g]
+    got = [g for g in _collect_requirements(
+        conf, ws, "inst",
+        requirements_files={"default": ["requirements.txt", "requirements_3.txt"]},
+    ) if "/app/" in g]
     assert got == [f"{ws}/instances/inst/app/requirements.txt"]
+
+
+@pytest.mark.instance_lifecycle_create
+def test_collect_requirements_no_config_skips_version_variant(tmp_path):
+    # Unconfigured → only the universal requirements.txt; a variant-only repo is
+    # not guessed at (the naming convention lives in workspace config, not owm).
+    conf = _collect_conf(odoo_branch="14.0", extra_repos='app = "PD-490_dev:main"\n')
+    ws = str(tmp_path)
+    _touch(f"{ws}/instances/inst/app/requirements_3.txt")  # only the variant exists
+    got = _collect_requirements(conf, ws, "inst")  # no requirements_files map
+    assert not any("/app/" in g for g in got)
 
 
 @pytest.mark.instance_lifecycle_create
