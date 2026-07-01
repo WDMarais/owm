@@ -1010,3 +1010,24 @@ def test_validate_warns_on_missing_script_runner_file(runner, tmp_workspace):
     out = result.output + (result.stderr or "")
     assert "script runner 'setup': file not found" in out
     assert "scripts/reviews/setup.py" in out
+
+
+@pytest.mark.cli_integration
+def test_validate_warns_on_non_python_script_runner_file(runner, tmp_workspace):
+    """A runner pointed at a non-.py file (the classic '.sh mistaken for the
+    odoo-shell type') is flagged even when the file exists — both runner types
+    run python."""
+    inst = tmp_workspace / "instances" / "feat-789"
+    (inst / "scripts").mkdir(parents=True)
+    (inst / "scripts" / "setup.sh").write_text("echo hi\n")
+    (inst / "instance.toml").write_text(
+        '[repos]\nodoo_like = "main:shared"\n'
+        '\n[database]\nname = "owm_feat789"\npg_port = 5432\n'
+        "\n[server]\nhttp_port = 8100\ngevent_port = 8101\n"
+        '\n[scripts]\nscripts_dir = "scripts"\n'
+        '\n[scripts.runners]\nsetup = { file = "setup.sh", type = "odoo-shell" }\n'
+    )
+    result = runner.invoke(cli, ["--workspace", str(tmp_workspace), "validate", "feat-789"])
+    out = result.output + (result.stderr or "")
+    assert "file not found" not in out  # the file exists; only the extension is wrong
+    assert "'setup.sh' is not a .py file" in out

@@ -1013,6 +1013,13 @@ def cmd_validate(ctx, name, live):
                 warnings.append(
                     f"script runner {rname!r}: file not found: {os.path.relpath(sp, workspace_root)}"
                 )
+            # Both runner types are python; a non-.py file (e.g. a .sh mistaken
+            # for the odoo-shell type) will fail at run time. Flag it early.
+            if not runner.file.endswith(".py"):
+                warnings.append(
+                    f"script runner {rname!r}: file {runner.file!r} is not a .py file "
+                    f"(both runner types run python)"
+                )
 
     if ws_conf:
         workspace_repos_meta = {
