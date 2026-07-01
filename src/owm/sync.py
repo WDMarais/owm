@@ -16,6 +16,7 @@ from owm.errors import (
     SHARED_REPO,
     DIRTY_WORKTREE,
     FETCH_TIMEOUT,
+    FETCH_FAILED,
     GIT_COMMAND_FAILED,
 )
 from owm.oplog import workspace_log
@@ -165,7 +166,14 @@ def git_fetch_bare(bare_path: str, *, branches: list[str] | None = None, timeout
     so we filter it out and only count real ref updates.
 
     stderr is not captured so git's progress output streams to the terminal.
-    Raises OwmError(FETCH_TIMEOUT) if the fetch exceeds `timeout` seconds.
+    Raises OwmError(FETCH_TIMEOUT) if the fetch exceeds `timeout` seconds, and
+    OwmError(FETCH_FAILED) on any other non-zero git exit — a failed fetch must
+    not be mistaken for "nothing to update". Notably, `git fetch` aborts the
+    whole invocation (fetching nothing) if any requested refspec's source ref
+    is missing on origin, so a single stale branch would otherwise strand every
+    branch in the batch under a false "up to date". Callers filter stale refs
+    out up front (see fetch_active_branches); anything that still fails here is
+    a real error and is surfaced as one.
     """
     if branches:
         refspecs = [f"+refs/heads/{b}:refs/heads/{b}" for b in branches]
@@ -184,7 +192,8 @@ def git_fetch_bare(bare_path: str, *, branches: list[str] | None = None, timeout
     except subprocess.TimeoutExpired:
         raise OwmError(f"fetch timed out after {timeout}s", code=FETCH_TIMEOUT)
     if r.returncode != 0:
-        return False
+        raise OwmError(f"git fetch exited {r.returncode}", code=FETCH_FAILED,
+                       returncode=r.returncode)
     ref_lines = [line for line in r.stdout.splitlines() if "FETCH_HEAD" not in line]
     return bool(ref_lines)
 

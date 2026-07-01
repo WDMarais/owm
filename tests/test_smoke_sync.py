@@ -22,7 +22,7 @@ from owm.sync import (
     git_push,
     git_reset_hard,
 )
-from owm.errors import OwmError, GIT_COMMAND_FAILED
+from owm.errors import OwmError, GIT_COMMAND_FAILED, FETCH_FAILED
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +223,17 @@ def test_git_fetch_bare_returns_false_when_nothing_new(tmp_path):
     up = _upstream(tmp_path)
     bare = _make_bare(up, tmp_path / "repo.git")
     assert git_fetch_bare(str(bare)) is False
+
+
+@pytest.mark.smoke
+def test_git_fetch_bare_raises_on_failed_fetch(tmp_path):
+    """A non-zero git exit (here: a refspec for a branch that doesn't exist on
+    origin) must raise, not return False — a failed fetch is not 'up to date'."""
+    up = _upstream(tmp_path)
+    bare = _make_bare(up, tmp_path / "repo.git")
+    with pytest.raises(OwmError) as ei:
+        git_fetch_bare(str(bare), branches=["no-such-branch"])
+    assert ei.value.code == FETCH_FAILED
 
 
 # ---------------------------------------------------------------------------
